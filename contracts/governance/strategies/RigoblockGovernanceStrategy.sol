@@ -32,7 +32,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     uint256 private constant _VOTING_PERIOD = 7 days;
 
     /// @notice Challenge window between a recovery request and its activation.
-    uint256 private constant _RECOVERY_WINDOW = 45 days;
+    uint256 private constant _RECOVERY_WINDOW = 60 days;
 
     /// @notice The Rigoblock governance proxy, identical on every chain; authenticates a recovery rejection.
     address private constant _GOVERNANCE_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
@@ -97,14 +97,25 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidProposalThreshold(uint256 proposalThreshold) public view override {
-        if (_mode == GovernanceMode.Receiver) return;
+        if (_mode == GovernanceMode.Receiver) {
+            _assertValidReceiverThreshold(proposalThreshold);
+            return;
+        }
         _assertValidProposalThreshold(proposalThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidQuorumThreshold(uint256 quorumThreshold) public view override {
-        if (_mode == GovernanceMode.Receiver) return;
+        if (_mode == GovernanceMode.Receiver) {
+            _assertValidReceiverThreshold(quorumThreshold);
+            return;
+        }
         _assertValidQuorumThreshold(quorumThreshold);
+    }
+
+    /// @dev Receiver thresholds must stay within the recovery address's fixed voting power.
+    function _assertValidReceiverThreshold(uint256 threshold) private pure {
+        require(threshold != 0 && threshold <= type(uint96).max, GovStrategyInvalidReceiverThreshold(threshold));
     }
 
     /// @inheritdoc IGovernanceStrategy

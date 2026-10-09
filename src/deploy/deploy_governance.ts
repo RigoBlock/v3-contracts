@@ -2,7 +2,7 @@ import { ethers } from "ethers";
 import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import type { Environment } from "../../rocketh/config.js";
-import { chainConfig } from "../utils/constants";
+import { chainConfig, governanceProxy } from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
 export default deployScript(
@@ -97,7 +97,7 @@ export default deployScript(
       { deterministic: true },
     );
 
-    await env.deploy(
+    const strategy = await env.deploy(
       "RigoblockGovernanceStrategy",
       {
         account: deployer,
@@ -114,6 +114,24 @@ export default deployScript(
       },
       { deterministic: true },
     );
+
+    // the strategy authenticates recovery vetoes against the chain-independent governance
+    // proxy address baked into its runtime; a mismatch would leave the veto unreachable
+    const onchainCode = (await env.network.provider.request({
+      method: "eth_getCode",
+      params: [strategy.address as `0x${string}`, "latest"],
+    })) as string;
+
+    if (
+      !onchainCode
+        .toLowerCase()
+        .includes(governanceProxy.slice(2).toLowerCase())
+    ) {
+      throw new Error(
+        `Deployed RigoblockGovernanceStrategy at ${strategy.address} does not reference governance ` +
+          `proxy ${governanceProxy}; rejectRecover would be unreachable.`,
+      );
+    }
   },
   { tags: ["governance", "l2-suite", "main-suite"] },
 );

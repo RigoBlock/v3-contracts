@@ -140,6 +140,15 @@ The veto reuses the entire existing machinery. This is the intended security bou
 recovery hatch is only as strong as the assumption that Wormhole works _well enough to deliver
 one veto message within the window_.
 
+**Veto latency budget.** The veto is not instant. A veto proposal waits for the next
+staking-epoch boundary to start (up to ~14 days, the current mainnet epoch), then votes for
+up to 7 days, then must be relayed. Worst case is roughly 3 weeks from the moment mainnet
+decides to veto to the veto landing on the receiver chain. Detection of `RecoverRequested`
+plus a mainnet decision must therefore land within roughly 39 days of the request (60-day
+window minus ~3 weeks of worst-case veto latency) for the veto to arrive in time. Monitoring
+receiver chains for `RecoverRequested` is the safety parameter of this mechanism; the
+window arithmetic above is the monitoring SLA.
+
 ### Recovery flow (after the window, Wormhole dead or veto never sent)
 
 1. `requestRecover()` was called at some point (any time; may be long before the failure).
@@ -157,7 +166,7 @@ one veto message within the window_.
 
 | Parameter                     | Value                                        | Rationale                                                                                                                                                                                         |
 | ----------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RECOVERY_WINDOW`             | 45 days                                      | Mainnet notices and delivers one veto within ~2 epochs (2 weeks each) with large margin; long enough to survive congestion, short enough that a dead bridge does not freeze the chain for months. |
+| `RECOVERY_WINDOW`             | 60 days                                      | Mainnet notices and delivers one veto within ~2 epochs (2 weeks each) with large margin; long enough to survive congestion, short enough that a dead bridge does not freeze the chain for months. |
 | `votingPeriod` under recovery | existing 7-day default                       | Latency is covered by the `Qualified` shortcut: the qualifying vote closes the window, so the 7-day period never actually runs.                                                                   |
 | Execution scope               | whatever the ordinary governance can execute | The recovery flows through normal `execute`, so no new execution primitive is introduced.                                                                                                         |
 
@@ -183,7 +192,7 @@ one veto message within the window_.
    is custody (multisig, offline keys), not code.
 2. False positive: a Wormhole liveness outage longer than the window while mainnet is alive
    and wishes to veto. The window is the safety parameter; a veto needs one delivered
-   message, so 45+ days of total Wormhole silence is the exposure bar. Historical Wormhole outages are hours-to-days; chain deprecation (the intended case) makes veto impossible by design.
+   message, so 60+ days of total Wormhole silence is the exposure bar. Historical Wormhole outages are hours-to-days; chain deprecation (the intended case) makes veto impossible by design. Note the asymmetry in veto latency: even once mainnet decides to veto, the veto takes up to ~3 weeks to land (see "Veto latency budget" above) — the window is sized for ~39 days of detection-plus-decision margin on top of that.
 3. Request spam: the recovery address can re-request immediately after a veto. Each request
    is vetoable, and the ultimate veto is a `upgradeStrategy` VAA that replaces the strategy
    outright. An optional cooldown (e.g. 30 days after a reset) can be added if this becomes
@@ -197,6 +206,13 @@ one veto message within the window_.
 power for anyone but the published recovery address; it cannot bypass the mainnet emitter
 check; and the only party who can trigger it is the address verified off-chain in the deploy
 records. The attack surface reduces to key custody and window calibration.
+
+**State-reporting note.** On receiver chains, `getProposalState` checks the receiver
+early-return before the `Executed` flag. Proposals that were executed while a recovery was
+active therefore read `Defeated` (not `Executed`) once the recovery ends and the receiver
+gate re-engages. This is fail-closed and safe — `Defeated` can never satisfy the `Succeeded`
+gate — but it looks odd in indexers and explorers, and Tally-style frontends will show those
+proposals as failed. No on-chain state is affected.
 
 ## Alternatives considered
 

@@ -24,9 +24,9 @@ This runbook executes the v2.8 train on-chain in two governance proposals per ch
    - `Authority.getApplicationAdapter(0x367015bb)` (`propose((address,bytes,uint256)[],string)`)
    - `Authority.getApplicationAdapter(0x56781388)` (`castVote(uint256,uint8)`)
    - `Authority.getApplicationAdapter(0xfe0d94c1)` (`execute(uint256)` — new in this train)
-   Authority: `0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1` on all chains. If `castVote`
-   returns a non-zero legacy AGovernance address on a chain, Proposal 2 on that chain needs
-   one extra `setAdapter(legacyAGovernance, false)` action.
+     Authority: `0x7F427F11eB24f1be14D0c794f6d5a9830F18FBf1` on all chains. If `castVote`
+     returns a non-zero legacy AGovernance address on a chain, Proposal 2 on that chain needs
+     one extra `setAdapter(legacyAGovernance, false)` action.
 4. **Identify the whitelister.** Selector re-routing (`removeMethod`/`addMethod`) is
    `onlyWhitelister`; `setAdapter` is `onlyOwner` (governance). Confirm which key holds the
    whitelister role on each chain's Authority and that it is available for Section 1,
@@ -69,7 +69,7 @@ Build Proposal 1 with the interface app (actions append 1:1, see
 Counts: 6 standard (7 with AGovernance), 7 Arbitrum (8), Unichain 6 (7). All ≤ 10.
 
 > **Timing:** the pool implementation takes effect at `setImplementation`, but adapters are
-> only *whitelisted* by this proposal. Until step 1.3 completes, pools keep routing to the
+> only _whitelisted_ by this proposal. Until step 1.3 completes, pools keep routing to the
 > old adapter addresses, which remain valid. This is safe — old and new implementations are
 > compatible with both adapter generations for the unchanged selectors.
 
@@ -147,3 +147,9 @@ created on HyperEVM.
 - **Rollback:** adapters — re-run the whitelister swap back to the old addresses and
   re-whitelist old adapters (old bytecode remains on-chain). Implementation — a new
   `setImplementation` proposal pointing at the previous implementation.
+- **Recovery-key compromise (receiver chains):** the correct response to a compromised
+  recovery address is a crosschain `upgradeStrategy` action replacing the strategy with one
+  carrying a different recovery address — a fresh strategy has fresh storage, so
+  `recoveryRequestedAt` resets. Repeated `rejectRecover` vetoes are the wrong tool: they
+  leave the compromised address in place and it can re-request immediately, restarting the
+  60-day clock each time. Full operational model: RECOVERY.md.

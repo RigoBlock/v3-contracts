@@ -29,7 +29,7 @@ contract GovernanceRecoveryTest is Test {
     address internal constant WORMHOLE = Constants.WORMHOLE_HYPEREVM;
     uint256 internal constant PROPOSAL_THRESHOLD = 100_000e18;
     uint256 internal constant QUORUM_THRESHOLD = 400_000e18;
-    uint256 internal constant RECOVERY_WINDOW = 45 days;
+    uint256 internal constant RECOVERY_WINDOW = 60 days;
 
     CrosschainHarness internal governance;
     RigoblockGovernanceStrategy internal strategy;

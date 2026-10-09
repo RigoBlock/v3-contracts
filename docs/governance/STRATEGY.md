@@ -133,13 +133,14 @@ the local strategy.
     proposals before reaching the strategy, so the values are only observable on direct
     strategy calls.
   - `assertValidInitParams` and the threshold validators skip the GRG-supply bounds (thresholds
-    are inert on chains without local voting). The validators early-return rather than revert
-    because a mainnet-sent crosschain `updateThresholds` action must not revert and brick the
-    whole VAA batch.
+    are inert on chains without local voting) but still enforce `(0, uint96.max]`: a stored
+    quorum above `uint96.max` would make the recovery path unreachable. The validators
+    early-return rather than revert because a mainnet-sent crosschain `updateThresholds`
+    action must not revert and brick the whole VAA batch.
   - The crosschain receiver path (`receiveMessage`) is unaffected: it reads the strategy only
     for `wormhole()` / `wormholeChainId()` and never touches staking.
   - A strategy deployed with a nonzero recovery address carries the recovery escape hatch:
-    after a 45-day challenge window with no mainnet veto, the recovery address can drive the
+    after a 60-day challenge window with no mainnet veto, the recovery address can drive the
     ordinary local proposal/vote/execute flow to recover a frozen governance. The recovery
     vote is a superquorum under a staking-free receiver consensus (`votesFor >= minimumQuorum`),
     so the proposal qualifies immediately and is executable at the next block. See RECOVERY.md

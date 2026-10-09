@@ -63,6 +63,10 @@ interface IGovernanceStrategy {
     /// @dev Only callable by the governance proxy, i.e. as a delivered governance action.
     function rejectRecover() external;
 
+    /// @notice Thrown when a threshold on a receiver chain is outside the recovery-enforceable range.
+    /// @param threshold The invalid threshold.
+    error GovStrategyInvalidReceiverThreshold(uint256 threshold);
+
     /// @notice Reverts if initialization paramters are incorrect.
     /// @dev Only used at initialization, as params deleted from factory storage after setup.
     /// @param params Tuple of factory parameters.

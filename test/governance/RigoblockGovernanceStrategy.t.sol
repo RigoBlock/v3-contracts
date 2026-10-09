@@ -419,17 +419,36 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(receiver.votingPeriod(), 7 days);
     }
 
-    function test_Receiver_AssertValidInitParams_SkipsThresholdValidation() public {
+    function test_Receiver_AssertValidInitParams_BoundedThresholdValidation() public {
         RigoblockGovernanceStrategy receiver = _receiverStrategy();
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
             implementation: address(0),
             governanceStrategy: address(receiver),
-            proposalThreshold: 0,
-            quorumThreshold: 0,
+            proposalThreshold: 1,
+            quorumThreshold: 1,
             timeType: TimeType.Timestamp,
             name: "Rigoblock Governance"
         });
-        // zero thresholds would revert on any staking-backed strategy; receiver accepts them
+        // bounds are staking-free on receiver chains: in-range thresholds pass, zero and
+        // above-uint96 thresholds revert
+        receiver.assertValidInitParams(params);
+
+        params.proposalThreshold = 0;
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, 0));
+        receiver.assertValidInitParams(params);
+
+        params.proposalThreshold = 1;
+        params.quorumThreshold = 0;
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, 0));
+        receiver.assertValidInitParams(params);
+
+        params.quorumThreshold = uint256(type(uint96).max) + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
         receiver.assertValidInitParams(params);
     }
 
@@ -449,11 +468,27 @@ contract RigoblockGovernanceStrategyTest is Test {
         receiver.assertValidInitParams(params);
     }
 
-    function test_Receiver_ThresholdValidators_NoOpWithoutStaking() public {
+    /// @dev Receiver thresholds are staking-free but bounded: zero would let anyone create
+    ///     inert proposals, and a threshold above the recovery address's uint96 power would
+    ///     brick recovery. Boundary values are accepted.
+    function test_Receiver_ThresholdValidators_BoundedWithoutStaking() public {
         RigoblockGovernanceStrategy receiver = _receiverStrategy();
-        // any value accepted, no staking read: would revert if supply were consulted
         receiver.assertValidProposalThreshold(1);
-        receiver.assertValidQuorumThreshold(type(uint256).max);
+        receiver.assertValidProposalThreshold(type(uint96).max);
+        receiver.assertValidQuorumThreshold(1);
+        receiver.assertValidQuorumThreshold(type(uint96).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector, uint256(0))
+        );
+        receiver.assertValidProposalThreshold(0);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidReceiverThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        receiver.assertValidQuorumThreshold(uint256(type(uint96).max) + 1);
     }
 
     function test_Receiver_WormholeConfig_Readable() public {
@@ -507,13 +542,13 @@ contract RigoblockGovernanceStrategyTest is Test {
         receiver.getVotingPower(makeAddr("anyone"));
         receiver.votingPeriod();
         receiver.assertValidProposalThreshold(1);
-        receiver.assertValidQuorumThreshold(type(uint256).max);
+        receiver.assertValidQuorumThreshold(type(uint96).max);
         receiver.assertValidInitParams(
             IRigoblockGovernanceFactory.Parameters({
                 implementation: address(0),
                 governanceStrategy: address(receiver),
-                proposalThreshold: 0,
-                quorumThreshold: 0,
+                proposalThreshold: 1,
+                quorumThreshold: 1,
                 timeType: TimeType.Timestamp,
                 name: "Rigoblock Governance"
             })
