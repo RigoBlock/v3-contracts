@@ -1,11 +1,13 @@
 # Governance recovery (escape hatch)
 
-Status: **implemented in `RigoblockGovernanceStrategy`** (strategy-only: no governance-implementation
-change, no `receiveMessage` change).
+Status: **implemented in `WormholeReceiverStrategy`** (strategy-only: no governance-implementation
+change, no `receiveMessage` change). The receiver strategy implements the generic
+`IGovernanceStrategy` hooks plus this escape hatch; the recovery errors and events live in
+`strategies/interfaces/IWormholeReceiverStrategy.sol`.
 
 ## Problem
 
-Receiver-only chains (HyperEVM, BSC) have exactly one admin entrypoint: `receiveMessage`,
+Receiver chains (every chain except the mainnet hub) have exactly one admin entrypoint: `receiveMessage`,
 which accepts only VAAs whose emitter is the Ethereum mainnet governance proxy
 (`MixinCrosschain`, `emitterChainId == 2`). Local governance is disabled by the strategy
 (`GovLocalGovernanceDisabled`), and there is no external admin key.
@@ -18,13 +20,13 @@ recovers from permanent verification failure. This is also the chain-shutdown sc
 protocol intends to retire BSC (deprecated GRG), and bridge support for a deprecating chain
 may disappear before the governance is wound down.
 
-Dual chains do not have this problem: their local governance can re-point `wormhole()` or
-upgrade contracts at any time.
+The mainnet hub does not have this problem: its local governance can re-point `wormhole()`
+or upgrade contracts at any time.
 
 ## Design
 
 A time-locked recovery by a pre-designated recovery address, implemented entirely in
-`RigoblockGovernanceStrategy`. While Wormhole lives, the mainnet governance vetoes through
+`WormholeReceiverStrategy`. While Wormhole lives, the mainnet governance vetoes through
 its normal cross-chain proposal flow. If no veto arrives within the challenge window, the
 recovery address gains voting power on the receiver chain and recovers the governance
 through the ordinary local proposal/vote/execute flow — which, on a receiver chain, only the
@@ -75,8 +77,8 @@ New functions:
   or a recovery is active (re-requesting an active recovery would overwrite its timestamp and
   disarm it); sets `recoveryRequestedAt = block.timestamp`; emits `RecoverRequested(timestamp)`.
 - `rejectRecover()` — callable only by the governance proxy, whose canonical address is
-  hardcoded in the strategy (i.e. only as an action delivered through `receiveMessage`, or a
-  passed proposal on Dual chains); requires a pending request; resets
+  hardcoded in the strategy (i.e. only as an action delivered through `receiveMessage`);
+  requires a pending request; resets
   `recoveryRequestedAt = 0`; emits `RecoverRejected()`.
 
 Recovery-active condition (internal view): `recoveryRequestedAt != 0 &&
@@ -95,7 +97,7 @@ minimal single-voter local governance):
     into the governance proxy (or staking) to compute power.
     One documented assumption: recovery cannot succeed if the governance's stored quorum were
     set above `type(uint96).max`. That would require mainnet to deliberately set an absurd
-    threshold on the receiver chain before dying; threshold validators on sender/dual chains
+    threshold on the receiver chain before dying; the sender strategy's threshold validators
     bound quorums to a fraction of supply, so this cannot arise from ordinary operation.
 - `getProposalState`: under an active recovery, computes the state machine without any staking
   read. The qualified-consensus branch is evaluated with a staking-free receiver consensus
@@ -113,8 +115,8 @@ minimal single-voter local governance):
   Wormhole targets still revert `GovCrosschainNotSender`. This revert is **not** what protects
   the other chains — that is the implementation's pinning of the trusted emitter to Wormhole
   chain id 2 (mainnet), which rejects a VAA published by a recovered chain no matter what its
-  strategy allows (asserted by `test_ReceiveMessage_UnknownEmitterChain_Reverts`), and the
-  mode gate that keeps Dual chains from publishing at all. The revert exists so the recovery
+  strategy allows (asserted by `test_ReceiveMessage_UnknownEmitterChain_Reverts`). The revert
+  exists so the recovery
   fails fast on an action that could never succeed: the governance proxy holds no native
   balance on receiver chains, so a `publishMessage` action would revert on the fee at
   execution time and brick the recovery proposal.
@@ -207,12 +209,9 @@ power for anyone but the published recovery address; it cannot bypass the mainne
 check; and the only party who can trigger it is the address verified off-chain in the deploy
 records. The attack surface reduces to key custody and window calibration.
 
-**State-reporting note.** On receiver chains, `getProposalState` checks the receiver
-early-return before the `Executed` flag. Proposals that were executed while a recovery was
-active therefore read `Defeated` (not `Executed`) once the recovery ends and the receiver
-gate re-engages. This is fail-closed and safe — `Defeated` can never satisfy the `Succeeded`
-gate — but it looks odd in indexers and explorers, and Tally-style frontends will show those
-proposals as failed. No on-chain state is affected.
+**State reporting.** Executed is terminal: `getProposalState` checks `proposal.executed` before the
+receiver gate, so proposals executed during a recovery keep reading `Executed` after the recovery
+ends (or is vetoed), on both the native and the OpenZeppelin-compatible status APIs.
 
 ## Alternatives considered
 
@@ -242,6 +241,5 @@ Test coverage: `test/governance/Governance.Recovery.t.sol` — auth, window boun
 recovery with a fully bricked staking contract, emptied staking (global delegated 0, GRG
 total supply 1 — still qualifies immediately via the staking-free receiver consensus), fixed
 uint96 recovery power, veto-after-vote locking, Wormhole-target rejection under recovery,
-constructor zeroing of the staking proxy on receiver chains, and a full Dual → Receiver
-strategy-switch transition (local governance fail-closed after the switch, cross-chain
-receiving unaffected).
+and a full staking-backed → Receiver strategy-switch transition (local governance
+fail-closed after the switch, cross-chain receiving unaffected).

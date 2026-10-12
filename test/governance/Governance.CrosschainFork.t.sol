@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
@@ -43,11 +42,7 @@ contract GovernanceCrosschainForkTest is Test {
 
         // sender role: the strategy's local Wormhole id is Ethereum's
         governance = new CrosschainHarness();
-        governance.setStrategy(
-            address(
-                new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN, GovernanceMode.Sender, address(0))
-            )
-        );
+        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN)));
         governance.setParams(1, 1);
 
         counter = new Counter();
@@ -71,7 +66,7 @@ contract GovernanceCrosschainForkTest is Test {
         vm.mockCall(
             STAKING,
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp - 1)
+            abi.encode(block.timestamp + 1)
         );
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
     }
@@ -88,7 +83,7 @@ contract GovernanceCrosschainForkTest is Test {
                     abi.encode(
                         CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: 1, actions: innerActions})
                     ),
-                    uint8(200)
+                    uint8(202)
                 ),
                 value: 0
             });
@@ -103,7 +98,7 @@ contract GovernanceCrosschainForkTest is Test {
                 emitterChainId: EMITTER_CHAIN,
                 emitterAddress: bytes32(uint256(uint160(address(governance)))),
                 sequence: sequence,
-                consistencyLevel: 200,
+                consistencyLevel: 202,
                 payload: payload,
                 guardianSetIndex: 0,
                 signatures: new GuardianSignature[](0),
@@ -158,6 +153,13 @@ contract GovernanceCrosschainForkTest is Test {
         vm.prank(whale);
         uint256 proposalId = governance.propose(actions, "crosschain batch");
         vm.warp(block.timestamp + 2);
+        // the epoch mock is pinned, not a real clock: keep it fresh across the warp so the
+        // vote path does not attempt a roll against the code-less staking mock
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp + 1)
+        );
         vm.prank(whale);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         vm.warp(block.timestamp + 1);
@@ -178,9 +180,7 @@ contract GovernanceCrosschainForkTest is Test {
 
         // swap to the receiver role: the strategy's local Wormhole id is now the target chain.
         // The receiver path only reads wormhole()/wormholeChainId(), so any non-receiver mode works.
-        governance.setStrategy(
-            address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Sender, address(0)))
-        );
+        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN)));
 
         // delivering the two VAAs in order executes both batches in order
         vm.mockCall(

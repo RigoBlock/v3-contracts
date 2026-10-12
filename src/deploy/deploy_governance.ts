@@ -1,8 +1,11 @@
-import { ethers } from "ethers";
 import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import type { Environment } from "../../rocketh/config.js";
-import { chainConfig, governanceProxy } from "../utils/constants";
+import {
+  chainConfig,
+  GOVERNANCE_HUB_CHAIN,
+  governanceProxy,
+} from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
 export default deployScript(
@@ -22,61 +25,33 @@ export default deployScript(
 
     const config = chainConfig[chainId];
 
-    // Must be set explicitly per chain; the deploy reverts when the mode is missing or unknown.
-    if (!config.governanceMode) {
+    // The script is authoritative for the chain-to-mode mapping: the hub chain (Ethereum
+    // mainnet) is the only sender governance, every other chain is a receiver.
+    const isSender = chainId === GOVERNANCE_HUB_CHAIN;
+    if (config.governanceMode !== (isSender ? "sender" : "receiver")) {
       throw new Error(
-        `Governance mode not configured for chain ${chainId}. Set governanceMode in src/utils/constants.ts ` +
-          '("sender" for Ethereum mainnet, "dual" or "receiver" for other chains).',
-      );
-    }
-    // The script is authoritative for the chain-to-mode mapping: mainnet is the only sender
-    // governance, HyperEVM and BSC are receiver-only, and every other chain must be dual.
-    const expectedModeByChain: Record<number, string> = {
-      1: "sender",
-      999: "receiver",
-      56: "receiver",
-    };
-    const expectedMode = expectedModeByChain[chainId] ?? "dual";
-    if (config.governanceMode !== expectedMode) {
-      throw new Error(
-        `Governance mode for chain ${chainId} must be "${expectedMode}", got "${config.governanceMode}".`,
-      );
-    }
-    const governanceModeByConfig: Record<string, number> = {
-      sender: 0, // GovernanceMode.Sender
-      dual: 1, // GovernanceMode.Dual
-      receiver: 2, // GovernanceMode.Receiver
-    };
-    const governanceMode = governanceModeByConfig[config.governanceMode];
-    if (governanceMode === undefined) {
-      throw new Error(
-        `Unknown governance mode "${config.governanceMode}" for chain ${chainId}`,
+        `Governance mode for chain ${chainId} must be "${isSender ? "sender" : "receiver"}", got "${config.governanceMode}".`,
       );
     }
 
     // Receiver chains carry a recovery address, validated here so a chain can never
     // ship with an unset or unintended configuration.
-    const isReceiver = config.governanceMode === "receiver";
-    if (isReceiver && !config.governanceRecovery) {
+    if (!isSender && !config.governanceRecovery) {
       throw new Error(
         `governanceRecovery must be set for receiver chain ${chainId}. ` +
           "Set it to the recovery multisig in src/utils/constants.ts.",
       );
     }
-    if (!isReceiver && config.governanceRecovery) {
+    if (isSender && config.governanceRecovery) {
       throw new Error(
-        `governanceRecovery must not be set for non-receiver chain ${chainId} (${config.governanceMode}).`,
+        `governanceRecovery must not be set for sender chain ${chainId}.`,
       );
     }
-    const recoveryAddress = isReceiver
-      ? (config.governanceRecovery as string)
-      : "0x0000000000000000000000000000000000000000";
 
     // The cross-chain receiver capability lives inside the governance implementation itself:
     // the governance proxy is the receiver hub on each chain, and its deterministic address is
-    // known in advance on every chain. A chain opts in as a receiver by deploying its governance
-    // strategy with a Wormhole address (config.wormhole); chains with a zero Wormhole address are
-    // senders-only. Only the sender mode (mainnet) can create cross-chain proposals.
+    // known in advance on every chain. The hub chain runs the staking-backed sender strategy,
+    // which is the only one that can create local proposals and publish cross-chain messages.
     await env.deploy(
       "RigoblockGovernanceFactory",
       {
@@ -97,40 +72,49 @@ export default deployScript(
       { deterministic: true },
     );
 
-    const strategy = await env.deploy(
-      "RigoblockGovernanceStrategy",
-      {
-        account: deployer,
-        artifact: await readArtifact("RigoblockGovernanceStrategy"),
-        args: [
-          // the constructor zeroes the staking proxy on receiver chains; pass zero here too so
-          // the deterministic address never depends on a staking entry a receiver chain ignores
-          isReceiver ? ethers.ZeroAddress : config.stakingProxy,
-          config.wormhole,
-          config.wormholeChainId,
-          governanceMode,
-          recoveryAddress,
-        ],
-      },
-      { deterministic: true },
-    );
-
-    // the strategy authenticates recovery vetoes against the chain-independent governance
-    // proxy address baked into its runtime; a mismatch would leave the veto unreachable
-    const onchainCode = (await env.network.provider.request({
-      method: "eth_getCode",
-      params: [strategy.address as `0x${string}`, "latest"],
-    })) as string;
-
-    if (
-      !onchainCode
-        .toLowerCase()
-        .includes(governanceProxy.slice(2).toLowerCase())
-    ) {
-      throw new Error(
-        `Deployed RigoblockGovernanceStrategy at ${strategy.address} does not reference governance ` +
-          `proxy ${governanceProxy}; rejectRecover would be unreachable.`,
+    if (isSender) {
+      await env.deploy(
+        "RigoblockGovernanceStrategy",
+        {
+          account: deployer,
+          artifact: await readArtifact("RigoblockGovernanceStrategy"),
+          args: [config.stakingProxy, config.wormhole, config.wormholeChainId],
+        },
+        { deterministic: true },
       );
+    } else {
+      const receiverStrategy = await env.deploy(
+        "WormholeReceiverStrategy",
+        {
+          account: deployer,
+          artifact: await readArtifact("WormholeReceiverStrategy"),
+          args: [
+            config.wormhole,
+            config.wormholeChainId,
+            config.governanceRecovery as string,
+          ],
+        },
+        { deterministic: true },
+      );
+
+      // the receiver strategy authenticates recovery vetoes against the chain-independent
+      // governance proxy address baked into its runtime; a mismatch would leave the veto
+      // unreachable
+      const onchainCode = (await env.network.provider.request({
+        method: "eth_getCode",
+        params: [receiverStrategy.address as `0x${string}`, "latest"],
+      })) as string;
+
+      if (
+        !onchainCode
+          .toLowerCase()
+          .includes(governanceProxy.slice(2).toLowerCase())
+      ) {
+        throw new Error(
+          `Deployed WormholeReceiverStrategy at ${receiverStrategy.address} does not reference governance ` +
+            `proxy ${governanceProxy}; rejectRecover would be unreachable.`,
+        );
+      }
     }
   },
   { tags: ["governance", "l2-suite", "main-suite"] },

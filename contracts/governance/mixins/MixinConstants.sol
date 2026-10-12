@@ -35,6 +35,9 @@ abstract contract MixinConstants is IRigoblockGovernance {
     bytes32 internal constant _PROPOSAL_QUORUM_SLOT =
         0xf4c156034b6fb4a58e020267d829cfaef00618984d103ed2c234f43e7575a62e;
 
+    bytes32 internal constant _PROPOSAL_VOTING_POWER_SLOT =
+        0xce475bdcfd8f87b8625fc1a8575f248a210ac0c878131a1450e408c3254d0534;
+
     bytes32 internal constant _PROPOSED_ACTION_SLOT =
         0xe4ff3d203d0a873fb9ffd3a1bbd07943574a73114c5affe6aa0217c743adeb06;
 

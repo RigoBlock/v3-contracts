@@ -182,14 +182,12 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("RigoblockGovernanceStrategy"),
-        // hardhat network (chain id 31337): Dual mode (enum value 1) is the only valid
-        // non-mainnet mode for a chain with staking.
+        // hardhat network (chain id 31337) stands in for the hub chain: the sender strategy
+        // takes the staking proxy and a (dummy) Wormhole configuration.
         args: [
           stakingProxy.address,
           "0x1111111111111111111111111111111111111111",
           1,
-          1,
-          "0x0000000000000000000000000000000000000000",
         ],
       },
       { deterministic: true },

@@ -13,8 +13,8 @@ library GovernanceActionLib {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             let didSucceed := call(gas(), target, value, add(data, 0x20), mload(data), 0, 0)
-            returndatacopy(0, 0, returndatasize())
             if eq(didSucceed, 0) {
+                returndatacopy(0, 0, returndatasize())
                 revert(0, returndatasize())
             }
         }

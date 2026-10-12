@@ -2,20 +2,15 @@ import { expect } from "chai";
 import { chainConfig } from "../../src/utils/constants";
 
 // Mirrors the authoritative mapping enforced at deploy time in src/deploy/deploy_governance.ts:
-// mainnet is the only sender governance, HyperEVM and BSC are receiver-only, and every
-// other configured chain must be dual.
-const expectedModeByChain: Record<number, string> = {
-  1: "sender",
-  999: "receiver",
-  56: "receiver",
-};
+// the hub chain (Ethereum mainnet) is the only sender governance, every other configured
+// chain is a receiver.
+const GOVERNANCE_HUB_CHAIN = 1;
 
 describe("Governance chain config", async () => {
   it("every configured chain declares a governance mode", async () => {
     for (const [chainId, config] of Object.entries(chainConfig)) {
       expect(config.governanceMode, `chain ${chainId}`).to.be.oneOf([
         "sender",
-        "dual",
         "receiver",
       ]);
     }
@@ -23,7 +18,8 @@ describe("Governance chain config", async () => {
 
   it("chain-to-mode mapping matches the deploy script's enforced mapping", async () => {
     for (const [chainId, config] of Object.entries(chainConfig)) {
-      const expected = expectedModeByChain[Number(chainId)] ?? "dual";
+      const expected =
+        Number(chainId) === GOVERNANCE_HUB_CHAIN ? "sender" : "receiver";
       expect(config.governanceMode, `chain ${chainId}`).to.eq(expected);
     }
   });

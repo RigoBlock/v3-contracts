@@ -16,6 +16,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalcount")) - 1));
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
         assert(_PROPOSAL_QUORUM_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.quorum")) - 1));
+        assert(_PROPOSAL_VOTING_POWER_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.votingpower")) - 1));
         assert(_CROSSCHAIN_SEQUENCE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.sequence")) - 1));
         assert(_PROPOSAL_META_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.meta")) - 1));
         assert(_OZ_PROPOSAL_HASH_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.ozhash")) - 1));
@@ -85,6 +86,16 @@ abstract contract MixinStorage is MixinImmutables {
     function _proposalQuorum() internal pure returns (ProposalQuorumByIndex storage s) {
         assembly {
             s.slot := _PROPOSAL_QUORUM_SLOT
+        }
+    }
+
+    struct ProposalVotingPowerByIndex {
+        mapping(uint256 proposalId => uint256 votingPower) proposalVotingPowerById;
+    }
+
+    function _proposalVotingPower() internal pure returns (ProposalVotingPowerByIndex storage s) {
+        assembly {
+            s.slot := _PROPOSAL_VOTING_POWER_SLOT
         }
     }
 

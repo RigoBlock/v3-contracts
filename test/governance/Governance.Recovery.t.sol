@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {GovernanceMode, RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
+import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
+import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
 import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
@@ -32,7 +34,7 @@ contract GovernanceRecoveryTest is Test {
     uint256 internal constant RECOVERY_WINDOW = 60 days;
 
     CrosschainHarness internal governance;
-    RigoblockGovernanceStrategy internal strategy;
+    WormholeReceiverStrategy internal strategy;
     Counter internal counter;
     address internal recovery = makeAddr("recovery");
     address internal whale = makeAddr("whale");
@@ -43,7 +45,7 @@ contract GovernanceRecoveryTest is Test {
         CrosschainHarness harness = new CrosschainHarness();
         vm.etch(Constants.GOV_PROXY, address(harness).code);
         governance = CrosschainHarness(payable(Constants.GOV_PROXY));
-        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN, GovernanceMode.Receiver, recovery);
+        strategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, recovery);
         governance.setStrategy(address(strategy));
         governance.setParams(PROPOSAL_THRESHOLD, QUORUM_THRESHOLD);
         // the etch skips the constructor, which defaults the params to Timestamp
@@ -88,30 +90,30 @@ contract GovernanceRecoveryTest is Test {
     }
 
     function test_RequestRejectRecover_Auth() public {
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, whale));
+        vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryUnauthorized.selector, whale));
         vm.prank(whale);
         strategy.requestRecover();
 
         vm.expectEmit();
-        emit IGovernanceStrategy.RecoverRequested(block.timestamp);
+        emit IWormholeReceiverStrategy.RecoverRequested(block.timestamp);
         vm.prank(recovery);
         strategy.requestRecover();
 
-        vm.expectRevert(IGovernanceStrategy.GovRecoveryAlreadyPending.selector);
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAlreadyPending.selector);
         vm.prank(recovery);
         strategy.requestRecover();
 
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovRecoveryUnauthorized.selector, whale));
+        vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryUnauthorized.selector, whale));
         vm.prank(whale);
         strategy.rejectRecover();
 
         // the rejection runs as a governance-proxy-delivered action, i.e. with msg.sender == proxy
         vm.expectEmit();
-        emit IGovernanceStrategy.RecoverRejected();
+        emit IWormholeReceiverStrategy.RecoverRejected();
         vm.prank(address(governance));
         strategy.rejectRecover();
 
-        vm.expectRevert(IGovernanceStrategy.GovRecoveryNotPending.selector);
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryNotPending.selector);
         vm.prank(address(governance));
         strategy.rejectRecover();
     }
@@ -123,17 +125,17 @@ contract GovernanceRecoveryTest is Test {
         vm.warp(block.timestamp + RECOVERY_WINDOW - 1);
 
         assertEq(strategy.getVotingPower(recovery), 0);
-        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
+        vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
         strategy.votingTimestamps(TimeType.Timestamp);
-        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
-        strategy.beforePropose(_incrementAction());
+        vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
+        strategy.beforePropose(_incrementActions());
     }
 
     /// @notice Re-requesting once the recovery is active would disarm it; it must revert.
     function test_ActiveRecovery_ReRequest_Reverts() public {
         _activateRecovery();
 
-        vm.expectRevert(IGovernanceStrategy.GovRecoveryAlreadyPending.selector);
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAlreadyPending.selector);
         vm.prank(recovery);
         strategy.requestRecover();
 
@@ -204,39 +206,46 @@ contract GovernanceRecoveryTest is Test {
         );
         governance.execute(proposalId);
 
-        vm.expectRevert(IGovernanceStrategy.GovLocalGovernanceDisabled.selector);
+        vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
         strategy.votingTimestamps(TimeType.Timestamp);
+    }
+
+    /// @notice A proposal executed during an active recovery keeps reading Executed after the
+    ///     recovery ends: executed is terminal and the receiver gate must not rewrite it.
+    function test_Recovery_ExecutedProposal_StaysExecuted_AfterVeto() public {
+        _activateRecovery();
+        uint256 proposalId = _proposeVote();
+
+        vm.warp(block.timestamp + 1);
+        governance.execute(proposalId);
+        assertEq(counter.value(), 1);
+
+        vm.prank(address(governance));
+        strategy.rejectRecover();
+
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
     /// @notice Cross-chain sending stays exclusive to the Sender chain during a recovery.
     function test_Recovery_WormholeAction_Reverts() public {
         _activateRecovery();
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: WORMHOLE,
-            data: "",
-            value: 0
-        });
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = IGovernanceVoting.ProposedAction({target: WORMHOLE, data: "", value: 0});
         vm.expectRevert(IGovernanceStrategy.GovCrosschainNotSender.selector);
-        strategy.beforePropose(action);
+        strategy.beforePropose(actions);
         vm.expectRevert(IGovernanceStrategy.GovCrosschainNotSender.selector);
-        strategy.beforeExecute(action);
+        strategy.beforeExecute(actions);
     }
 
-    /// @notice A dual governance can be turned into a receiver governance by a single local
-    ///     proposal that swaps the strategy: the proxy and its storage are untouched, local
+    /// @notice A staking-backed governance can be turned into a receiver governance by a single
+    ///     local proposal that swaps the strategy: the proxy and its storage are untouched, local
     ///     governance is fail-closed right after the switch, and cross-chain receiving keeps
     ///     working unchanged.
-    function test_DualToReceiver_Transition_UpgradesSmoothly() public {
-        RigoblockGovernanceStrategy dualStrategy = new RigoblockGovernanceStrategy(
-            STAKING,
-            WORMHOLE,
-            TARGET_CHAIN,
-            GovernanceMode.Dual,
-            address(0)
-        );
-        governance.setStrategy(address(dualStrategy));
+    function test_StakingToReceiver_Transition_UpgradesSmoothly() public {
+        RigoblockGovernanceStrategy senderStrategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+        governance.setStrategy(address(senderStrategy));
 
-        // local voting power for the dual phase
+        // local voting power for the staking-backed phase
         IStructs.StoredBalance memory balance = IStructs.StoredBalance({
             currentEpoch: 1,
             currentEpochBalance: uint96(1_000_000e18),
@@ -255,17 +264,11 @@ contract GovernanceRecoveryTest is Test {
         vm.mockCall(
             STAKING,
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp - 1)
+            abi.encode(block.timestamp + 1)
         );
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
-        RigoblockGovernanceStrategy receiverStrategy = new RigoblockGovernanceStrategy(
-            STAKING,
-            WORMHOLE,
-            TARGET_CHAIN,
-            GovernanceMode.Receiver,
-            recovery
-        );
+        WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, recovery);
 
         IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
         actions[0] = IGovernanceVoting.ProposedAction({
@@ -277,6 +280,13 @@ contract GovernanceRecoveryTest is Test {
         uint256 proposalId = governance.propose(actions, "switch to receiver");
 
         vm.warp(block.timestamp + 2);
+        // the epoch mock is pinned, not a real clock: keep it fresh across the warp so the
+        // vote path does not attempt a roll against the code-less staking mock
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp + 1)
+        );
         vm.prank(whale);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
@@ -302,7 +312,7 @@ contract GovernanceRecoveryTest is Test {
             emitterChainId: CHAIN_ID_ETHEREUM,
             emitterAddress: bytes32(uint256(uint160(address(governance)))),
             sequence: 0,
-            consistencyLevel: 200,
+            consistencyLevel: 202,
             payload: payload,
             guardianSetIndex: 0,
             signatures: new GuardianSignature[](0),
@@ -320,5 +330,11 @@ contract GovernanceRecoveryTest is Test {
                 data: abi.encodeCall(Counter.increment, ()),
                 value: 0
             });
+    }
+
+    function _incrementActions() private view returns (IGovernanceVoting.ProposedAction[] memory) {
+        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        actions[0] = _incrementAction();
+        return actions;
     }
 }

@@ -8,15 +8,6 @@ import {ProposalStatus} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
-    /// @notice Emitted when a recovery is requested.
-    event RecoverRequested(uint256 timestamp);
-
-    /// @notice Emitted when a recovery is rejected.
-    event RecoverRejected();
-
-    /// @notice Thrown when a local governance method is called on a receiver-only chain.
-    error GovLocalGovernanceDisabled();
-
     /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
     error GovCrosschainInvalidData();
 
@@ -42,30 +33,13 @@ interface IGovernanceStrategy {
     /// @notice Thrown when the governance time type is not TimeType.Timestamp.
     error GovStrategyInvalidTimeType(TimeType timeType);
 
-    /// @notice Thrown when an address other than the recovery address or the governance proxy
-    ///      attempts to manage a recovery request.
-    error GovRecoveryUnauthorized(address caller);
+    /// @notice Thrown when the staking epoch cannot be rolled forward by a proposal.
+    error GovEpochNotFinalized();
 
-    /// @notice Thrown when a recovery request is pending or already active.
-    error GovRecoveryAlreadyPending();
-
-    /// @notice Thrown when no recovery request is pending.
-    error GovRecoveryNotPending();
-
-    /// @notice Thrown when a receiver-chain strategy is deployed without a recovery address.
-    error GovRecoveryAddressZero();
-
-    /// @notice Requests the governance recovery; executable after the challenge window.
-    /// @dev Only callable by the recovery address, and only when no request is pending or active.
-    function requestRecover() external;
-
-    /// @notice Rejects a pending or active recovery (the governance's veto).
-    /// @dev Only callable by the governance proxy, i.e. as a delivered governance action.
-    function rejectRecover() external;
-
-    /// @notice Thrown when a threshold on a receiver chain is outside the recovery-enforceable range.
-    /// @param threshold The invalid threshold.
-    error GovStrategyInvalidReceiverThreshold(uint256 threshold);
+    /// @notice Thrown when a vote is cast after the staking epoch of the proposal's snapshot has rolled.
+    /// @param currentEpochEnd The current epoch's earliest end time.
+    /// @param expectedEpochEnd The snapshot epoch's earliest end time.
+    error GovVotingEpochMismatch(uint256 currentEpochEnd, uint256 expectedEpochEnd);
 
     /// @notice Reverts if initialization paramters are incorrect.
     /// @dev Only used at initialization, as params deleted from factory storage after setup.
@@ -84,13 +58,20 @@ interface IGovernanceStrategy {
     /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
     /// @param proposal Tuple of the proposal.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
+    /// @param totalVotingPower Total voting power snapshotted by the governance on the first vote.
     /// @param timeType Time reference used by the proposal's voting period.
     /// @return Tuple of the proposal state.
     function getProposalState(
         IGovernanceState.Proposal calldata proposal,
         uint256 minimumQuorum,
+        uint256 totalVotingPower,
         TimeType timeType
     ) external view returns (ProposalStatus);
+
+    /// @notice Returns the current total voting power.
+    /// @dev Snapshotted by the governance on the first vote of each proposal, so the denominator
+    ///      of qualified-majority calculations cannot shrink after votes are recorded.
+    function totalVotingPower() external view returns (uint256);
 
     /// @notice Return the voting period.
     /// @dev Informational only: the enforceable window is the one returned by votingTimestamps.
@@ -100,6 +81,7 @@ interface IGovernanceStrategy {
     /// @notice Returns the voting timestamps.
     /// @dev Must produce start/end values expressed in the same unit as `timeType` (block numbers
     ///      for TimeType.Blocknumber, timestamps for TimeType.Timestamp). See getProposalState.
+    ///      Pure view: the epoch is rolled by `beforePropose` and `beforeVote` before this is read.
     /// @param timeType Time reference used by the proposal's voting period.
     /// @return startBlockOrTime Timestamp when proposal starts.
     /// @return endBlockOrTime Timestamp when voting ends.
@@ -107,23 +89,35 @@ interface IGovernanceStrategy {
         TimeType timeType
     ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
 
+    /// @notice Prepares the staking clock for a vote and pins the proposal's voting epoch.
+    /// @dev Called by the governance before the first vote of each proposal with `storedEpochEnd`
+    ///      0, and before every later vote with the snapshot epoch's end time. When 0, rolls a
+    ///      finished staking epoch so the snapshot matches the epoch the votes are recorded in,
+    ///      and returns the current epoch's earliest end time; otherwise reverts unless the
+    ///      staking epoch is still the snapshot epoch. Receiver chains return 0.
+    /// @param storedEpochEnd The snapshot epoch's earliest end time, or 0 on the first vote.
+    /// @return epochEnd The current epoch's earliest end time, or 0 on receiver chains.
+    function beforeVote(uint256 storedEpochEnd) external returns (uint256 epochEnd);
+
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.
     function getVotingPower(address account) external view returns (uint256);
 
-    /// @notice Validates and optionally modifies an action before it is stored as part of a proposal.
-    /// @param action The action to validate.
-    /// @return The validated (possibly modified) action.
+    /// @notice Validates and optionally modifies every action before it is stored as part of a proposal.
+    /// @dev Called once per proposal; runs before the voting window is read and may roll the
+    ///      staking clock, so it is not a view function.
+    /// @param actions The actions to validate.
+    /// @return The validated (possibly modified) actions.
     function beforePropose(
-        IGovernanceVoting.ProposedAction calldata action
-    ) external view returns (IGovernanceVoting.ProposedAction memory);
+        IGovernanceVoting.ProposedAction[] calldata actions
+    ) external returns (IGovernanceVoting.ProposedAction[] memory);
 
-    /// @notice Returns the action as it should be executed, optionally modifying the value.
-    /// @param action The action to execute.
-    /// @return The action to execute.
+    /// @notice Returns the actions as they should be executed, optionally modifying their values.
+    /// @param actions The actions to execute.
+    /// @return The actions to execute.
     function beforeExecute(
-        IGovernanceVoting.ProposedAction calldata action
-    ) external view returns (IGovernanceVoting.ProposedAction memory);
+        IGovernanceVoting.ProposedAction[] calldata actions
+    ) external view returns (IGovernanceVoting.ProposedAction[] memory);
 
     /// @notice Returns the Wormhole core contract used for cross-chain governance.
     /// @return Address of the Wormhole core contract, or the zero address if this chain is not

@@ -24,8 +24,12 @@ interface ChainConfig {
 }
 
 // Governance mode of a chain, mirroring the on-chain GovernanceMode enum
-// (contracts/governance/strategies/RigoblockGovernanceStrategy.sol). Must be set per chain.
-export type GovernanceMode = "sender" | "dual" | "receiver";
+// (contracts/governance/types/GovernanceTypes.sol). The hub chain is the only sender.
+export type GovernanceMode = "sender" | "receiver";
+
+// The governance hub chain: the only chain with staking-backed sender governance. Every
+// other configured chain is a receiver and requires a governanceRecovery address.
+export const GOVERNANCE_HUB_CHAIN = 1;
 
 // The Rigoblock governance proxy, deployed at the same address on every chain; used by the
 // AGovernance adapter. The strategy contract authenticates recovery against the same value.
@@ -59,7 +63,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0xe35e9842fceaca96570b734083f4a58e8f7c5f2a",
     wormhole: "0xa5f208e072434bC67592E4C49C1B991BA79BCA46",
     wormholeChainId: 23,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // Optimism (Chain ID: 10)
   10: {
@@ -73,7 +77,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0x6f26Bf09B1C792e3228e5467807a900A503c0281",
     wormhole: "0xEe91C335eab126dF5fDB3797EA9d6aD93aeC9722",
     wormholeChainId: 24,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // Polygon (Chain ID: 137)
   137: {
@@ -87,7 +91,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0x9295ee1d8C5b022Be115A2AD3c30C72E34e7F096",
     wormhole: "0x7A4B5a56256163F07b2C80A7cA55aBE66c4ec4d7",
     wormholeChainId: 5,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // BSC (Chain ID: 56)
   56: {
@@ -115,7 +119,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
     wormhole: "0xCa1D5a146B03f6303baF59e5AD5615ae0b9d146D",
     wormholeChainId: 44,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // Base (Chain ID: 8453)
   8453: {
@@ -129,7 +133,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64",
     wormhole: "0xbebdb6C8ddC678FfA9f8748f85C815C556Dd8ac6",
     wormholeChainId: 30,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // Sepolia (Chain ID: 11155111)
   11155111: {
@@ -143,7 +147,7 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     acrossSpokePool: "0x5ef6C01E11889d86803e0B23e3cB3F9E9d97B662",
     wormhole: "0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78",
     wormholeChainId: 10002,
-    governanceMode: "dual",
+    governanceMode: "receiver",
   },
   // HyperEVM (Chain ID: 999)
   999: {

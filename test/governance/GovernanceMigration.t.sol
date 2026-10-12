@@ -61,17 +61,10 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         require(!_revertOnQuorumValidation, MockInvalidQuorumThreshold());
     }
 
-    function requestRecover() external pure override {
-        revert();
-    }
-
-    function rejectRecover() external pure override {
-        revert();
-    }
-
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
         uint256 minimumQuorum,
+        uint256,
         TimeType timeType
     ) external view returns (ProposalStatus) {
         uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
@@ -101,9 +94,13 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         return 7 days;
     }
 
+    function totalVotingPower() external view override returns (uint256) {
+        return votingPower;
+    }
+
     function votingTimestamps(
         TimeType timeType
-    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
+    ) external view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
         if (timeType == TimeType.Timestamp) {
             startBlockOrTime = block.timestamp + 1;
             endBlockOrTime = startBlockOrTime + 7 days;
@@ -118,15 +115,19 @@ contract MockMigrationStrategy is IGovernanceStrategy {
     }
 
     function beforePropose(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+        IRigoblockGovernance.ProposedAction[] calldata actions
+    ) external pure returns (IRigoblockGovernance.ProposedAction[] memory) {
+        return actions;
     }
 
     function beforeExecute(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+        IRigoblockGovernance.ProposedAction[] calldata actions
+    ) external pure returns (IRigoblockGovernance.ProposedAction[] memory) {
+        return actions;
+    }
+
+    function beforeVote(uint256) external pure returns (uint256) {
+        return 0;
     }
 
     function wormhole() external pure returns (address) {

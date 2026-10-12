@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {GovernanceMode} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
+import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
@@ -49,9 +49,7 @@ contract GovernanceMigrationForkTest is Test {
         newStrategy = new RigoblockGovernanceStrategy(
             Constants.GRG_STAKING,
             Constants.WORMHOLE_ETHEREUM,
-            uint16(2), // Wormhole Ethereum chain id
-            GovernanceMode.Sender, // deployed on the mainnet fork
-            address(0)
+            uint16(2) // Wormhole Ethereum chain id
         );
 
         // Give the test voter enough voting power to create and pass proposals. Voting power is
@@ -231,6 +229,14 @@ contract GovernanceMigrationForkTest is Test {
         IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(proposalId);
         vm.warp(wrapper.proposal.startBlockOrTime + 1);
 
+        // the vote path rolls a finished epoch before snapshotting; pin the clock fresh (the
+        // real mainnet staking rejects the roll while pools are unfinalized)
+        vm.mockCall(
+            Constants.GRG_STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp + 1)
+        );
+
         vm.prank(voter);
         if (legacyVote) {
             // pre-upgrade implementation: VoteType.For = 0, do not use the reordered enum
@@ -246,10 +252,18 @@ contract GovernanceMigrationForkTest is Test {
     }
 
     /// @dev Creates a proposal as the voter.
+    /// @notice The new strategy rolls a finished staking epoch inside beforePropose, which the
+    ///     real mainnet staking rejects while pools are unfinalized; the tests repeatedly warp
+    ///     whole voting periods, so the epoch clock is pinned fresh before every proposal.
     function _createProposal(
         IGovernanceVoting.ProposedAction[] memory actions,
         string memory description
     ) internal returns (uint256 proposalId) {
+        vm.mockCall(
+            Constants.GRG_STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp + 1)
+        );
         vm.prank(voter);
         return IGovernanceVoting(PROXY).propose(actions, description);
     }

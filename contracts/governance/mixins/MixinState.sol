@@ -224,10 +224,15 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
         uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
         quorum = quorum > 0 ? quorum : type(uint256).max;
 
+        // the slot packs (epochEnd << 192) | votingPower; zero until the first vote snapshots both,
+        // so a proposal without votes cannot qualify
+        uint256 totalVotingPower = uint192(_proposalVotingPower().proposalVotingPowerById[proposalId]);
+
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
                 quorum,
+                totalVotingPower,
                 _governanceParameters().timeType
             );
     }

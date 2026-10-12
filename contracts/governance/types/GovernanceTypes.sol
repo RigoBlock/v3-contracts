@@ -38,3 +38,12 @@ struct CrossChainPayload {
     uint256 proposalId;
     IGovernanceVoting.ProposedAction[] actions;
 }
+
+/// @notice Role of a chain in cross-chain governance. The hub chain (Ethereum mainnet) is the
+///         only sender: it holds staking-backed voting and publishes governance messages.
+///         Every other chain is a receiver: local governance is fail-closed and the only
+///         execution path is delivered cross-chain messages, with a recovery escape hatch.
+enum GovernanceMode {
+    Sender,
+    Receiver
+}
