@@ -5,6 +5,7 @@ import {
   chainConfig,
   GOVERNANCE_HUB_CHAIN,
   governanceProxy,
+  governanceRecovery,
 } from "../utils/constants";
 import { enableManagedNonce } from "../utils/nonce";
 
@@ -36,13 +37,13 @@ export default deployScript(
 
     // Receiver chains carry a recovery address, validated here so a chain can never
     // ship with an unset or unintended configuration.
-    if (!isSender && !config.governanceRecovery) {
+    if (!isSender && !governanceRecovery) {
       throw new Error(
         `governanceRecovery must be set for receiver chain ${chainId}. ` +
           "Set it to the recovery multisig in src/utils/constants.ts.",
       );
     }
-    if (isSender && config.governanceRecovery) {
+    if (isSender && governanceRecovery) {
       throw new Error(
         `governanceRecovery must not be set for sender chain ${chainId}.`,
       );
@@ -91,15 +92,16 @@ export default deployScript(
           args: [
             config.wormhole,
             config.wormholeChainId,
-            config.governanceRecovery as string,
+            governanceProxy,
+            governanceRecovery as string,
           ],
         },
         { deterministic: true },
       );
 
-      // the receiver strategy authenticates recovery vetoes against the chain-independent
-      // governance proxy address baked into its runtime; a mismatch would leave the veto
-      // unreachable
+      // the receiver strategy authenticates recovery vetoes against the governance proxy
+      // address passed as an immutable constructor argument; a mismatch would leave the
+      // veto unreachable
       const onchainCode = (await env.network.provider.request({
         method: "eth_getCode",
         params: [receiverStrategy.address as `0x${string}`, "latest"],

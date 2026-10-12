@@ -40,7 +40,7 @@ Verified against the current code:
   (`MixinState._getVotingPower` → `IGovernanceStrategy.getVotingPower`).
 - The quorum is snapshotted into governance storage at proposal creation as the plain
   governance `quorumThreshold` — **no staking read**
-  (`MixinVoting.sol:131`).
+  (`MixinVoting.sol:134`).
 - Proposal state is computed **only** through the strategy
   (`MixinState._getProposalState` → `IGovernanceStrategy.getProposalState`).
 - VAA-delivered actions execute with `msg.sender == governance proxy`
@@ -51,21 +51,16 @@ Verified against the current code:
 
 ### Strategy changes
 
-New constructor argument (immutable, validated by the deploy script: required on receiver
-chains, forbidden elsewhere — a chain can never ship with an unset or unintended
-configuration). The constructor additionally **zeroes the recovery address on non-receiver
-chains**, so a misconfigured deployment cannot arm the recovery path even by accident, and
-**zeroes the staking proxy on receiver chains**, so no staking address can ever influence a
-receiver chain, whatever was passed at deploy time:
+New constructor arguments (immutables, validated by the deploy script: both are required on
+receiver chains, forbidden elsewhere — a chain can never ship with an unset or unintended
+configuration):
 
-- `recoveryAddress` — a Rigoblock-team address, required on Receiver chains: the constructor
-  reverts on a zero address there, so even a hand deployment cannot ship a permanently dead
-  hatch. Zero elsewhere.
-
-The governance proxy needs no constructor argument: the proxy is deterministically deployed
-at the same address on every chain, so the strategy authenticates a recovery rejection
-against that canonical address, hardcoded as a constant — no per-chain configuration, no
-deploy-time input to get wrong.
+- `recoveryAddress` — a Rigoblock-team address, required non-zero (`GovRecoveryAddressZero`):
+  even a hand deployment cannot ship a permanently dead hatch.
+- `governanceProxy` — the governance proxy, deterministically deployed at the same address on
+  every chain. The strategy authenticates a recovery rejection (`rejectRecover`) against this
+  address; it is constructor-wired rather than a source constant, but there is still no
+  per-chain freedom to get it wrong.
 
 New mutable storage:
 
@@ -76,59 +71,49 @@ New functions:
 - `requestRecover()` — callable only by `recoveryAddress`; reverts while a request is pending
   or a recovery is active (re-requesting an active recovery would overwrite its timestamp and
   disarm it); sets `recoveryRequestedAt = block.timestamp`; emits `RecoverRequested(timestamp)`.
-- `rejectRecover()` — callable only by the governance proxy, whose canonical address is
-  hardcoded in the strategy (i.e. only as an action delivered through `receiveMessage`);
-  requires a pending request; resets
+- `rejectRecover()` — callable only by the governance proxy (i.e. only as an action delivered
+  through `receiveMessage`); requires a pending request; resets
   `recoveryRequestedAt = 0`; emits `RecoverRejected()`.
 
 Recovery-active condition (internal view): `recoveryRequestedAt != 0 &&
 block.timestamp >= recoveryRequestedAt + RECOVERY_WINDOW`.
 
-Mode-gated behavior changes — every existing `Receiver` branch becomes
-`Receiver && !recoveryActive` (i.e. under an active recovery the strategy behaves like a
-minimal single-voter local governance):
+Mode-gated behavior changes — every existing local-governance branch becomes
+`!recoveryActive` (i.e. under an active recovery the strategy behaves like a minimal
+single-proposer local governance):
 
 - `getVotingPower(account)`: under an active recovery, returns `type(uint96).max` for
   `recoveryAddress`, and 0 for everyone else. The fixed uint96 value is deliberate:
-  - it exceeds any realistic quorum by orders of magnitude (quorums are bounded by a
-    fraction of GRG supply; `type(uint96).max` is ~800x the entire GRG supply),
+  - it exceeds any realistic proposer threshold by orders of magnitude,
   - it fits the vote receipt, which stores votes as `uint96`, without truncation,
   - and it keeps the recovery path free of external reads — the strategy never calls back
     into the governance proxy (or staking) to compute power.
-    One documented assumption: recovery cannot succeed if the governance's stored quorum were
-    set above `type(uint96).max`. That would require mainnet to deliberately set an absurd
-    threshold on the receiver chain before dying; the sender strategy's threshold validators
-    bound quorums to a fraction of supply, so this cannot arise from ordinary operation.
-- `getProposalState`: under an active recovery, computes the state machine without any staking
-  read. The qualified-consensus branch is evaluated with a staking-free receiver consensus
-  (`votesFor >= minimumQuorum`): the recovery vote reaches `Qualified` immediately, the voting
-  window closes at the qualifying vote, and the proposal is executable at the next block. This
-  is required, not an optimization: the standard consensus performs an external call to
-  staking, so a bricked staking contract would make `getProposalState` revert and the recovery
-  could never execute — in exactly the disaster case the hatch exists for. The receiver
-  consensus also removes the `3 * votesFor` overflow and cannot be pinned by an emptied
-  staking contract (global delegated = 0). The proposal state stays readable at every step.
-- `votingTimestamps`: under an active recovery, returns a staking-free start
-  (`block.timestamp`) and the default voting period, instead of reverting. No flash-vote risk:
+- `getProposalState` is proposer-based: a proposal whose proposer is `recoveryAddress`
+  returns `Succeeded` while a recovery is active, everything else returns `Defeated` — with
+  no staking read in either branch. This is required, not an optimization: the sender
+  consensus performs an external call to staking, so a bricked staking contract would make
+  `getProposalState` revert and the recovery could never execute — in exactly the disaster
+  case the hatch exists for. The proposer-based gate also cannot be pinned by an emptied
+  staking contract (global delegated = 0), and the proposal state stays readable at every
+  step. `execute` still enforces the ordinary `Succeeded` gate, so the recovery proposal is
+  executable at the next block.
+- `votingTimestamps` returns `(block.timestamp, block.timestamp)` and `votingPeriod` returns
+  0 — the window is empty, so no flash-vote risk and no staking-derived start to compute:
   voting power is fixed to the recovery address, so only it can vote.
-- `beforePropose` / `beforeExecute`: allow non-Wormhole actions under an active recovery;
-  Wormhole targets still revert `GovCrosschainNotSender`. This revert is **not** what protects
-  the other chains — that is the implementation's pinning of the trusted emitter to Wormhole
-  chain id 2 (mainnet), which rejects a VAA published by a recovered chain no matter what its
-  strategy allows (asserted by `test_ReceiveMessage_UnknownEmitterChain_Reverts`). The revert
-  exists so the recovery
-  fails fast on an action that could never succeed: the governance proxy holds no native
-  balance on receiver chains, so a `publishMessage` action would revert on the fee at
-  execution time and brick the recovery proposal.
-- `votingPeriod`: already staking-free on Receiver (returns the 7-day default); unchanged.
-- Threshold validators and `assertValidInitParams`: unchanged (already staking-free on
-  Receiver).
-
-**Warning — `updateThresholds` during a recovery.** The threshold validators read GRG total
-supply through staking. If staking is dead, a recovery proposal that includes an
-`updateThresholds` action reverts inside the validator. The recovery flow does not need it:
-change thresholds only after the recovery batch has installed a fresh strategy (which is
-step 4 of the recovery flow anyway).
+- `beforePropose`: allows non-Wormhole actions under an active recovery (reverts
+  `GovLocalGovernanceDisabled` otherwise). Wormhole `publishMessage` targets are *not*
+  special-cased here — that protection is the implementation's pinning of the trusted emitter
+  to Wormhole chain id 2 (mainnet), which rejects a VAA published by a recovered chain no
+  matter what its strategy allows (asserted by
+  `test_ReceiveMessage_UnknownEmitterChain_Reverts`). A wormhole action in a recovery batch
+  would simply revert on the fee at execution time (the governance proxy holds no native
+  balance on receiver chains); keeping `beforePropose` gate-free means a recovery batch never
+  fails on strategy validation before it can fix the bridge pointer.
+- `beforeExecute`: pure pass-through.
+- Threshold validators and `assertValidInitParams`: empty — receiver governance has no voting
+  thresholds, so any value is accepted (`assertValidInitParams` only asserts the name is
+  `"Rigoblock Governance"`). This also keeps a mainnet-sent crosschain `updateThresholds`
+  action from reverting and bricking the whole VAA batch.
 
 ### Veto path (mainnet, while Wormhole is alive)
 
@@ -155,11 +140,10 @@ window arithmetic above is the monitoring SLA.
 
 1. `requestRecover()` was called at some point (any time; may be long before the failure).
 2. Window passes with no veto.
-3. Recovery address calls `propose` (passes the threshold via the fixed recovery voting
-   power), `castVote` For — the vote is a superquorum under the staking-free receiver
-   consensus, so the proposal reaches `Qualified` immediately, the voting window closes, and
-   `execute` is possible at the next block. The proposal state is readable throughout, with
-   or without a functioning staking system.
+3. Recovery address calls `propose` (passes the proposer threshold via the fixed recovery
+   voting power) — the proposal reads `Succeeded` immediately at creation (proposer-based
+   state), so `execute` is possible at the next block. No vote is needed. The proposal state
+   is readable throughout, with or without a functioning staking system.
 4. Typical recovery batch: `upgradeStrategy(freshStrategy)` — a new strategy instance with
    `recoveryRequestedAt = 0` re-arms the recovery hatch under the recovery governance's own
    chosen parameters, and optionally re-points `wormhole()` to a new bridge.
@@ -169,7 +153,7 @@ window arithmetic above is the monitoring SLA.
 | Parameter                     | Value                                        | Rationale                                                                                                                                                                                         |
 | ----------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `RECOVERY_WINDOW`             | 60 days                                      | Mainnet notices and delivers one veto within ~2 epochs (2 weeks each) with large margin; long enough to survive congestion, short enough that a dead bridge does not freeze the chain for months. |
-| `votingPeriod` under recovery | existing 7-day default                       | Latency is covered by the `Qualified` shortcut: the qualifying vote closes the window, so the 7-day period never actually runs.                                                                   |
+| `votingPeriod` under recovery | 0 (empty window)                            | The proposal reads `Succeeded` immediately at creation (proposer-based state), so no voting window ever runs — the period is inert.                                                            |
 | Execution scope               | whatever the ordinary governance can execute | The recovery flows through normal `execute`, so no new execution primitive is introduced.                                                                                                         |
 
 ## Security analysis
@@ -238,8 +222,8 @@ rides it or a follow-up train is a scope decision). Per chain: deploy strategy w
 via the governance's normal strategy upgrade. Until adopted, exposure is the status quo.
 
 Test coverage: `test/governance/Governance.Recovery.t.sol` — auth, window boundary,
-recovery with a fully bricked staking contract, emptied staking (global delegated 0, GRG
-total supply 1 — still qualifies immediately via the staking-free receiver consensus), fixed
-uint96 recovery power, veto-after-vote locking, Wormhole-target rejection under recovery,
-and a full staking-backed → Receiver strategy-switch transition (local governance
+recovery with a fully bricked staking contract, immediate `Succeeded` at creation
+(proposer-based state, no staking read), fixed uint96 recovery power, veto-after-request
+locking, wormhole actions passing `beforePropose` under recovery (execution still fails on
+the fee), and a full staking-backed → receiver strategy-switch transition (local governance
 fail-closed after the switch, cross-chain receiving unaffected).

@@ -3,9 +3,8 @@ pragma solidity 0.8.37;
 
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 import {IWormholeReceiverStrategy} from "./interfaces/IWormholeReceiverStrategy.sol";
 
@@ -14,30 +13,29 @@ import {IWormholeReceiverStrategy} from "./interfaces/IWormholeReceiverStrategy.
 ///      cross-chain messages delivered from the sender chain. A recovery escape hatch
 ///      (see the governance documentation) covers bridge failure.
 contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrategy {
-    /// @notice Wormhole core contract on the same chain as this strategy.
-    address private immutable _wormhole;
-
-    /// @notice Fixed voting period; the recovery address has no flash-vote risk.
-    uint256 private constant _VOTING_PERIOD = 7 days;
-
     /// @notice Challenge window between a recovery request and its activation.
     uint256 private constant _RECOVERY_WINDOW = 60 days;
 
-    /// @notice The Rigoblock governance proxy, identical on every chain; authenticates a recovery rejection.
-    address private constant _GOVERNANCE_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
+    /// @notice Wormhole core contract on the same chain as this strategy.
+    address private immutable _wormhole;
 
     /// @notice Wormhole chain id of the chain this strategy is deployed on.
     uint16 private immutable _wormholeChainId;
+
+    /// @notice The Rigoblock governance proxy, identical on every chain; authenticates a recovery rejection.
+    address private immutable _governanceProxy;
 
     /// @notice Pre-designated recovery address.
     address private immutable _recoveryAddress;
 
     uint256 private _recoveryRequestedAt;
 
-    constructor(address wormhole, uint16 wormholeChainId, address recoveryAddress) {
+    constructor(address wormhole, uint16 wormholeChainId, address governanceProxy, address recoveryAddress) {
+        require(governanceProxy != address(0), GovRecoveryAddressZero());
         require(recoveryAddress != address(0), GovRecoveryAddressZero());
         _wormhole = wormhole;
         _wormholeChainId = wormholeChainId;
+        _governanceProxy = governanceProxy;
         _recoveryAddress = recoveryAddress;
     }
 
@@ -53,7 +51,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     /// @inheritdoc IWormholeReceiverStrategy
     function rejectRecover() external override {
-        require(msg.sender == _GOVERNANCE_PROXY, GovRecoveryUnauthorized(msg.sender));
+        require(msg.sender == _governanceProxy, GovRecoveryUnauthorized(msg.sender));
         require(_recoveryRequestedAt != 0, GovRecoveryNotPending());
         _recoveryRequestedAt = 0;
         emit RecoverRejected();
@@ -61,110 +59,66 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     /// @inheritdoc IGovernanceStrategy
     function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
-        _assertTimestamp(params.timeType);
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
-        assertValidProposalThreshold(params.proposalThreshold);
-        assertValidQuorumThreshold(params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidProposalThreshold(uint256 proposalThreshold) public pure override {
-        _assertValidReceiverThreshold(proposalThreshold);
-    }
+    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
+    function assertValidProposalThreshold(uint256) external pure override {}
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidQuorumThreshold(uint256 quorumThreshold) public pure override {
-        _assertValidReceiverThreshold(quorumThreshold);
-    }
-
-    /// @dev Thresholds must stay within the recovery address's fixed voting power.
-    function _assertValidReceiverThreshold(uint256 threshold) private pure {
-        require(threshold != 0 && threshold <= type(uint96).max, GovStrategyInvalidReceiverThreshold(threshold));
-    }
+    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
+    function assertValidQuorumThreshold(uint256) external pure override {}
 
     /// @inheritdoc IGovernanceStrategy
+    /// @dev Local governance is fail-closed: only the recovery address can pass a proposal,
+    ///      and only while a recovery is active. Execution status is handled by the governance.
     function getProposalState(
-        IGovernanceState.Proposal memory proposal,
-        uint256 minimumQuorum,
+        IGovernanceState.Proposal memory,
+        address proposer,
         uint256,
-        TimeType timeType
+        uint256,
+        TimeType
     ) external view override returns (ProposalStatus) {
-        _assertTimestamp(timeType);
-        uint256 time = block.timestamp;
-        // executed is terminal and must be reported regardless of the recovery state
-        if (proposal.executed) return ProposalStatus.Executed;
-        // fail closed unless an active recovery authorizes local governance
-        if (!_isRecoveryActive()) return ProposalStatus.Defeated;
-        if (time <= proposal.startBlockOrTime) {
-            return ProposalStatus.Pending;
-        } else if (time <= proposal.endBlockOrTime && proposal.votesFor >= minimumQuorum) {
-            return ProposalStatus.Qualified;
-        } else if (time <= proposal.endBlockOrTime) {
-            return ProposalStatus.Active;
-        } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
-            return ProposalStatus.Defeated;
-        } else {
-            return ProposalStatus.Succeeded;
-        }
+        if (proposer == _recoveryAddress && _isRecoveryActive()) return ProposalStatus.Succeeded;
+        return ProposalStatus.Defeated;
     }
 
     /// @inheritdoc IGovernanceStrategy
+    /// @dev No staking on receiver chains.
     function totalVotingPower() external pure override returns (uint256) {
         return 0;
     }
 
     /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
-        // uint96: fits the vote receipt, far above any real quorum, no external reads
+        // the recovery address must always be able to pass the proposer-threshold gate,
+        // regardless of the configured threshold value
         return _isRecoveryActive() && account == _recoveryAddress ? type(uint96).max : 0;
     }
 
     /// @inheritdoc IGovernanceStrategy
+    /// @dev Receiver governance has no voting period.
     function votingPeriod() public pure override returns (uint256) {
-        return _VOTING_PERIOD;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function votingTimestamps(
-        TimeType timeType
-    ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        _assertTimestamp(timeType);
-        // recovery has no flash-vote risk: power is fixed to the recovery address
-        require(_isRecoveryActive(), GovLocalGovernanceDisabled());
-        startBlockOrTime = block.timestamp;
-        endBlockOrTime = startBlockOrTime + _VOTING_PERIOD;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function beforeVote(uint256) external pure override returns (uint256) {
         return 0;
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforePropose(
-        IGovernanceVoting.ProposedAction[] calldata actions
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory) {
+    /// @dev Receiver governance has no voting window.
+    function votingTimestamps(
+        TimeType
+    ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        return (block.timestamp, block.timestamp);
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function beforePropose(ProposedAction[] calldata actions) external view override returns (ProposedAction[] memory) {
         require(_isRecoveryActive(), GovLocalGovernanceDisabled());
-        for (uint256 i = 0; i < actions.length; i++) {
-            // fails fast: publishing would revert on the fee at execution time
-            if (actions[i].target == _wormhole) {
-                revert GovCrosschainNotSender();
-            }
-        }
         return actions;
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforeExecute(
-        IGovernanceVoting.ProposedAction[] calldata actions
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory) {
-        require(_isRecoveryActive(), GovLocalGovernanceDisabled());
-        for (uint256 i = 0; i < actions.length; i++) {
-            // fails fast: publishing would revert on the fee at execution time
-            if (actions[i].target == _wormhole) {
-                revert GovCrosschainNotSender();
-            }
-        }
+    function beforeExecute(ProposedAction[] calldata actions) external pure override returns (ProposedAction[] memory) {
         return actions;
     }
 
@@ -176,11 +130,6 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IGovernanceStrategy
     function wormholeChainId() external view override returns (uint16) {
         return _wormholeChainId;
-    }
-
-    /// @dev Reverts unless the governance uses TimeType.Timestamp.
-    function _assertTimestamp(TimeType timeType) private pure {
-        require(timeType == TimeType.Timestamp, GovStrategyInvalidTimeType(timeType));
     }
 
     function _isRecoveryActive() private view returns (bool) {

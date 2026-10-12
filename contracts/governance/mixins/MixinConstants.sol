@@ -32,11 +32,10 @@ abstract contract MixinConstants is IRigoblockGovernance {
 
     bytes32 internal constant _PROPOSAL_COUNT_SLOT = 0x7d19d505a441201fb38442238c5f65c45e6231c74b35aed1c92ad842019eab9f;
 
-    bytes32 internal constant _PROPOSAL_QUORUM_SLOT =
-        0xf4c156034b6fb4a58e020267d829cfaef00618984d103ed2c234f43e7575a62e;
-
-    bytes32 internal constant _PROPOSAL_VOTING_POWER_SLOT =
-        0xce475bdcfd8f87b8625fc1a8575f248a210ac0c878131a1450e408c3254d0534;
+    /// @notice Per-proposal extra data: quorum snapshotted at creation plus the total voting
+    ///         power snapshotted on the first vote, packed as two uint128 in one mapping value.
+    bytes32 internal constant _PROPOSAL_EXTRA_DATA_SLOT =
+        0xbbdc155f7f36ce6d239dd2318ad17dc29530c9acfef994264c9e18ae3aeb3a14;
 
     bytes32 internal constant _PROPOSED_ACTION_SLOT =
         0xe4ff3d203d0a873fb9ffd3a1bbd07943574a73114c5affe6aa0217c743adeb06;

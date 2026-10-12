@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity >=0.8.0 <0.9.0;
 
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {ProposedAction} from "../types/GovernanceTypes.sol";
 
 library GovernanceActionLib {
-    function execute(IGovernanceVoting.ProposedAction memory action) internal {
+    function execute(ProposedAction memory action) internal {
         address target = action.target;
         uint256 value = action.value;
         bytes memory data = action.data;

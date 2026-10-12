@@ -7,6 +7,7 @@ export const extensionsMapSalt = "extensionsMapSalt19";
 export const zeroExAllowanceHolder =
   "0x0000000000001fF3684f28c67538d4D072C22734";
 export const zeroExDeployer = "0x00000000000004533Fe15556B1E086BB1A72cEae";
+export const governanceRecovery = "0x002BA2351532a741043d874Bd0b12aAb21abc289";
 
 interface ChainConfig {
   rigoToken: string;
@@ -20,11 +21,9 @@ interface ChainConfig {
   wormhole: string;
   wormholeChainId: number;
   governanceMode: GovernanceMode;
-  governanceRecovery?: string;
 }
 
-// Governance mode of a chain, mirroring the on-chain GovernanceMode enum
-// (contracts/governance/types/GovernanceTypes.sol). The hub chain is the only sender.
+// Governance mode of a chain. The hub chain is the only sender.
 export type GovernanceMode = "sender" | "receiver";
 
 // The governance hub chain: the only chain with staking-backed sender governance. Every

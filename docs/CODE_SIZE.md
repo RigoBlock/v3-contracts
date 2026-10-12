@@ -99,9 +99,9 @@ deployed instance of its own.
 | --------------------------- | -----------: | -------: | ---------: |
 | Staking                     |        22820 |     1756 |     92.85% |
 | GrgVault                    |         4392 |    20184 |     17.87% |
-| RigoblockGovernance         |        22484 |     2092 |     91.49% |
-| RigoblockGovernanceStrategy |         6405 |    18171 |     26.06% |
-| WormholeReceiverStrategy    |         3569 |    21007 |     14.52% |
+| RigoblockGovernance         |        22436 |     2140 |     91.29% |
+| RigoblockGovernanceStrategy |         6288 |    18288 |     25.59% |
+| WormholeReceiverStrategy    |         2803 |    21773 |     11.40% |
 
 ## Notes
 

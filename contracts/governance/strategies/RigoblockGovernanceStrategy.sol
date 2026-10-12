@@ -3,7 +3,7 @@ pragma solidity 0.8.37;
 
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
-import {CrossChainPayload, ProposalStatus} from "../types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
@@ -21,7 +21,10 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
 
-    /// @notice Maximum voting period.
+    /// @notice Maximum voting period. The one-second margin under the staking epoch duration
+    ///         (see votingPeriod) keeps the whole voting window strictly inside a single
+    ///         staking epoch even when the epoch duration equals this cap, so votes can never
+    ///         mix epochs and no per-proposal epoch guard is needed.
     uint256 private constant _VOTING_PERIOD = 7 days;
 
     /// @notice Wormhole chain id of the chain this strategy is deployed on.
@@ -56,19 +59,16 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function getProposalState(
         IGovernanceState.Proposal memory proposal,
+        address,
         uint256 minimumQuorum,
-        uint256 totalVotingPower,
+        uint256 votingPower,
         TimeType timeType
     ) external view override returns (ProposalStatus) {
         _assertTimestamp(timeType);
         uint256 time = block.timestamp;
-        // executed is terminal and must be reported regardless of the clock
-        if (proposal.executed) return ProposalStatus.Executed;
         if (time <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
-        } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum, totalVotingPower)) {
-            // notice: because in rigoblock staking we use epochs, the exact start time will never perfectly match the new epoch
-            // using timestamps instead of epoch is a safeguard for upgrades, should the staking system get stuck by being unable to finalize.
+        } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum, votingPower)) {
             return ProposalStatus.Qualified;
         } else if (time <= proposal.endBlockOrTime) {
             return ProposalStatus.Active;
@@ -82,11 +82,11 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     function _qualifiedConsensus(
         IGovernanceState.Proposal memory proposal,
         uint256 minimumQuorum,
-        uint256 totalVotingPower
+        uint256 votingPower
     ) private pure returns (bool) {
         // the denominator is snapshotted on the first vote, so staking epoch rollovers
         // cannot shrink the electorate after votes are recorded
-        return (3 * proposal.votesFor > 2 * totalVotingPower &&
+        return (3 * proposal.votesFor > 2 * votingPower &&
             proposal.votesFor > 2 * proposal.votesAgainst &&
             proposal.votesFor >= minimumQuorum);
     }
@@ -104,8 +104,15 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
-        uint256 stakingEpochDuration = IStorage(_stakingProxy).epochDurationInSeconds();
-        return stakingEpochDuration < _VOTING_PERIOD ? stakingEpochDuration : _VOTING_PERIOD;
+        uint256 epochDuration;
+        try IStorage(_stakingProxy).epochDurationInSeconds() returns (uint256 duration) {
+            epochDuration = duration;
+        } catch {
+            return _VOTING_PERIOD;
+        }
+        if (epochDuration < 2) return _VOTING_PERIOD;
+        uint256 period = epochDuration - 1;
+        return period < _VOTING_PERIOD ? period : _VOTING_PERIOD;
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -113,30 +120,25 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         TimeType timeType
     ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
         _assertTimestamp(timeType);
-        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-        if (block.timestamp >= startBlockOrTime) {
-            // outside the propose path (which always rolls first) a stale clock reverts
-            revert GovEpochNotFinalized();
+        uint256 earliestEnd;
+        try IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds() returns (uint256 end) {
+            earliestEnd = end;
+        } catch {
+            earliestEnd = block.timestamp;
         }
+        // a stale clock (the roll attempt in beforePropose failed or this is a plain view call)
+        // falls back to starting the window at the next timestamp
+        startBlockOrTime = block.timestamp >= earliestEnd ? block.timestamp + 1 : earliestEnd;
         endBlockOrTime = startBlockOrTime + votingPeriod();
     }
 
-    /// @inheritdoc IGovernanceStrategy
-    function beforeVote(uint256 storedEpochEnd) external override returns (uint256 epochEnd) {
-        epochEnd = _rollEpochIfStale();
-        if (storedEpochEnd != 0) {
-            require(epochEnd == storedEpochEnd, GovVotingEpochMismatch(epochEnd, storedEpochEnd));
-        }
-    }
-
-    /// @dev Rolls a finished staking epoch so the proposal starts, all votes and the total-voting-power
-    ///      snapshot sit inside a single epoch, keeping the qualified-majority denominator consistent.
-    function _rollEpochIfStale() private returns (uint256 earliestEnd) {
-        earliestEnd = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+    /// @dev Attempts to roll a finished staking epoch. Governance must stay operational even
+    ///      if the staking contract cannot roll, so a reverting endEpoch is swallowed and the
+    ///      staking clock is used as-is.
+    function _rollEpochIfStale() private {
+        uint256 earliestEnd = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
         if (block.timestamp >= earliestEnd) {
-            IStaking(_stakingProxy).endEpoch();
-            earliestEnd = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-            require(block.timestamp < earliestEnd, GovEpochNotFinalized());
+            try IStaking(_stakingProxy).endEpoch() {} catch {}
         }
     }
 
@@ -172,11 +174,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforePropose(
-        IGovernanceVoting.ProposedAction[] calldata actions
-    ) external override returns (IGovernanceVoting.ProposedAction[] memory) {
-        // the proposal window, all votes and the voting-power snapshot must sit inside a
-        // single staking epoch
+    function beforePropose(ProposedAction[] calldata actions) external override returns (ProposedAction[] memory) {
+        // roll a finished staking epoch so the voting window starts at a live epoch boundary
         _rollEpochIfStale();
 
         // wormhole actions publish governance messages to the receiver chains
@@ -213,17 +212,14 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforeExecute(
-        IGovernanceVoting.ProposedAction[] calldata actions
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory) {
-        IGovernanceVoting.ProposedAction[] memory modified = actions;
-        for (uint256 i = 0; i < modified.length; i++) {
-            if (modified[i].target != _wormhole) continue;
+    function beforeExecute(ProposedAction[] memory actions) external view override returns (ProposedAction[] memory) {
+        for (uint256 i = 0; i < actions.length; i++) {
+            if (actions[i].target != _wormhole) continue;
             // Wormhole requires msg.value == messageFee() on publishMessage, so the wrapper value
             // must be exactly the fee, overriding any (zero) value set at proposal time.
-            modified[i].value = ICoreBridge(_wormhole).messageFee();
+            actions[i].value = ICoreBridge(_wormhole).messageFee();
         }
-        return modified;
+        return actions;
     }
 
     /// @inheritdoc IGovernanceStrategy

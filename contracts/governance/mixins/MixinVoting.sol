@@ -3,12 +3,13 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
 import {IGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {SafeCast} from "@openzeppelin-gov/utils/math/SafeCast.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinState} from "./MixinState.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 /// @dev Inherits `MixinState` (which inherits OZ `Governor`) as a single chain, avoiding a
@@ -66,7 +67,7 @@ abstract contract MixinVoting is MixinState {
 
     /// @inheritdoc IGovernanceVoting
     function propose(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) external override returns (uint256 proposalId) {
         proposalId = _propose(actions, description);
@@ -82,15 +83,15 @@ abstract contract MixinVoting is MixinState {
     ) public override(Governor, IGovernor) returns (uint256 proposalId) {
         uint256 targetsLength = targets.length;
         require(targetsLength == values.length && targetsLength == calldatas.length, GovActionsLengthMismatch());
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](targetsLength);
+        ProposedAction[] memory actions = new ProposedAction[](targetsLength);
         for (uint256 i = 0; i < targetsLength; i++) {
-            actions[i] = IGovernanceVoting.ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
+            actions[i] = ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
         }
         proposalId = _propose(actions, description);
     }
 
     function _propose(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) internal returns (uint256 proposalId) {
         uint256 length = actions.length;
@@ -129,7 +130,8 @@ abstract contract MixinVoting is MixinState {
         }
 
         _proposal().proposalById[proposalId] = newProposal;
-        _proposalQuorum().proposalQuorumById[proposalId] = _governanceParameters().quorumThreshold;
+        ProposalExtraData storage extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        extraData.quorum = SafeCast.toUint128(_governanceParameters().quorumThreshold);
 
         emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
         _mapOzHashAndEmitOZProposalCreated(proposalId, actions, startBlockOrTime, endBlockOrTime, description);
@@ -139,7 +141,7 @@ abstract contract MixinVoting is MixinState {
     ///      resolves to the stored proposal) and emits the OZ-format ProposalCreated event.
     function _mapOzHashAndEmitOZProposalCreated(
         uint256 proposalId,
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         uint256 startBlockOrTime,
         uint256 endBlockOrTime,
         string memory description
@@ -169,30 +171,6 @@ abstract contract MixinVoting is MixinState {
         );
     }
 
-    /// @dev Rolls and pins the staking epoch before voting power is read, then snapshots the total
-    ///      voting power on the first vote: the packed slot holds `(epochEnd << 192) | votingPower`,
-    ///      so the qualified-majority denominator always matches the epoch the votes are recorded in.
-    function _castVote(
-        uint256 proposalId,
-        address account,
-        uint8 support,
-        string memory reason,
-        bytes memory params
-    ) internal override returns (uint256) {
-        // mirror the state guard so voting on an unknown proposal fails before the strategy hook
-        require(_proposalCount().value >= proposalId && proposalId != 0, GovProposalIdInvalid(proposalId));
-        uint256 packed = _proposalVotingPower().proposalVotingPowerById[proposalId];
-        uint256 storedEpochEnd = packed >> 192;
-        address strategy = _governanceParameters().strategy;
-        uint256 epochEnd = IGovernanceStrategy(strategy).beforeVote(storedEpochEnd);
-        if (storedEpochEnd == 0) {
-            _proposalVotingPower().proposalVotingPowerById[proposalId] =
-                (epochEnd << 192) |
-                IGovernanceStrategy(strategy).totalVotingPower();
-        }
-        return super._castVote(proposalId, account, support, reason, params);
-    }
-
     /// @dev Implements the OZ Governor vote counting on Rigoblock storage: checks the receipt, records
     ///      the vote, moves a qualified proposal to next-block execution, and emits the native event
     ///      (the OZ VoteCast/VoteCastWithParams events are emitted by `Governor._castVote`).
@@ -208,6 +186,15 @@ abstract contract MixinVoting is MixinState {
         IGovernanceState.Proposal storage proposal = _proposal().proposalById[proposalId];
         IGovernanceState.Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, GovAlreadyVoted(proposalId, voter));
+
+        // the total voting power is snapshotted on the first vote so the qualified-majority
+        // denominator stays fixed for the proposal's whole life
+        ProposalExtraData storage extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        if (extraData.votingPower == 0) {
+            extraData.votingPower = SafeCast.toUint128(
+                IGovernanceStrategy(_governanceParameters().strategy).totalVotingPower()
+            );
+        }
 
         if (voteType == IGovernanceVoting.VoteType.For) {
             proposal.votesFor += votingPower;
@@ -301,13 +288,11 @@ abstract contract MixinVoting is MixinState {
         address strategy = _governanceParameters().strategy;
 
         // First pass: let the strategy prepare the actions and compute the exact native amount required.
-        IGovernanceVoting.ProposedAction[] memory storedActions = new IGovernanceVoting.ProposedAction[](length);
+        ProposedAction[] memory storedActions = new ProposedAction[](length);
         for (uint256 i = 0; i < length; i++) {
             storedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
-        IGovernanceVoting.ProposedAction[] memory preparedActions = IGovernanceStrategy(strategy).beforeExecute(
-            storedActions
-        );
+        ProposedAction[] memory preparedActions = IGovernanceStrategy(strategy).beforeExecute(storedActions);
         uint256 requiredValue;
         for (uint256 i = 0; i < length; i++) {
             requiredValue += preparedActions[i].value;

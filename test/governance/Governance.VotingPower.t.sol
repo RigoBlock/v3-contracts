@@ -3,7 +3,7 @@ pragma solidity 0.8.37;
 
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
@@ -101,19 +101,14 @@ contract VotingPowerHarness is RigoblockGovernance {
     }
 
     function proposalVotingPower(uint256 proposalId) external view returns (uint256) {
-        return uint192(_proposalVotingPower().proposalVotingPowerById[proposalId]);
-    }
-
-    function proposalSnapshotEpochEnd(uint256 proposalId) external view returns (uint256) {
-        return _proposalVotingPower().proposalVotingPowerById[proposalId] >> 192;
+        return _proposalExtraData().proposalExtraDataById[proposalId].votingPower;
     }
 }
 
 /// @title Qualified-majority denominator semantics against a staking stub with real epoch rules.
-/// @notice The total voting power is snapshotted on the first vote together with the staking
-///     epoch's end time: the first vote rolls a finished epoch before snapshotting, and the
-///     snapshot epoch provably outlives the voting window, so no second roll is possible
-///     in-window and votes and denominator always share an epoch.
+/// @notice The total voting power is snapshotted on the first vote. The voting window is
+///     strictly inside a single staking epoch (see RigoblockGovernanceStrategy.votingPeriod),
+///     so no epoch roll is possible in-window and votes and denominator always share an epoch.
 contract GovernanceVotingPowerTest is Test {
     uint256 internal constant WHALE_STAKE = 300_000e18;
     uint256 internal constant VOTER_STAKE = 400_000e18;
@@ -143,13 +138,9 @@ contract GovernanceVotingPowerTest is Test {
         staking.endEpoch();
     }
 
-    function _incrementAction() private view returns (IGovernanceVoting.ProposedAction[] memory actions) {
-        actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.increment, ()),
-            value: 0
-        });
+    function _incrementAction() private view returns (ProposedAction[] memory actions) {
+        actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
     }
 
     /// @notice A delegation made after proposal creation but before voting starts counts fully:
@@ -202,8 +193,9 @@ contract GovernanceVotingPowerTest is Test {
         staking.undelegate(VOTER_STAKE);
 
         // 400k of the frozen 700k snapshot is below two-thirds, even though the live supply
-        // (300k) would qualify it; at the exact deadline the proposal is still Active
-        vm.warp(start + 7 days);
+        // (300k) would qualify it; the voting window is strictly inside the epoch (7 days - 1),
+        // so at its end the proposal is still Active
+        vm.warp(start + 7 days - 1);
         assertEq(governance.proposalVotingPower(proposalId), WHALE_STAKE + VOTER_STAKE);
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Active));
 
@@ -249,16 +241,16 @@ contract GovernanceVotingPowerTest is Test {
         assertEq(start, block.timestamp + 7 days);
     }
 
-    /// @notice Regression for the mid-window-roll attack: the window starts at the proposing
-    ///     epoch's boundary, so the epoch can be rolled at any moment during the window. The
-    ///     first vote now performs that roll before snapshotting, so a whale who delegated
-    ///     mid-proposal lands in both the numerator and the denominator and must hold two-thirds
-    ///     of the real electorate to qualify.
-    function test_VotingPower_MidWindowRoll_GrowElectorate_CannotQualifyAgainstStaleSnapshot() public {
+    /// @notice Regression for the mid-window electorate-growth attack: an attacker delegating
+    ///     mid-proposal can roll the epoch during the window (the roll is permissionless) and
+    ///     vote with the promoted balance, but the first-vote snapshot is frozen, so the new
+    ///     votes land in the numerator only and must still clear two-thirds of the snapshot
+    ///     to qualify.
+    function test_VotingPower_MidWindowRoll_GrowElectorate_CannotQualifyAgainstFrozenSnapshot() public {
         address attacker = makeAddr("attacker");
         uint256 whaleStake = 4_000_000e18;
         uint256 scapeStake = 100;
-        uint256 midWindowDelegation = 3_000_000e18;
+        uint256 midWindowDelegation = 2_000_000e18;
 
         vm.prank(whale);
         staking.delegate(whaleStake);
@@ -277,25 +269,25 @@ contract GovernanceVotingPowerTest is Test {
         vm.prank(attacker);
         staking.delegate(midWindowDelegation);
 
-        // first vote lands in the dead window: it rolls the epoch and snapshots the promoted
-        // electorate, so the attacker is in the denominator too
+        // the first vote snapshots the pre-attack electorate: the attacker is not in it
         vm.warp(start + 1);
         vm.prank(voter);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
-        assertEq(governance.proposalVotingPower(proposalId), whaleStake + scapeStake + midWindowDelegation);
+        assertEq(governance.proposalVotingPower(proposalId), whaleStake + scapeStake);
 
-        // no second roll is possible inside the window: the snapshot epoch outlives it
-        vm.warp(start + 7 days);
-        vm.expectRevert(EpochStakingStub.EpochNotEnded.selector);
+        // the epoch roll is permissionless and succeeds inside the window, promoting the
+        // attacker's delegation into the current epoch
         staking.endEpoch();
+        assertEq(staking.globalCurrent(), whaleStake + scapeStake + midWindowDelegation);
 
-        // the whale's 3M is below two-thirds of the 7M snapshot: the proposal stays Active
+        // the attacker votes with the promoted balance, but 2M is below two-thirds of the
+        // frozen 4M snapshot: the proposal stays Active
         vm.prank(attacker);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Active));
 
-        // at the deadline the honest vote counts decide: 3M against 100 succeeds and executes
-        vm.warp(start + 7 days + 1);
+        // at the deadline the honest vote counts decide: 2M against 100 succeeds and executes
+        vm.warp(start + 7 days);
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
         governance.execute(proposalId);
         assertEq(counter.value(), 1);

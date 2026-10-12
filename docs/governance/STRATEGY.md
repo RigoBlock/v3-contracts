@@ -65,26 +65,26 @@ so execution is only possible in a later unit. Everything that depends on the st
 
 - **Voting power**: current-epoch delegated GRG stake (`IStaking.getOwnerStakeByStatus`).
 - **Qualified majority**:
-  `3 * votesFor > 2 * totalVotingPowerSnapshot && votesFor > 2 * votesAgainst && votesFor >= minimumQuorum`.
-  The denominator is the total voting power the governance snapshots into storage on the proposal's
-  first vote (`MixinVoting._castVote` packs it with the snapshot epoch's end time into
-  `_PROPOSAL_VOTING_POWER_SLOT` as `(epochEnd << 192) | votingPower`), never a live staking read at
-  evaluation time: epoch rollovers cannot shrink the electorate after votes are recorded. A proposal
-  can only close early once it would already succeed on the vote ratio at the deadline. On Receiver
-  chains the consensus is staking-free instead: `votesFor >= minimumQuorum`, so a recovery vote
-  qualifies without any staking read.
-- **Epoch consistency**: the staking clock is permissionless, so the strategy rolls a finished epoch
-  in `beforePropose` (the proposal starts at the fresh epoch's boundary) and again on the first vote,
-  before voting power is read; the snapshot is taken after that roll. Because the snapshot epoch ends
-  at `firstVoteTime + epochDuration` and the voting period never exceeds the epoch duration, the
-  snapshot epoch provably outlives the voting window, so no second roll is possible in-window and
-  votes and denominator always share an epoch. Every later vote re-validates the epoch via
-  `beforeVote(storedEpochEnd)`, which reverts with `GovVotingEpochMismatch` if the staking clock has
-  moved past the snapshot epoch (a scenario only reachable if the staking epoch duration changes
-  mid-proposal).
-- **Voting period**: `min(7 days, staking epoch duration)`, anchored to the current epoch's earliest
-  end time; a finished epoch is rolled forward when the proposal is created, so voting always starts
-  at a live epoch boundary and never inside a dead epoch.
+  `3 * votesFor > 2 * votingPowerSnapshot && votesFor > 2 * votesAgainst && votesFor >= minimumQuorum`.
+  The denominator is the total voting power the governance snapshots into storage on the
+  proposal's first vote (`MixinVoting._countVote` writes it into `_PROPOSAL_EXTRA_DATA_SLOT`,
+  a single mapping value packing quorum and voting power as two uint128), never a live staking
+  read at evaluation time: epoch rollovers cannot shrink the electorate after votes are
+  recorded. A proposal can only close early once it would already succeed on the vote ratio at
+  the deadline. On receiver chains there is no voting at all: only a proposal created by the
+  recovery address during an active recovery reads `Succeeded`.
+- **Epoch consistency**: the staking clock is permissionless, so the strategy attempts to roll a
+  finished epoch in `beforePropose` (the proposal starts at the fresh epoch's boundary). The
+  roll is best-effort: governance must stay operational even if `endEpoch` reverts (e.g. the
+  staking scheduler is stuck), so the revert is swallowed and the voting window falls back to
+  starting at the next timestamp. The voting period is `min(epochDuration - 1, 7 days)`: the
+  one-second margin keeps the whole voting window strictly inside the current epoch whenever
+  the epoch cannot roll (window starts at a live epoch boundary). A mid-window epoch roll is
+  not prevented — `endEpoch` is permissionless — but the frozen first-vote snapshot keeps it
+  harmless: post-roll delegations enter the numerator, not the denominator.
+- **Voting period**: `min(7 days, staking epoch duration - 1)`, anchored to the current epoch's
+  earliest end time; a finished epoch is rolled forward when the proposal is created, so voting
+  always starts at a live epoch boundary and never inside a dead epoch.
 - **Thresholds**: proposal threshold between 1% and 2% of GRG total supply (hard floor 20,000 GRG
   off mainnet); quorum threshold between 4% and 10% (hard floor 100,000 GRG off mainnet).
 - **Cross-chain proposals** (Wormhole): only from Ethereum mainnet, only via
@@ -95,8 +95,9 @@ so execution is only possible in a later unit. Everything that depends on the st
 
 ## Governance modes
 
-`GovernanceMode` (defined in `types/GovernanceTypes.sol`) has two values, and each maps to a
-dedicated strategy contract — there is no mode flag in either strategy's constructor:
+The chain's mode (sender vs receiver) exists only in the TypeScript deployment mapping — the
+`GovernanceMode` enum was removed from on-chain types — and each mode maps to a dedicated
+strategy contract:
 
 | Chain                       | Mode       | Strategy                    |
 | --------------------------- | ---------- | --------------------------- |
@@ -121,30 +122,30 @@ any other chain's governance proxy is rejected regardless of the local strategy.
   plus crosschain sending — a local proposal may contain Wormhole `publishMessage` actions
   (gated by `beforePropose`), which receivers execute.
 - **Receiver** (`WormholeReceiverStrategy`, every other chain): managed exclusively from
-  mainnet; local governance is disabled and the strategy never reads staking, so it works even
-  where no staking system exists (e.g. HyperEVM):
-  - `beforePropose`, `beforeExecute` and `votingTimestamps` revert `GovLocalGovernanceDisabled`
-    unless a recovery is active — no local proposal can be created or executed.
-  - `getVotingPower` returns 0 (or `uint96.max` for the recovery address while a recovery is
-    active) and `getProposalState` returns `Defeated` without reading staking; `votingPeriod`
-    returns the 7-day default. These are read methods and must not revert, but they can never
-    open a local path: `Defeated` can never satisfy the `Succeeded` gate in `execute`, and the
-    governance implementation reverts for non-stored proposals before reaching the strategy,
-    so the values are only observable on direct strategy calls.
-  - `assertValidInitParams` and the threshold validators skip the GRG-supply bounds (thresholds
-    are inert on chains without local voting) but still enforce `(0, uint96.max]`: a stored
-    quorum above `uint96.max` would make the recovery path unreachable. The validators
-    early-return rather than revert because a mainnet-sent crosschain `updateThresholds`
-    action must not revert and brick the whole VAA batch.
+  mainnet; local governance is fail-closed and the strategy never reads staking, so it works
+  even where no staking system exists (e.g. HyperEVM):
+  - `beforePropose` reverts `GovLocalGovernanceDisabled` unless a recovery is active — no
+    local proposal can be created outside a recovery. `beforeExecute` is a pure pass-through.
+  - `getVotingPower` returns 0 (or `type(uint96).max` for the recovery address while a
+    recovery is active) and `getProposalState` is proposer-based: a proposal whose proposer
+    is the recovery address returns `Succeeded` while a recovery is active, everything else
+    returns `Defeated` — without reading staking. `votingPeriod` returns 0 and
+    `votingTimestamps` returns `(block.timestamp, block.timestamp)`: the window is empty, so
+    a non-recovery proposal is never votable. These are read methods and must not revert,
+    but they can never open a local path: `Defeated` can never satisfy the `Succeeded` gate
+    in `execute`, and the governance implementation reverts for non-stored proposals before
+    reaching the strategy, so the values are only observable on direct strategy calls.
+  - `assertValidInitParams` and the threshold validators are empty: receiver governance has
+    no voting thresholds, so any value is accepted. This keeps a mainnet-sent crosschain
+    `updateThresholds` action from reverting and bricking the whole VAA batch.
   - The crosschain receiver path (`receiveMessage`) is unaffected: it reads the strategy only
     for `wormhole()` / `wormholeChainId()` and never touches staking.
-  - The constructor takes a non-zero recovery address; the strategy carries the recovery
-    escape hatch: after a 60-day challenge window with no mainnet veto, the recovery address
-    can drive the ordinary local proposal/vote/execute flow to recover a frozen governance.
-    The recovery vote is a superquorum under a staking-free receiver consensus
-    (`votesFor >= minimumQuorum`), so the proposal qualifies immediately and is executable at
-    the next block. The recovery errors and events live in
-    `strategies/interfaces/IWormholeReceiverStrategy.sol`, not in the generic
+  - The constructor takes `(wormhole, wormholeChainId, governanceProxy, recoveryAddress)`,
+    with both addresses required non-zero. The strategy carries the recovery escape hatch:
+    after a 60-day challenge window with no mainnet veto, the recovery address can drive the
+    ordinary local proposal flow — the proposal reads `Succeeded` immediately at creation
+    (proposer-based) and is executable at the next block. The recovery errors and events
+    live in `strategies/interfaces/IWormholeReceiverStrategy.sol`, not in the generic
     `IGovernanceStrategy`. See RECOVERY.md for the full design.
 
 Upgrading a live governance between modes is a strategy swap via `upgradeStrategy`: deploy the
@@ -164,9 +165,10 @@ time type are read from the factory's transient storage by the proxy constructor
   as the other chains (same key, same `"Rigoblock Governance"` name). There is no beacon and
   no two-step upgrade: pass the current implementation and strategy as `createGovernance`
   arguments.
-- Because the proxy address is chain-independent, the receiver strategy hardcodes it as a
-  constant to authenticate a recovery rejection (`rejectRecover`) — no constructor argument
-  and no per-chain configuration that could be set wrong.
+- Because the proxy address is chain-independent, the receiver strategy takes it as a
+  constructor argument (`governanceProxy`) to authenticate a recovery rejection
+  (`rejectRecover`) — it is still not part of per-chain configuration beyond the single
+  constructor wiring in the deploy script.
 - This is how HyperEVM is brought under the canonical governance: deploy (or reuse) the
   implementation and strategy, then `createGovernance(newImplementation, strategy, …)` from
   the same deployer key — the proxy is created already pointing at the new implementation,

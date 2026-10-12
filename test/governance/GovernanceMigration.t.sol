@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";
@@ -63,6 +63,7 @@ contract MockMigrationStrategy is IGovernanceStrategy {
 
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
+        address,
         uint256 minimumQuorum,
         uint256,
         TimeType timeType
@@ -76,8 +77,6 @@ contract MockMigrationStrategy is IGovernanceStrategy {
             return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return ProposalStatus.Defeated;
-        } else if (proposal.executed) {
-            return ProposalStatus.Executed;
         } else {
             return ProposalStatus.Succeeded;
         }
@@ -114,20 +113,12 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         return votingPower;
     }
 
-    function beforePropose(
-        IRigoblockGovernance.ProposedAction[] calldata actions
-    ) external pure returns (IRigoblockGovernance.ProposedAction[] memory) {
+    function beforePropose(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
         return actions;
     }
 
-    function beforeExecute(
-        IRigoblockGovernance.ProposedAction[] calldata actions
-    ) external pure returns (IRigoblockGovernance.ProposedAction[] memory) {
+    function beforeExecute(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
         return actions;
-    }
-
-    function beforeVote(uint256) external pure returns (uint256) {
-        return 0;
     }
 
     function wormhole() external pure returns (address) {
@@ -166,15 +157,15 @@ contract MigrationHarness is MixinStorage, MixinInitializer, MixinVoting, MixinU
     }
 
     function setProposalQuorum(uint256 proposalId, uint256 quorum) external {
-        _proposalQuorum().proposalQuorumById[proposalId] = quorum;
+        _proposalExtraData().proposalExtraDataById[proposalId].quorum = uint128(quorum);
     }
 
     function proposalSlot() external pure returns (bytes32) {
         return _PROPOSAL_SLOT;
     }
 
-    function proposalQuorumSlot() external pure returns (bytes32) {
-        return _PROPOSAL_QUORUM_SLOT;
+    function proposalExtraDataSlot() external pure returns (bytes32) {
+        return _PROPOSAL_EXTRA_DATA_SLOT;
     }
 
     function proposalMetaSlot() external pure returns (bytes32) {
@@ -202,8 +193,8 @@ contract MockTarget {
 
 /// @title GovernanceMigrationTest
 /// @notice Simulates the governance implementation upgrade that introduces the
-///     `proposalQuorumById` snapshot mapping. Verifies that:
-///     1. Proposals written by the old implementation (no quorum mapping entry) are treated
+///     merged proposal extra-data slot (quorum snapshot). Verifies that:
+///     1. Proposals written by the old implementation (no quorum snapshot) are treated
 ///        as legacy and rendered unexecutable.
 ///     2. New proposals created after the upgrade snapshot the current quorum in a mapping.
 ///     3. A later quorum reduction cannot resurrect a legacy proposal.
@@ -245,7 +236,7 @@ contract GovernanceMigrationTest is Test {
     function test_Migration_LegacyProposal_BecomesDefeated() public {
         uint256 legacyId = _createLegacyProposal(harness);
 
-        // The legacy proposal has no quorum mapping entry.
+        // The legacy proposal has no quorum snapshot.
         assertEq(_readProposalQuorum(harness, legacyId), 0);
 
         // Warp past voting period. The legacy proposal can never reach type(uint256).max quorum.
@@ -506,7 +497,7 @@ contract GovernanceMigrationTest is Test {
         vm.prank(whale);
         harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
-        IGovernanceVoting.ProposedAction[] memory actions = harness.getActions(proposalId);
+        ProposedAction[] memory actions = harness.getActions(proposalId);
         assertEq(actions.length, 1);
         assertEq(actions[0].target, address(target));
         assertEq(actions[0].value, 0);
@@ -559,8 +550,9 @@ contract GovernanceMigrationTest is Test {
         // `executed` is the last field of the 7-field Proposal struct.
         assertEq(vm.load(address(harness), executedSlot), bytes32(uint256(1)));
 
-        // The quorum snapshot lives in its own mapping at a different slot.
-        bytes32 quorumSlot = keccak256(abi.encode(uint256(proposalId), uint256(harness.proposalQuorumSlot())));
+        // The quorum snapshot lives in its own mapping at a different slot, packed with the
+        // first-vote voting-power snapshot as two uint128 in one slot value.
+        bytes32 quorumSlot = keccak256(abi.encode(uint256(proposalId), uint256(harness.proposalExtraDataSlot())));
         assertTrue(executedSlot != quorumSlot);
         assertEq(vm.load(address(harness), quorumSlot), bytes32(uint256(12345)));
     }
@@ -570,14 +562,14 @@ contract GovernanceMigrationTest is Test {
         MigrationHarness instance,
         string memory description
     ) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(target), data: "", value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(target), data: "", value: 0});
         vm.prank(whale);
         return instance.propose(actions, description);
     }
 
     /// @dev Simulates a proposal written by the old implementation by creating a
-    ///     proposal with the new implementation and then deleting its quorum mapping entry.
+    ///     proposal with the new implementation and then deleting its quorum snapshot.
     function _createLegacyProposal(MigrationHarness instance) private returns (uint256 proposalId) {
         proposalId = _createProposal(instance, "legacy proposal");
         instance.setProposalQuorum(proposalId, 0);
@@ -588,8 +580,8 @@ contract GovernanceMigrationTest is Test {
 
     /// @dev Returns the raw quorum snapshot for a proposal from storage.
     function _readProposalQuorum(MigrationHarness instance, uint256 proposalId) private view returns (uint256) {
-        bytes32 quorumSlot = keccak256(abi.encode(proposalId, uint256(instance.proposalQuorumSlot())));
-        return uint256(vm.load(address(instance), quorumSlot));
+        bytes32 extraDataSlot = keccak256(abi.encode(proposalId, uint256(instance.proposalExtraDataSlot())));
+        return uint128(uint256(vm.load(address(instance), extraDataSlot)));
     }
 
     /// @dev Creates a proposal whose single action calls the given instance with the given calldata.
@@ -598,8 +590,8 @@ contract GovernanceMigrationTest is Test {
         bytes memory data,
         string memory description
     ) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(instance), data: data, value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(instance), data: data, value: 0});
         vm.prank(whale);
         return instance.propose(actions, description);
     }

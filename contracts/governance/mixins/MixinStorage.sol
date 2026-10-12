@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
+import {ProposedAction} from "../types/GovernanceTypes.sol";
 import {MixinImmutables} from "./MixinImmutables.sol";
 
 abstract contract MixinStorage is MixinImmutables {
@@ -15,8 +15,7 @@ abstract contract MixinStorage is MixinImmutables {
         assert(_PROPOSAL_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal")) - 1));
         assert(_PROPOSAL_COUNT_SLOT == bytes32(uint256(keccak256("governance.proxy.proposalcount")) - 1));
         assert(_PROPOSED_ACTION_SLOT == bytes32(uint256(keccak256("governance.proxy.proposedaction")) - 1));
-        assert(_PROPOSAL_QUORUM_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.quorum")) - 1));
-        assert(_PROPOSAL_VOTING_POWER_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.votingpower")) - 1));
+        assert(_PROPOSAL_EXTRA_DATA_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.extradata")) - 1));
         assert(_CROSSCHAIN_SEQUENCE_SLOT == bytes32(uint256(keccak256("governance.proxy.crosschain.sequence")) - 1));
         assert(_PROPOSAL_META_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.meta")) - 1));
         assert(_OZ_PROPOSAL_HASH_SLOT == bytes32(uint256(keccak256("governance.proxy.proposal.ozhash")) - 1));
@@ -79,28 +78,23 @@ abstract contract MixinStorage is MixinImmutables {
         }
     }
 
-    struct ProposalQuorumByIndex {
-        mapping(uint256 proposalId => uint256 quorum) proposalQuorumById;
+    struct ProposalExtraData {
+        uint128 quorum;
+        uint128 votingPower;
     }
 
-    function _proposalQuorum() internal pure returns (ProposalQuorumByIndex storage s) {
+    struct ProposalExtraDataByIndex {
+        mapping(uint256 proposalId => ProposalExtraData extraData) proposalExtraDataById;
+    }
+
+    function _proposalExtraData() internal pure returns (ProposalExtraDataByIndex storage s) {
         assembly {
-            s.slot := _PROPOSAL_QUORUM_SLOT
-        }
-    }
-
-    struct ProposalVotingPowerByIndex {
-        mapping(uint256 proposalId => uint256 votingPower) proposalVotingPowerById;
-    }
-
-    function _proposalVotingPower() internal pure returns (ProposalVotingPowerByIndex storage s) {
-        assembly {
-            s.slot := _PROPOSAL_VOTING_POWER_SLOT
+            s.slot := _PROPOSAL_EXTRA_DATA_SLOT
         }
     }
 
     struct ActionByIndex {
-        mapping(uint256 => mapping(uint256 => IGovernanceVoting.ProposedAction)) proposedActionbyIndex;
+        mapping(uint256 => mapping(uint256 => ProposedAction)) proposedActionbyIndex;
     }
 
     function _proposedAction() internal pure returns (ActionByIndex storage s) {

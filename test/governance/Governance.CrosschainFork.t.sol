@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {CrossChainPayload} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -71,11 +71,9 @@ contract GovernanceCrosschainForkTest is Test {
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
     }
 
-    function _wormholeAction(
-        IGovernanceVoting.ProposedAction[] memory innerActions
-    ) private pure returns (IGovernanceVoting.ProposedAction memory) {
+    function _wormholeAction(ProposedAction[] memory innerActions) private pure returns (ProposedAction memory) {
         return
-            IGovernanceVoting.ProposedAction({
+            ProposedAction({
                 target: WORMHOLE,
                 data: abi.encodeWithSelector(
                     ICoreBridge.publishMessage.selector,
@@ -127,28 +125,20 @@ contract GovernanceCrosschainForkTest is Test {
     function testFork_MultipleMessagesFromSingleProposal_ExecuteInOrderOnReceiver() public {
         // one proposal publishing two batched messages: message 1 carries two actions
         // (the typical coupled upgrade), message 2 a single action
-        IGovernanceVoting.ProposedAction[] memory batchOne = new IGovernanceVoting.ProposedAction[](2);
-        batchOne[0] = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.increment, ()),
-            value: 0
-        });
-        batchOne[1] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory batchOne = new ProposedAction[](2);
+        batchOne[0] = ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
+        batchOne[1] = ProposedAction({
             target: address(counter),
             data: abi.encodeCall(Counter.setValue, (42)),
             value: 0
         });
-        IGovernanceVoting.ProposedAction[] memory batchTwo = new IGovernanceVoting.ProposedAction[](1);
-        batchTwo[0] = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.increment, ()),
-            value: 0
-        });
+        ProposedAction[] memory batchTwo = new ProposedAction[](1);
+        batchTwo[0] = ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
 
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](3);
+        ProposedAction[] memory actions = new ProposedAction[](3);
         actions[0] = _wormholeAction(batchOne);
         actions[1] = _wormholeAction(batchTwo);
-        actions[2] = IGovernanceVoting.ProposedAction({target: ethRecipient, data: "", value: 1 wei});
+        actions[2] = ProposedAction({target: ethRecipient, data: "", value: 1 wei});
 
         vm.prank(whale);
         uint256 proposalId = governance.propose(actions, "crosschain batch");

@@ -5,6 +5,7 @@ pragma solidity 0.8.37;
 import {IAGovernance} from "./interfaces/IAGovernance.sol";
 import {IMinimumVersion} from "./interfaces/IMinimumVersion.sol";
 import {IRigoblockGovernance} from "../../../governance/IRigoblockGovernance.sol";
+import {ProposedAction} from "../../../governance/types/GovernanceTypes.sol";
 
 /// @title Governance adapter - Allows a pool to interact with Rigoblock governance.
 /// @author Gabriele Rigo - <gab@rigoblock.com>
@@ -33,7 +34,7 @@ contract AGovernance is IAGovernance, IMinimumVersion {
 
     /// @inheritdoc IAGovernance
     function propose(
-        IRigoblockGovernance.ProposedAction[] calldata actions,
+        ProposedAction[] calldata actions,
         string calldata description
     ) external override onlyDelegateCall returns (uint256 proposalId) {
         return IRigoblockGovernance(_getGovernance()).propose(actions, description);

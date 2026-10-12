@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -22,7 +22,7 @@ interface ILegacyVoting {
 
 /// @title GovernanceMigrationForkTest
 /// @notice Mainnet-fork migration test for the governance implementation upgrade that
-///     introduces the `proposalQuorumById` snapshot mapping.
+///     introduces the merged proposal extra-data slot (quorum snapshot).
 /// @dev The test performs the upgrade through real governance proposals on the live proxy.
 ///     Only the voter's voting power is mocked (the staking system is otherwise left untouched);
 ///     proposals are created, voted on and executed through the real governance methods.
@@ -156,8 +156,8 @@ contract GovernanceMigrationForkTest is Test {
     ///     snapshot. After the upgrade it is treated as a legacy proposal (max quorum) and
     ///     therefore reports Defeated state, which is expected: it has already been executed.
     function _executeUpgradeProposal() internal {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
             target: PROXY,
             data: abi.encodeWithSelector(IGovernanceUpgrade.upgradeImplementation.selector, address(newImpl)),
             value: 0
@@ -198,8 +198,8 @@ contract GovernanceMigrationForkTest is Test {
 
     /// @dev Creates, votes on and executes a proposal to update the governance thresholds.
     function _executeThresholdsProposal(uint256 proposalThreshold, uint256 quorumThreshold) internal {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
             target: PROXY,
             data: abi.encodeWithSelector(
                 IGovernanceUpgrade.updateThresholds.selector,
@@ -221,21 +221,13 @@ contract GovernanceMigrationForkTest is Test {
     ///     whose `castVote` takes the internal VoteType enum (For = 0) and returns nothing.
     ///     Post-upgrade votes use the reordered enum (Against = 0, For = 1), matching OZ.
     function _createVoteAndExecute(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         bool legacyVote
     ) internal returns (uint256 proposalId) {
         proposalId = _createProposal(actions, "proposal");
 
         IGovernanceState.ProposalWrapper memory wrapper = IGovernanceState(PROXY).getProposalById(proposalId);
         vm.warp(wrapper.proposal.startBlockOrTime + 1);
-
-        // the vote path rolls a finished epoch before snapshotting; pin the clock fresh (the
-        // real mainnet staking rejects the roll while pools are unfinalized)
-        vm.mockCall(
-            Constants.GRG_STAKING,
-            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp + 1)
-        );
 
         vm.prank(voter);
         if (legacyVote) {
@@ -256,7 +248,7 @@ contract GovernanceMigrationForkTest is Test {
     ///     real mainnet staking rejects while pools are unfinalized; the tests repeatedly warp
     ///     whole voting periods, so the epoch clock is pinned fresh before every proposal.
     function _createProposal(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) internal returns (uint256 proposalId) {
         vm.mockCall(
@@ -275,8 +267,8 @@ contract GovernanceMigrationForkTest is Test {
     }
 
     /// @dev Returns a no-op action used for proposals whose execution result is irrelevant.
-    function _noOpAction() internal pure returns (IGovernanceVoting.ProposedAction[] memory actions) {
-        actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(0), data: "", value: 0});
+    function _noOpAction() internal pure returns (ProposedAction[] memory actions) {
+        actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(0), data: "", value: 0});
     }
 }

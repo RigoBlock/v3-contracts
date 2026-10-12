@@ -2,11 +2,10 @@
 pragma solidity 0.8.37;
 
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
-import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
-import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
@@ -45,7 +44,7 @@ contract GovernanceRecoveryTest is Test {
         CrosschainHarness harness = new CrosschainHarness();
         vm.etch(Constants.GOV_PROXY, address(harness).code);
         governance = CrosschainHarness(payable(Constants.GOV_PROXY));
-        strategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, recovery);
+        strategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, Constants.GOV_PROXY, recovery);
         governance.setStrategy(address(strategy));
         governance.setParams(PROPOSAL_THRESHOLD, QUORUM_THRESHOLD);
         // the etch skips the constructor, which defaults the params to Timestamp
@@ -60,18 +59,12 @@ contract GovernanceRecoveryTest is Test {
         vm.warp(block.timestamp + RECOVERY_WINDOW);
     }
 
-    function _proposeVote() internal returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.increment, ()),
-            value: 0
-        });
+    /// @dev The recoverer creates a proposal, which the receiver strategy reports as
+    ///     Succeeded immediately: no voting window, no vote needed.
+    function _proposeRecovery() internal returns (uint256 proposalId) {
         vm.prank(recovery);
-        proposalId = governance.propose(actions, "recovery proposal");
-        vm.warp(block.timestamp + 2);
-        vm.prank(recovery);
-        governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
+        proposalId = governance.propose(_incrementActions(), "recovery proposal");
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
     }
 
     /// @notice Reverts every staking selector the governance flow could touch, so the recovery
@@ -125,8 +118,10 @@ contract GovernanceRecoveryTest is Test {
         vm.warp(block.timestamp + RECOVERY_WINDOW - 1);
 
         assertEq(strategy.getVotingPower(recovery), 0);
-        vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
-        strategy.votingTimestamps(TimeType.Timestamp);
+        // the receiver has no voting window and no propose path outside a recovery
+        (uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.votingTimestamps(TimeType.Timestamp);
+        assertEq(startBlockOrTime, block.timestamp);
+        assertEq(endBlockOrTime, block.timestamp);
         vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
         strategy.beforePropose(_incrementActions());
     }
@@ -151,28 +146,22 @@ contract GovernanceRecoveryTest is Test {
         assertEq(strategy.getVotingPower(whale), 0);
     }
 
-    /// @notice Full recovery flow with a fully bricked staking contract: state stays readable at
-    ///     every step, the vote reaches Qualified superquorum without any staking read, and the
-    ///     proposal is executable at the next block.
+    /// @notice Full recovery flow with a fully bricked staking contract: the recovery proposal
+    ///     is Succeeded from creation (no staking read anywhere) and executes immediately.
     function test_Recovery_BrickedStaking_RecoveryExecutes() public {
         _brickStaking();
         _activateRecovery();
 
-        uint256 proposalId = _proposeVote();
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
-
-        vm.warp(block.timestamp + 1);
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
-
+        uint256 proposalId = _proposeRecovery();
         governance.execute(proposalId);
         assertEq(counter.value(), 1);
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
     /// @notice Staking alive but emptied (global delegated 0, GRG total supply 1, the
-    ///     bridged-token-burn case): the receiver consensus branch ignores staking, so the
-    ///     proposal still reaches Qualified immediately and the recovery flow completes.
-    function test_Recovery_EmptiedStaking_Superquorum_QualifiesImmediately() public {
+    ///     bridged-token-burn case): the receiver strategy never reads staking, so the
+    ///     recovery proposal is Succeeded from creation and the flow completes.
+    function test_Recovery_EmptiedStaking_RecoveryExecutes() public {
         IStructs.StoredBalance memory zeroBalance;
         vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGlobalStakeByStatus.selector), abi.encode(zeroBalance));
         address grg = address(0x2222);
@@ -181,21 +170,16 @@ contract GovernanceRecoveryTest is Test {
 
         _activateRecovery();
 
-        uint256 proposalId = _proposeVote();
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
-
-        vm.warp(block.timestamp + 1);
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
-
+        uint256 proposalId = _proposeRecovery();
         governance.execute(proposalId);
         assertEq(counter.value(), 1);
     }
 
-    /// @notice A mainnet veto landing after the recovery vote locks the proposal: the receiver
-    ///     branch returns Defeated again and execution reverts.
-    function test_Recovery_VetoAfterVote_LocksProposal() public {
+    /// @notice A mainnet veto landing after the recovery proposal is created flips it back to
+    ///     Defeated and locks execution.
+    function test_Recovery_VetoAfterProposal_LocksProposal() public {
         _activateRecovery();
-        uint256 proposalId = _proposeVote();
+        uint256 proposalId = _proposeRecovery();
 
         vm.prank(address(governance));
         strategy.rejectRecover();
@@ -206,17 +190,17 @@ contract GovernanceRecoveryTest is Test {
         );
         governance.execute(proposalId);
 
+        // local governance is disabled again
         vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
-        strategy.votingTimestamps(TimeType.Timestamp);
+        strategy.beforePropose(_incrementActions());
     }
 
     /// @notice A proposal executed during an active recovery keeps reading Executed after the
     ///     recovery ends: executed is terminal and the receiver gate must not rewrite it.
     function test_Recovery_ExecutedProposal_StaysExecuted_AfterVeto() public {
         _activateRecovery();
-        uint256 proposalId = _proposeVote();
+        uint256 proposalId = _proposeRecovery();
 
-        vm.warp(block.timestamp + 1);
         governance.execute(proposalId);
         assertEq(counter.value(), 1);
 
@@ -226,15 +210,16 @@ contract GovernanceRecoveryTest is Test {
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
-    /// @notice Cross-chain sending stays exclusive to the Sender chain during a recovery.
-    function test_Recovery_WormholeAction_Reverts() public {
+    /// @notice A Wormhole-target action no longer reverts at propose time: sending is blocked
+    ///     on a receiver chain by the implementation's trusted-emitter pinning, not by the
+    ///     strategy, and the governance proxy holds no native balance to pay a publish fee.
+    function test_Recovery_WormholeAction_ProposePasses() public {
         _activateRecovery();
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: WORMHOLE, data: "", value: 0});
-        vm.expectRevert(IGovernanceStrategy.GovCrosschainNotSender.selector);
-        strategy.beforePropose(actions);
-        vm.expectRevert(IGovernanceStrategy.GovCrosschainNotSender.selector);
-        strategy.beforeExecute(actions);
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: WORMHOLE, data: "", value: 0});
+        vm.prank(recovery);
+        uint256 proposalId = governance.propose(actions, "wormhole-target proposal");
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
     }
 
     /// @notice A staking-backed governance can be turned into a receiver governance by a single
@@ -268,10 +253,15 @@ contract GovernanceRecoveryTest is Test {
         );
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
-        WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, recovery);
+        WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(
+            WORMHOLE,
+            TARGET_CHAIN,
+            Constants.GOV_PROXY,
+            recovery
+        );
 
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
             target: address(governance),
             data: abi.encodeCall(IGovernanceUpgrade.upgradeStrategy, (address(receiverStrategy))),
             value: 0
@@ -280,13 +270,6 @@ contract GovernanceRecoveryTest is Test {
         uint256 proposalId = governance.propose(actions, "switch to receiver");
 
         vm.warp(block.timestamp + 2);
-        // the epoch mock is pinned, not a real clock: keep it fresh across the warp so the
-        // vote path does not attempt a roll against the code-less staking mock
-        vm.mockCall(
-            STAKING,
-            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp + 1)
-        );
         vm.prank(whale);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
@@ -300,7 +283,7 @@ contract GovernanceRecoveryTest is Test {
         governance.propose(actions, "post-switch local proposal");
 
         // cross-chain receiving is unaffected by the switch
-        IGovernanceVoting.ProposedAction[] memory incrementActions = new IGovernanceVoting.ProposedAction[](1);
+        ProposedAction[] memory incrementActions = new ProposedAction[](1);
         incrementActions[0] = _incrementAction();
         bytes memory payload = abi.encode(
             CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: 1, actions: incrementActions})
@@ -323,17 +306,12 @@ contract GovernanceRecoveryTest is Test {
         assertEq(counter.value(), 1);
     }
 
-    function _incrementAction() private view returns (IGovernanceVoting.ProposedAction memory) {
-        return
-            IGovernanceVoting.ProposedAction({
-                target: address(counter),
-                data: abi.encodeCall(Counter.increment, ()),
-                value: 0
-            });
+    function _incrementAction() private view returns (ProposedAction memory) {
+        return ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
     }
 
-    function _incrementActions() private view returns (IGovernanceVoting.ProposedAction[] memory) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+    function _incrementActions() private view returns (ProposedAction[] memory) {
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = _incrementAction();
         return actions;
     }

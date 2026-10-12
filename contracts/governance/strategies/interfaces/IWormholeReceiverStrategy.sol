@@ -29,10 +29,6 @@ interface IWormholeReceiverStrategy {
     /// @notice Thrown when a receiver-chain strategy is deployed without a recovery address.
     error GovRecoveryAddressZero();
 
-    /// @notice Thrown when a threshold is outside the recovery-enforceable range.
-    /// @param threshold The invalid threshold.
-    error GovStrategyInvalidReceiverThreshold(uint256 threshold);
-
     /// @notice Requests the governance recovery; executable after the challenge window.
     /// @dev Only callable by the recovery address, and only when no request is pending or active.
     function requestRecover() external;

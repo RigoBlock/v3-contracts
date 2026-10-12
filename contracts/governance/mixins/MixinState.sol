@@ -11,16 +11,14 @@ import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 
 abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
-    function getActions(
-        uint256 proposalId
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
+    function getActions(uint256 proposalId) external view override returns (ProposedAction[] memory proposedActions) {
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
-        proposedActions = new IGovernanceVoting.ProposedAction[](actionsLength);
+        proposedActions = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -199,9 +197,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     ) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](
-            actionsLength
-        );
+        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -220,19 +216,20 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
             return ProposalStatus.Canceled;
         }
 
-        // prevent old-format proposals execution if quorum drops
-        uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
-        quorum = quorum > 0 ? quorum : type(uint256).max;
+        // executed is terminal and must be reported regardless of strategy or clock
+        if (proposal.executed) return ProposalStatus.Executed;
 
-        // the slot packs (epochEnd << 192) | votingPower; zero until the first vote snapshots both,
-        // so a proposal without votes cannot qualify
-        uint256 totalVotingPower = uint192(_proposalVotingPower().proposalVotingPowerById[proposalId]);
+        // a proposal without a stored quorum (legacy or corrupt) can never reach quorum
+        uint256 quorum = _proposalExtraData().proposalExtraDataById[proposalId].quorum;
+        quorum = quorum > 0 ? quorum : type(uint256).max;
+        uint256 votingPower = _proposalExtraData().proposalExtraDataById[proposalId].votingPower;
 
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
+                _proposalMeta().proposalMetaById[proposalId].proposer,
                 quorum,
-                totalVotingPower,
+                votingPower,
                 _governanceParameters().timeType
             );
     }

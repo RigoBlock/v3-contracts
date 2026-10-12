@@ -3,7 +3,7 @@ pragma solidity 0.8.37;
 
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
-import {CrossChainPayload, ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceCrosschain} from "../../contracts/governance/interfaces/governance/IGovernanceCrosschain.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
@@ -93,16 +93,13 @@ contract GovernanceCrosschainTest is Test {
         counter = new Counter();
     }
 
-    function _encodePayload(IGovernanceVoting.ProposedAction memory action) private pure returns (bytes memory) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+    function _encodePayload(ProposedAction memory action) private pure returns (bytes memory) {
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = action;
         return _encodePayload(actions, 1);
     }
 
-    function _encodePayload(
-        IGovernanceVoting.ProposedAction[] memory actions,
-        uint256 proposalId
-    ) private pure returns (bytes memory) {
+    function _encodePayload(ProposedAction[] memory actions, uint256 proposalId) private pure returns (bytes memory) {
         return
             abi.encode(
                 CrossChainPayload({targetWormholeChainId: TARGET_CHAIN, proposalId: proposalId, actions: actions})
@@ -138,25 +135,18 @@ contract GovernanceCrosschainTest is Test {
         vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector), abi.encode(vaa, true, ""));
     }
 
-    function _buildIncrementAction() private view returns (IGovernanceVoting.ProposedAction memory) {
-        return
-            IGovernanceVoting.ProposedAction({
-                target: address(counter),
-                data: abi.encodeCall(Counter.increment, ()),
-                value: 0
-            });
+    function _buildIncrementAction() private view returns (ProposedAction memory) {
+        return ProposedAction({target: address(counter), data: abi.encodeCall(Counter.increment, ()), value: 0});
     }
 
-    function _wrap(
-        IGovernanceVoting.ProposedAction memory action
-    ) private pure returns (IGovernanceVoting.ProposedAction[] memory) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+    function _wrap(ProposedAction memory action) private pure returns (ProposedAction[] memory) {
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = action;
         return actions;
     }
 
     function test_ReceiveMessage_HappyPath() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
         _mockParseAndVerify(_buildVaa(payload, 0));
 
@@ -168,7 +158,7 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_NotConfigured_Reverts() public {
         CrosschainHarness unconfigured = new CrosschainHarness();
 
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
         vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
@@ -180,7 +170,7 @@ contract GovernanceCrosschainTest is Test {
         // a strategy with a zero Wormhole address (e.g. a chain that is not a receiver)
         otherChain.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN)));
 
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
         vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
@@ -188,7 +178,7 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function test_ReceiveMessage_UnknownEmitter_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
         CoreBridgeVM memory vaa = _buildVaa(payload, 0);
         vaa.emitterAddress = bytes32(uint256(1));
@@ -199,7 +189,7 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function test_ReceiveMessage_UnknownEmitterChain_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
         CoreBridgeVM memory vaa = _buildVaa(payload, 0);
         vaa.emitterChainId = EMITTER_CHAIN + 1;
@@ -210,7 +200,7 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function test_ReceiveMessage_WrongChain_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = abi.encode(
             CrossChainPayload({targetWormholeChainId: 9999, proposalId: 1, actions: _wrap(action)})
         );
@@ -230,7 +220,7 @@ contract GovernanceCrosschainTest is Test {
         // a chain whose Wormhole chain id equals the emitter's (i.e. the sender chain itself)
         governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN)));
 
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
         _mockParseAndVerify(_buildVaa(payload, 0));
 
@@ -264,7 +254,7 @@ contract GovernanceCrosschainTest is Test {
 
     /// @notice A re-delivered VAA is rejected by the monotonic sequence check.
     function test_ReceiveMessage_ReplayedVaa_Reverts() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
         _mockParseAndVerify(_buildVaa(payload, 0));
 
@@ -284,7 +274,7 @@ contract GovernanceCrosschainTest is Test {
     ///     reverting the whole batch atomically.
     function test_ReceiveMessage_Reentrancy_BumpsSequenceBeforeExecution() public {
         ReentrantRelayerTarget relayerTarget = new ReentrantRelayerTarget(address(governance));
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+        ProposedAction memory action = ProposedAction({
             target: address(relayerTarget),
             data: abi.encodeCall(ReentrantRelayerTarget.reenter, ("")),
             value: 0
@@ -303,7 +293,7 @@ contract GovernanceCrosschainTest is Test {
     /// @notice A governance-approved re-send executes as a new message: the sender chain
     ///     published the action again, so it carries a new sequence and is not a replay.
     function test_ReceiveMessage_ResentAction_ExecutesAsNewMessage() public {
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
 
         _mockParseAndVerify(_buildVaa(payload, 0));
@@ -322,8 +312,8 @@ contract GovernanceCrosschainTest is Test {
     ///     with a higher sequence delivers even if earlier sequences never executed, and a
     ///     later message with a lower sequence is rejected.
     function test_ReceiveMessage_GapAllowed_HigherSequenceSkipsMissing() public {
-        IGovernanceVoting.ProposedAction memory action1 = _buildIncrementAction();
-        IGovernanceVoting.ProposedAction memory action2 = IGovernanceVoting.ProposedAction({
+        ProposedAction memory action1 = _buildIncrementAction();
+        ProposedAction memory action2 = ProposedAction({
             target: address(counter),
             data: abi.encodeCall(Counter.setValue, (42)),
             value: 0
@@ -350,7 +340,7 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_ExecutionFailure_RevertsAndStaysRedeliverable() public {
         FlakyTarget flaky = new FlakyTarget();
         flaky.setShouldRevert(true);
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+        ProposedAction memory action = ProposedAction({
             target: address(flaky),
             data: abi.encodeCall(FlakyTarget.run, ()),
             value: 0
@@ -374,12 +364,12 @@ contract GovernanceCrosschainTest is Test {
         FlakyTarget flaky = new FlakyTarget();
         flaky.setShouldRevert(true);
 
-        IGovernanceVoting.ProposedAction memory failingAction = IGovernanceVoting.ProposedAction({
+        ProposedAction memory failingAction = ProposedAction({
             target: address(flaky),
             data: abi.encodeCall(FlakyTarget.run, ()),
             value: 0
         });
-        IGovernanceVoting.ProposedAction memory goodAction = _buildIncrementAction();
+        ProposedAction memory goodAction = _buildIncrementAction();
 
         _mockParseAndVerify(_buildVaa(_encodePayload(failingAction), 0));
         vm.expectRevert(abi.encodeWithSelector(FlakyTarget.TargetRevert.selector));
@@ -398,11 +388,7 @@ contract GovernanceCrosschainTest is Test {
     ///     succeeds once re-delivered after funding.
     function test_ReceiveMessage_FailedAction_RecoveredByRedelivery() public {
         address recipient = address(0xBEEF);
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: recipient,
-            data: "",
-            value: 0.25 ether
-        });
+        ProposedAction memory action = ProposedAction({target: recipient, data: "", value: 0.25 ether});
 
         // the governance holds no native balance: the action reverts and is not consumed
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
@@ -423,11 +409,7 @@ contract GovernanceCrosschainTest is Test {
         address recipient = address(0xBEEF);
         vm.deal(address(governance), 1 ether);
 
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
-            target: recipient,
-            data: "",
-            value: 0.25 ether
-        });
+        ProposedAction memory action = ProposedAction({target: recipient, data: "", value: 0.25 ether});
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
         governance.receiveMessage("");
@@ -438,13 +420,9 @@ contract GovernanceCrosschainTest is Test {
     /// @notice A single message carries a batch of actions, executed in order: the typical
     ///     case of coupling an adapter upgrade with an implementation upgrade lands atomically.
     function test_ReceiveMessage_BatchActions_ExecuteInOrder() public {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](3);
+        ProposedAction[] memory actions = new ProposedAction[](3);
         actions[0] = _buildIncrementAction();
-        actions[1] = IGovernanceVoting.ProposedAction({
-            target: address(counter),
-            data: abi.encodeCall(Counter.setValue, (42)),
-            value: 0
-        });
+        actions[1] = ProposedAction({target: address(counter), data: abi.encodeCall(Counter.setValue, (42)), value: 0});
         actions[2] = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
 
@@ -460,16 +438,17 @@ contract GovernanceCrosschainTest is Test {
         WormholeReceiverStrategy newStrategy = new WormholeReceiverStrategy(
             WORMHOLE,
             TARGET_CHAIN,
+            address(governance),
             makeAddr("recovery")
         );
 
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](2);
+        actions[0] = ProposedAction({
             target: address(governance),
             data: abi.encodeCall(IGovernanceUpgrade.upgradeImplementation, (address(newImpl))),
             value: 0
         });
-        actions[1] = IGovernanceVoting.ProposedAction({
+        actions[1] = ProposedAction({
             target: address(governance),
             data: abi.encodeCall(IGovernanceUpgrade.upgradeStrategy, (address(newStrategy))),
             value: 0
@@ -489,8 +468,8 @@ contract GovernanceCrosschainTest is Test {
 
         uint256 proposalThreshold = 500_000e18;
         uint256 quorumThreshold = 2_000_000e18;
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
             target: address(governance),
             data: abi.encodeCall(IGovernanceUpgrade.updateThresholds, (proposalThreshold, quorumThreshold)),
             value: 0
@@ -508,7 +487,7 @@ contract GovernanceCrosschainTest is Test {
     ///     sequence still delivers, so it does not clog the pipeline.
     function test_ReceiveMessage_ExpiredMessage_RevertsAndDoesNotClog() public {
         vm.warp(1_700_000_000);
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 3 days)));
 
         vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
@@ -532,7 +511,7 @@ contract GovernanceCrosschainTest is Test {
     ///     fresh timestamp and the new message executes.
     function test_ReceiveMessage_ExpiredMessage_ResentWithFreshTimestamp_Executes() public {
         vm.warp(1_700_000_000);
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 3 days)));
         vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
         governance.receiveMessage("");
@@ -547,7 +526,7 @@ contract GovernanceCrosschainTest is Test {
     ///     boundary (block.timestamp == vaa.timestamp + 2 days) still executes.
     function test_ReceiveMessage_ExpiryBoundary_ExactTimeout_Executes() public {
         vm.warp(1_700_000_000);
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 2 days)));
 
         governance.receiveMessage("");
@@ -558,7 +537,7 @@ contract GovernanceCrosschainTest is Test {
     /// @notice One second past the boundary the message is expired and not consumed.
     function test_ReceiveMessage_ExpiryBoundary_OneSecondPast_Reverts() public {
         vm.warp(1_700_000_000);
-        IGovernanceVoting.ProposedAction memory action = _buildIncrementAction();
+        ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0, uint32(block.timestamp - 2 days - 1)));
 
         vm.expectRevert(abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverMessageExpired.selector, uint64(0)));
@@ -573,12 +552,8 @@ contract GovernanceCrosschainTest is Test {
         FlakyTarget flaky = new FlakyTarget();
         flaky.setShouldRevert(true);
 
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](2);
-        actions[0] = IGovernanceVoting.ProposedAction({
-            target: address(flaky),
-            data: abi.encodeCall(FlakyTarget.run, ()),
-            value: 0
-        });
+        ProposedAction[] memory actions = new ProposedAction[](2);
+        actions[0] = ProposedAction({target: address(flaky), data: abi.encodeCall(FlakyTarget.run, ()), value: 0});
         actions[1] = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(actions, 1), 0));
 
@@ -593,7 +568,7 @@ contract GovernanceCrosschainTest is Test {
         // an action calling the governance itself executes with msg.sender == governance,
         // i.e. the sender chain holds the same authority as local voters
         CrosschainHarness newImpl = new CrosschainHarness();
-        IGovernanceVoting.ProposedAction memory action = IGovernanceVoting.ProposedAction({
+        ProposedAction memory action = ProposedAction({
             target: address(governance),
             data: abi.encodeCall(IGovernanceUpgrade.upgradeImplementation, (address(newImpl))),
             value: 0
@@ -639,19 +614,12 @@ contract GovernanceCrosschainTest is Test {
 
         // ...and so does local governance on the same contract
         governance.setParams(1, 1);
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = _buildIncrementAction();
         vm.prank(whale);
         uint256 proposalId = governance.propose(actions, "local proposal");
 
         vm.warp(block.timestamp + 2);
-        // the epoch mock is pinned, not a real clock: keep it fresh across the warp so the
-        // vote path does not attempt a roll against the code-less staking mock
-        vm.mockCall(
-            STAKING,
-            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp + 1)
-        );
         vm.prank(whale);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Qualified));
@@ -702,19 +670,12 @@ contract GovernanceCrosschainTest is Test {
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
         governance.setParams(1, 400_000e18);
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = _buildIncrementAction();
         vm.prank(whale);
         uint256 proposalId = governance.propose(actions, "snapshot denominator");
 
         vm.warp(block.timestamp + 2);
-        // the epoch mock is pinned, not a real clock: keep it fresh across the warp so the
-        // vote path does not attempt a roll against the code-less staking mock
-        vm.mockCall(
-            STAKING,
-            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
-            abi.encode(block.timestamp + 1)
-        );
         vm.prank(voter);
         governance.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
         // 410k of a 1M snapshot (41%) is below the two-thirds threshold
@@ -741,11 +702,12 @@ contract GovernanceCrosschainTest is Test {
         WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(
             WORMHOLE,
             TARGET_CHAIN,
+            address(governance),
             makeAddr("recovery")
         );
         governance.setStrategy(address(receiverStrategy));
 
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
+        ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = _buildIncrementAction();
         // the voting-power gate fires before the strategy hook: getVotingPower returns 0 on a
         // receiver chain, so proposal creation is fail-closed either way. The harness leaves the

@@ -23,12 +23,15 @@ A chain's role is expressed entirely through its governance strategy:
 
 - **Ethereum mainnet is the only sender.** The sender strategy
   (`RigoblockGovernanceStrategy`, deployed only on mainnet) validates Wormhole actions
-  in `beforePropose`; the receiver strategy (`WormholeReceiverStrategy`) reverts them
-  (`GovCrosschainNotSender`), and the receiver mixin cannot run on mainnet at all
-  (`GovReceiverLocalEmitter`, since the trusted emitter is mainnet itself). The trusted emitter is checked as
+  in `beforePropose` (zero value, no local-chain `publishMessage`), and the receiver mixin
+  cannot run on mainnet at all (`GovReceiverLocalEmitter`, since the trusted emitter is
+  mainnet itself). The trusted emitter is checked as
   `emitterAddress == address(this)`: the proxy is deployed at the same deterministic
   address on every chain, so the mainnet instance of that shared address is the only
-  valid emitter.
+  valid emitter. The receiver strategy no longer reverts wormhole targets itself —
+  fail-closed local governance is enforced by `beforePropose` gating on an active
+  recovery, so no ordinary local proposal can ever carry a `publishMessage` action to
+  the receiver chain.
 - **Every other chain is a receiver** when its strategy has a nonzero Wormhole core
   address. Receiving is permissionless (any relayer can deliver a VAA) and independent
   of local governance.
@@ -396,10 +399,13 @@ beyond what a valid later message already has.
 
 ## Quorum snapshot (issue #200)
 
-When a proposal is created, the current `quorumThreshold` is copied into a
-separate `proposalQuorumById` mapping. All subsequent state checks for that
-proposal use the snapshotted value. If the quorum is later changed by another
-successful proposal, the state of past proposals remains deterministic.
+When a proposal is created, the current `quorumThreshold` is copied into the
+proposal's entry of a merged `proposalExtraDataById` mapping (slot
+`_PROPOSAL_EXTRA_DATA_SLOT`), which packs the snapshot quorum and the
+delegated-total snapshot as two `uint128` values in one storage slot. All
+subsequent state checks for that proposal use the snapshotted value. If the
+quorum is later changed by another successful proposal, the state of past
+proposals remains deterministic.
 
 Proposals created before this feature was introduced do not have a snapshot;
 their mapping entry is `0`. `_getProposalState` treats those legacy proposals as
@@ -417,38 +423,36 @@ effective quorum through `getProposalState(proposalId)`.
 
 ## Delegated-total snapshot (qualified-majority denominator)
 
-The same snapshot pattern protects the qualified-majority denominator. On the
-first vote of a proposal, `MixinVoting._castVote` copies the strategy's
+The same merged extra-data slot protects the qualified-majority denominator. On
+the first vote of a proposal, `MixinVoting._countVote` copies the strategy's
 `totalVotingPower()` (the current-epoch global delegated balance on
-sender chain) into a `proposalVotingPowerById` mapping, packed with the
-snapshot epoch's end time as `(epochEnd << 192) | votingPower`, and the
-strategy's `_qualifiedConsensus` evaluates `3 * votesFor > 2 * snapshot`
-against that fixed value instead of reading the live staking balance. This
+sender chain) into the proposal's `votingPower` field, and the strategy's
+`_qualifiedConsensus` evaluates `3 * votesFor > 2 * snapshot` against that
+fixed value instead of reading the live staking balance. This
 closes the epoch-rollover shrink vector: a coalition that votes and then
 activates queued undelegations to shrink the live electorate cannot
 manufacture an early `Qualified` from less than two-thirds of the snapshotted
 supply.
 
 The snapshot is taken on the first vote rather than at proposal creation, so
-delegations made after proposal creation but before voting starts count in
+delegations made after proposal creation but before the first vote count in
 both the numerator and the denominator. The staking clock is permissionless,
-so the strategy rolls a finished epoch in `beforePropose` (the proposal
-starts at the fresh epoch's boundary) and again on the first vote, before
-voting power is read; the snapshot is taken after that roll. Because the
-snapshot epoch ends at `firstVoteTime + epochDuration` and the voting period
-never exceeds the epoch duration, the snapshot epoch provably outlives the
-voting window — no second roll is possible in-window, so votes and
-denominator always share an epoch, and a mid-proposal whale delegation lands
-in both the numerator and the denominator instead of qualifying against a
-pre-roll snapshot. Every later vote re-validates the epoch through the
-strategy's `beforeVote` hook and reverts with `GovVotingEpochMismatch` if the
-staking clock has moved past the snapshot epoch. Proposals without votes have
-a zero entry and cannot qualify; the quorum snapshot mapping already
-fail-closes pre-snapshot legacy proposals. If the staking epoch cannot be
-rolled (the scheduler still reverts, e.g. unfinalized pools), proposal
-creation and the first vote revert instead of proceeding inside a dead epoch.
-Early qualification also requires `votesFor > 2 * votesAgainst`, the same
-ratio execution requires, so a proposal can never be closed early in a state
+so the strategy rolls a finished epoch in `beforePropose` when it can (the
+revert is swallowed — a dead scheduler must not block governance); if the roll
+does not happen, `votingTimestamps` falls back to `start = block.timestamp + 1`
+with the 7-day default period, and the snapshot is taken from whatever epoch
+is current at the first vote. The voting period is
+`min(epochDuration - 1, 7 days)`, so the window always fits inside the current
+epoch whenever the epoch could roll — but a mid-window epoch roll is *not*
+prevented: `endEpoch` is callable by anyone once `block.timestamp >= epochEnd`,
+and the window starts at the epoch boundary. A mid-proposal whale delegation
+after such a roll lands in the numerator but not the frozen denominator, so it
+cannot qualify against the snapshot (new votes must still clear
+`3 * votesFor > 2 * snapshot`). Proposals without votes have
+a zero entry and cannot qualify; the merged extra-data mapping already
+fail-closes pre-snapshot legacy proposals (zero quorum reads as
+`type(uint256).max`). Early qualification also requires `votesFor > 2 * votesAgainst`,
+the same ratio execution requires, so a proposal can never be closed early in a state
 that would read `Defeated` at the deadline.
 
 ## Deployment
@@ -458,8 +462,10 @@ that would read `Defeated` at the deadline.
 (no constructor arguments — same address on every chain), then the chain's
 strategy: `RigoblockGovernanceStrategy` (staking proxy + Wormhole configuration)
 on the hub chain (`GOVERNANCE_HUB_CHAIN` in `src/utils/constants.ts`), or
-`WormholeReceiverStrategy` (Wormhole configuration + recovery address) on every
-other chain, which requires `governanceRecovery` to be configured.
+`WormholeReceiverStrategy` with constructor arguments
+`(wormhole, wormholeChainId, governanceProxy, governanceRecovery)` on every
+other chain, which requires `governanceRecovery` (and the derived
+`governanceProxy`) to be configured.
 
 Chain-specific Wormhole addresses and chain ids are stored in
 `src/utils/constants.ts` and `contracts/test/Constants.sol`.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {MigrationHarness, MockMigrationStrategy, MockTarget} from "./GovernanceMigration.t.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -167,16 +167,16 @@ contract GovernanceTimeTypeTest is Test {
 
     /// @dev Creates a no-op proposal and returns its id.
     function _createProposal() private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(target), data: "", value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(target), data: "", value: 0});
         vm.prank(whale);
         return harness.propose(actions, "time type proposal");
     }
 
     /// @dev Creates a proposal whose single action calls the harness with the given calldata.
     function _createProposalWithData(bytes memory data) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(harness), data: data, value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(harness), data: data, value: 0});
         vm.prank(whale);
         return harness.propose(actions, "time type proposal");
     }

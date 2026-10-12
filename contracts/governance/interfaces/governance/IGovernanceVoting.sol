@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
+import {ProposedAction} from "../../types/GovernanceTypes.sol";
 import "./IGovernanceEvents.sol";
 
 interface IGovernanceVoting {
@@ -20,12 +21,6 @@ interface IGovernanceVoting {
     ///      proposal cannot be voted on or executed. Cancelling does not consume the proposal id.
     /// @param proposalId The ID of the proposal to cancel.
     function cancel(uint256 proposalId) external;
-
-    struct ProposedAction {
-        address target;
-        bytes data;
-        uint256 value;
-    }
 
     /// @notice Creates a proposal on the the given actions. Must have at least `proposalThreshold`.
     /// @dev Must have at least `proposalThreshold` of voting power to call this function.
