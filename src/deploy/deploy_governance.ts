@@ -28,24 +28,14 @@ export default deployScript(
 
     // The script is authoritative for the chain-to-mode mapping: the hub chain (Ethereum
     // mainnet) is the only sender governance, every other chain is a receiver.
-    const isSender = chainId === GOVERNANCE_HUB_CHAIN;
-    if (config.governanceMode !== (isSender ? "sender" : "receiver")) {
-      throw new Error(
-        `Governance mode for chain ${chainId} must be "${isSender ? "sender" : "receiver"}", got "${config.governanceMode}".`,
-      );
-    }
+    const isHub = chainId === GOVERNANCE_HUB_CHAIN;
 
-    // Receiver chains carry a recovery address, validated here so a chain can never
-    // ship with an unset or unintended configuration.
-    if (!isSender && !governanceRecovery) {
+    // the hub chain's wormhole configuration must exist: the implementation constructor takes
+    // the hub wormhole chain id, and the hub strategy wraps the hub wormhole core contract
+    const hubConfig = chainConfig[GOVERNANCE_HUB_CHAIN];
+    if (!hubConfig?.wormhole || !hubConfig.wormholeChainId) {
       throw new Error(
-        `governanceRecovery must be set for receiver chain ${chainId}. ` +
-          "Set it to the recovery multisig in src/utils/constants.ts.",
-      );
-    }
-    if (isSender && governanceRecovery) {
-      throw new Error(
-        `governanceRecovery must not be set for sender chain ${chainId}.`,
+        `chainConfig[${GOVERNANCE_HUB_CHAIN}] must have wormhole and wormholeChainId configured.`,
       );
     }
 
@@ -53,6 +43,10 @@ export default deployScript(
     // the governance proxy is the receiver hub on each chain, and its deterministic address is
     // known in advance on every chain. The hub chain runs the staking-backed sender strategy,
     // which is the only one that can create local proposals and publish cross-chain messages.
+    // The Wormhole SDK only provides compile-time per-chain constants (no EVM-chainid to
+    // wormhole-chainid conversion), so the id is read from the hub chain's deploy config.
+    const hubWormholeChainId = hubConfig.wormholeChainId;
+
     await env.deploy(
       "RigoblockGovernanceFactory",
       {
@@ -68,18 +62,19 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("RigoblockGovernance"),
-        args: [],
+        // identical on every chain, so the deterministic implementation address is unchanged
+        args: [hubWormholeChainId],
       },
       { deterministic: true },
     );
 
-    if (isSender) {
+    if (isHub) {
       await env.deploy(
         "RigoblockGovernanceStrategy",
         {
           account: deployer,
           artifact: await readArtifact("RigoblockGovernanceStrategy"),
-          args: [config.stakingProxy, config.wormhole, config.wormholeChainId],
+          args: [config.stakingProxy, config.wormhole],
         },
         { deterministic: true },
       );
@@ -89,12 +84,7 @@ export default deployScript(
         {
           account: deployer,
           artifact: await readArtifact("WormholeReceiverStrategy"),
-          args: [
-            config.wormhole,
-            config.wormholeChainId,
-            governanceProxy,
-            governanceRecovery as string,
-          ],
+          args: [config.wormhole, governanceProxy, governanceRecovery],
         },
         { deterministic: true },
       );

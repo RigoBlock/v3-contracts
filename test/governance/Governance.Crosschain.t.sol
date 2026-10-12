@@ -16,10 +16,10 @@ import {Test} from "forge-std/Test.sol";
 import {ICoreBridge, CoreBridgeVM, GuardianSignature} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {CHAIN_ID_ETHEREUM, CHAIN_ID_HYPER_EVM} from "wormhole-solidity-sdk/src/constants/Chains.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
 import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 import {IStorage} from "../../contracts/staking/interfaces/IStorage.sol";
+import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
 
 contract Counter {
     uint256 public value;
@@ -51,7 +51,12 @@ contract FlakyTarget {
 /// @notice Deploys the governance implementation standalone and exposes strategy storage,
 ///     mirroring the MigrationHarness pattern used by GovernanceMigration.t.sol.
 contract CrosschainHarness is RigoblockGovernance {
-    constructor() RigoblockGovernance() {}
+    // 2 is the Wormhole chain id of Ethereum, the governance hub
+    constructor() RigoblockGovernance(2) {
+        // governance actions that reach updateThresholds validate the canonical name via the
+        // strategy; the harness skips initialization, so the name is set here
+        _name().value = "Rigoblock Governance";
+    }
 
     function setStrategy(address strategy_) external {
         _paramsWrapper().governanceParameters.strategy = strategy_;
@@ -71,6 +76,14 @@ contract CrosschainHarness is RigoblockGovernance {
     }
 }
 
+/// @dev Strategy exposing a zero wormhole address, simulating a chain where cross-chain
+///      governance is not configured.
+contract ZeroWormholeStrategy {
+    function wormhole() external pure returns (address) {
+        return address(0);
+    }
+}
+
 /// @title Tests for the cross-chain receiver implemented inside the governance.
 /// @notice Wormhole's parseAndVerifyVM is mocked: these tests exercise the governance's own
 ///     state machine (ordering, replay protection, gaps, expiry), not VAA cryptography.
@@ -78,7 +91,8 @@ contract GovernanceCrosschainTest is Test {
     uint16 internal constant EMITTER_CHAIN = CHAIN_ID_ETHEREUM;
     uint16 internal constant TARGET_CHAIN = CHAIN_ID_HYPER_EVM;
     address internal constant STAKING = address(0x1111);
-    address internal constant WORMHOLE = Constants.WORMHOLE_HYPEREVM;
+    address internal constant GRG = address(0x2222);
+    address internal wormhole;
     uint256 internal constant DELEGATED_BALANCE = 1_000_000e18;
 
     CrosschainHarness internal governance;
@@ -87,7 +101,12 @@ contract GovernanceCrosschainTest is Test {
     address internal whale = makeAddr("whale");
 
     function setUp() public {
-        strategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+        wormhole = makeAddr("wormhole");
+        // enough code for the constructor's code.length check; the local Wormhole chain id is
+        // read from the core contract, which is not deployed in these tests
+        vm.etch(wormhole, hex"00");
+        vm.mockCall(wormhole, abi.encodeWithSelector(ICoreBridge.chainId.selector), abi.encode(TARGET_CHAIN));
+        strategy = new RigoblockGovernanceStrategy(STAKING, wormhole);
         governance = new CrosschainHarness();
         governance.setStrategy(address(strategy));
         counter = new Counter();
@@ -132,7 +151,7 @@ contract GovernanceCrosschainTest is Test {
     }
 
     function _mockParseAndVerify(CoreBridgeVM memory vaa) private {
-        vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector), abi.encode(vaa, true, ""));
+        vm.mockCall(wormhole, abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector), abi.encode(vaa, true, ""));
     }
 
     function _buildIncrementAction() private view returns (ProposedAction memory) {
@@ -155,25 +174,30 @@ contract GovernanceCrosschainTest is Test {
         assertEq(governance.nextMinimumSequence(), 1);
     }
 
-    function test_ReceiveMessage_NotConfigured_Reverts() public {
+    /// @notice A governance whose strategy is the zero address cannot receive: the strategy is
+    ///     asserted non-null at initialization, so this state is only reachable through direct
+    ///     storage manipulation.
+    function test_ReceiveMessage_WithoutStrategy_Reverts() public {
         CrosschainHarness unconfigured = new CrosschainHarness();
 
         ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
-        vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
+        vm.expectRevert();
         unconfigured.receiveMessage("");
     }
 
+    /// @notice A strategy that exposes a zero wormhole address (a chain without cross-chain
+    ///     governance configured) cannot receive: the uncallable core bridge reverts the
+    ///     verification call. Configuration is enforced by both strategies' constructors.
     function test_ReceiveMessage_WormholeDisabledInStrategy_Reverts() public {
         CrosschainHarness otherChain = new CrosschainHarness();
-        // a strategy with a zero Wormhole address (e.g. a chain that is not a receiver)
-        otherChain.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, address(0), TARGET_CHAIN)));
+        otherChain.setStrategy(address(new ZeroWormholeStrategy()));
 
         ProposedAction memory action = _buildIncrementAction();
         _mockParseAndVerify(_buildVaa(_encodePayload(action), 0));
 
-        vm.expectRevert(IGovernanceCrosschain.GovReceiverNotConfigured.selector);
+        vm.expectRevert();
         otherChain.receiveMessage("");
     }
 
@@ -218,7 +242,8 @@ contract GovernanceCrosschainTest is Test {
 
     function test_ReceiveMessage_LocalEmitter_Reverts() public {
         // a chain whose Wormhole chain id equals the emitter's (i.e. the sender chain itself)
-        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, WORMHOLE, EMITTER_CHAIN)));
+        vm.mockCall(wormhole, abi.encodeWithSelector(ICoreBridge.chainId.selector), abi.encode(EMITTER_CHAIN));
+        governance.setStrategy(address(new RigoblockGovernanceStrategy(STAKING, wormhole)));
 
         ProposedAction memory action = _buildIncrementAction();
         bytes memory payload = _encodePayload(action);
@@ -230,7 +255,7 @@ contract GovernanceCrosschainTest is Test {
 
     function test_ReceiveMessage_InvalidVaa_Reverts() public {
         vm.mockCall(
-            WORMHOLE,
+            wormhole,
             abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector),
             abi.encode(_buildVaa("", 0), false, "invalid signature")
         );
@@ -436,8 +461,7 @@ contract GovernanceCrosschainTest is Test {
     function test_ReceiveMessage_BatchWithSelfUpgrades_Executes() public {
         CrosschainHarness newImpl = new CrosschainHarness();
         WormholeReceiverStrategy newStrategy = new WormholeReceiverStrategy(
-            WORMHOLE,
-            TARGET_CHAIN,
+            wormhole,
             address(governance),
             makeAddr("recovery")
         );
@@ -461,11 +485,13 @@ contract GovernanceCrosschainTest is Test {
     }
 
     /// @notice Voting thresholds can also be upgraded cross-chain through the self-call path.
+    ///     The receive path executes stored actions directly; threshold bounds are validated
+    ///     at execution time via validateParams, so the GRG supply is mocked to keep the
+    ///     proposed values in bounds.
     function test_ReceiveMessage_UpgradesThresholds_ViaSelfCall() public {
-        address grg = address(0x2222);
-        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(grg));
-        vm.mockCall(grg, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(uint256(40_000_000e18)));
-
+        // 50M supply keeps 500k/2M in bounds: proposal [1%, 2%] = [500k, 1M], quorum [4%, 10%] = [2M, 5M]
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(GRG));
+        vm.mockCall(GRG, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(50_000_000e18));
         uint256 proposalThreshold = 500_000e18;
         uint256 quorumThreshold = 2_000_000e18;
         ProposedAction[] memory actions = new ProposedAction[](1);
@@ -700,8 +726,7 @@ contract GovernanceCrosschainTest is Test {
     ///     proxy level, while the cross-chain receive path keeps executing unaffected.
     function test_Receiver_LocalProposeReverts_ReceiveStillExecutes() public {
         WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(
-            WORMHOLE,
-            TARGET_CHAIN,
+            wormhole,
             address(governance),
             makeAddr("recovery")
         );

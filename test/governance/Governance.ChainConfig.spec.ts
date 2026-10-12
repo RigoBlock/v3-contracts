@@ -1,34 +1,25 @@
 import { expect } from "chai";
-import { chainConfig, governanceRecovery } from "../../src/utils/constants";
+import {
+  chainConfig,
+  GOVERNANCE_HUB_CHAIN,
+  governanceRecovery,
+} from "../../src/utils/constants";
 
 // Mirrors the authoritative mapping enforced at deploy time in src/deploy/deploy_governance.ts:
-// the hub chain (Ethereum mainnet) is the only sender governance, every other configured
-// chain is a receiver.
-const GOVERNANCE_HUB_CHAIN = 1;
+// the hub chain (Ethereum mainnet) is the only sender governance, every other configured chain
+// is a receiver.
 
 describe("Governance chain config", async () => {
-  it("every configured chain declares a governance mode", async () => {
-    for (const [chainId, config] of Object.entries(chainConfig)) {
-      expect(config.governanceMode, `chain ${chainId}`).to.be.oneOf([
-        "sender",
-        "receiver",
-      ]);
-    }
-  });
-
-  it("chain-to-mode mapping matches the deploy script's enforced mapping", async () => {
-    for (const [chainId, config] of Object.entries(chainConfig)) {
-      const expected =
-        Number(chainId) === GOVERNANCE_HUB_CHAIN ? "sender" : "receiver";
-      expect(config.governanceMode, `chain ${chainId}`).to.eq(expected);
-    }
-  });
-
-  it("sender mode is exclusive to Ethereum mainnet", async () => {
-    const senderChains = Object.entries(chainConfig)
-      .filter(([, config]) => config.governanceMode === "sender")
-      .map(([chainId]) => Number(chainId));
-    expect(senderChains).to.deep.eq([1]);
+  // Mirrors the deploy script validation in src/deploy/deploy_governance.ts: the hub chain's
+  // wormhole configuration must exist, since the implementation constructor takes the hub
+  // wormhole chain id and the hub strategy wraps the hub wormhole core contract.
+  it("hub chain has wormhole and wormholeChainId configured", async () => {
+    const hubConfig = chainConfig[GOVERNANCE_HUB_CHAIN];
+    expect(hubConfig, `chain ${GOVERNANCE_HUB_CHAIN}`).to.not.eq(undefined);
+    expect(hubConfig.wormhole).to.match(/^0x[0-9a-fA-F]{40}$/);
+    expect(BigInt(hubConfig.wormhole)).to.not.eq(0n);
+    expect(hubConfig.wormholeChainId).to.be.a("number");
+    expect(hubConfig.wormholeChainId).to.be.greaterThan(0);
   });
 
   // Mirrors the deploy script validation in src/deploy/deploy_governance.ts: a recovery

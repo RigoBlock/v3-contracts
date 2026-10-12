@@ -23,9 +23,6 @@ interface IGovernanceCrosschain {
     /// @notice Thrown when the VAA is older than the execution window.
     error GovReceiverMessageExpired(uint64 sequence);
 
-    /// @notice Thrown when the governance strategy has no Wormhole address configured.
-    error GovReceiverNotConfigured();
-
     /// @notice Consumes a Wormhole VAA and executes the governance actions it contains.
     /// @dev Sequences must be strictly monotonically increasing but need not be consecutive:
     ///      a message that reverts is never consumed and can be skipped by delivering any

@@ -157,7 +157,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernor
     function votingDelay() public pure override(Governor, IGovernor) returns (uint256) {
-        // voting starts at least one second in the future (see votingTimestamps)
+        // voting starts at least one second in the future (see the strategy's beforePropose)
         return 1;
     }
 
@@ -216,20 +216,16 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
             return ProposalStatus.Canceled;
         }
 
-        // executed is terminal and must be reported regardless of strategy or clock
-        if (proposal.executed) return ProposalStatus.Executed;
-
         // a proposal without a stored quorum (legacy or corrupt) can never reach quorum
-        uint256 quorum = _proposalExtraData().proposalExtraDataById[proposalId].quorum;
-        quorum = quorum > 0 ? quorum : type(uint256).max;
-        uint256 votingPower = _proposalExtraData().proposalExtraDataById[proposalId].votingPower;
+        ProposalExtraData memory extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        uint256 quorum = extraData.quorum > 0 ? extraData.quorum : type(uint256).max;
 
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
                 _proposalMeta().proposalMetaById[proposalId].proposer,
                 quorum,
-                votingPower,
+                extraData.votingPower,
                 _governanceParameters().timeType
             );
     }

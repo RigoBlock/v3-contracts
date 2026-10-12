@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
@@ -19,9 +20,6 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
 
-    /// @notice Wormhole chain id of the chain this strategy is deployed on.
-    uint16 private immutable _wormholeChainId;
-
     /// @notice The Rigoblock governance proxy, identical on every chain; authenticates a recovery rejection.
     address private immutable _governanceProxy;
 
@@ -30,11 +28,14 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     uint256 private _recoveryRequestedAt;
 
-    constructor(address wormhole, uint16 wormholeChainId, address governanceProxy, address recoveryAddress) {
+    constructor(address wormhole, address governanceProxy, address recoveryAddress) {
+        require(wormhole.code.length > 0, GovRecoveryAddressZero());
+        try ICoreBridge(wormhole).chainId() returns (uint16) {} catch {
+            revert GovRecoveryAddressZero();
+        }
         require(governanceProxy != address(0), GovRecoveryAddressZero());
         require(recoveryAddress != address(0), GovRecoveryAddressZero());
         _wormhole = wormhole;
-        _wormholeChainId = wormholeChainId;
         _governanceProxy = governanceProxy;
         _recoveryAddress = recoveryAddress;
     }
@@ -58,36 +59,25 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
+    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
+    function validateParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
-    function assertValidProposalThreshold(uint256) external pure override {}
-
-    /// @inheritdoc IGovernanceStrategy
-    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
-    function assertValidQuorumThreshold(uint256) external pure override {}
-
-    /// @inheritdoc IGovernanceStrategy
     /// @dev Local governance is fail-closed: only the recovery address can pass a proposal,
-    ///      and only while a recovery is active. Execution status is handled by the governance.
+    ///      and only while a recovery is active. Execution status is handled here, first.
     function getProposalState(
-        IGovernanceState.Proposal memory,
+        IGovernanceState.Proposal memory proposal,
         address proposer,
         uint256,
         uint256,
         TimeType
     ) external view override returns (ProposalStatus) {
+        // executed is terminal and must be reported regardless of the clock or recovery state
+        if (proposal.executed) return ProposalStatus.Executed;
         if (proposer == _recoveryAddress && _isRecoveryActive()) return ProposalStatus.Succeeded;
         return ProposalStatus.Defeated;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    /// @dev No staking on receiver chains.
-    function totalVotingPower() external pure override returns (uint256) {
-        return 0;
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -104,17 +94,17 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev Receiver governance has no voting window.
-    function votingTimestamps(
-        TimeType
-    ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        return (block.timestamp, block.timestamp);
+    function beforePropose(
+        ProposedAction[] calldata actions
+    ) external view override returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        require(_isRecoveryActive(), GovLocalGovernanceDisabled());
+        return (actions, block.timestamp, block.timestamp);
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforePropose(ProposedAction[] calldata actions) external view override returns (ProposedAction[] memory) {
-        require(_isRecoveryActive(), GovLocalGovernanceDisabled());
-        return actions;
+    /// @dev No staking on receiver chains.
+    function beforeVote() external pure override returns (uint256) {
+        return 0;
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -125,11 +115,6 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IGovernanceStrategy
     function wormhole() external view override returns (address) {
         return _wormhole;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function wormholeChainId() external view override returns (uint16) {
-        return _wormholeChainId;
     }
 
     function _isRecoveryActive() private view returns (bool) {

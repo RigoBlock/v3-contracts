@@ -4,6 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceUpgrade} from "../interfaces/governance/IGovernanceUpgrade.sol";
+import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
 import {MixinVoting} from "./MixinVoting.sol";
 
 abstract contract MixinUpgrade is MixinVoting {
@@ -20,20 +21,23 @@ abstract contract MixinUpgrade is MixinVoting {
         uint256 newQuorumThreshold
     ) external override onlyGovernance {
         IGovernanceState.GovernanceParameters storage params = _governanceParameters();
-        // reverting only when both thresholds are unchanged, as a proposal may legitimately update a single one
         require(
             newProposalThreshold != params.proposalThreshold || newQuorumThreshold != params.quorumThreshold,
             GovUpgradeSameAsCurrent()
         );
-        // an unchanged threshold is not re-validated: supply inflation can drift a previously
-        // valid threshold out of range, and blocking single-threshold updates would brick governance
-        IGovernanceStrategy strategy = IGovernanceStrategy(params.strategy);
-        if (newProposalThreshold != params.proposalThreshold) {
-            strategy.assertValidProposalThreshold(newProposalThreshold);
-        }
-        if (newQuorumThreshold != params.quorumThreshold) {
-            strategy.assertValidQuorumThreshold(newQuorumThreshold);
-        }
+        // the post-update parameters must satisfy the strategy's validation so a proposal can never
+        // brick the governance with out-of-bounds thresholds; an unchanged threshold is validated in
+        // its current form, which supply inflation may have drifted out of range
+        IGovernanceStrategy(params.strategy).validateParams(
+            IRigoblockGovernanceFactory.Parameters({
+                name: _name().value,
+                governanceStrategy: params.strategy,
+                proposalThreshold: newProposalThreshold,
+                quorumThreshold: newQuorumThreshold,
+                timeType: params.timeType,
+                implementation: address(this)
+            })
+        );
         params.proposalThreshold = newProposalThreshold;
         params.quorumThreshold = newQuorumThreshold;
         emit ProposalThresholdSet(newProposalThreshold);
@@ -60,6 +64,8 @@ abstract contract MixinUpgrade is MixinVoting {
         address oldStrategy = _governanceParameters().strategy;
         require(newStrategy != oldStrategy, GovUpgradeSameAsCurrent());
         require(_isContract(newStrategy), GovUpgradeNotContract(newStrategy));
+
+        // TODO: should we assert that strategy is a strategy type of contract? like a supportsInterface?
 
         // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;

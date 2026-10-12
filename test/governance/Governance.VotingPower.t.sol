@@ -9,6 +9,7 @@ import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
 
 import {Test} from "forge-std/Test.sol";
+import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
 contract Counter {
     uint256 public value;
@@ -91,6 +92,8 @@ contract EpochStakingStub {
 
 /// @title Harness exposing strategy storage, same pattern as the cross-chain tests.
 contract VotingPowerHarness is RigoblockGovernance {
+    // 2 is the Wormhole chain id of Ethereum, the governance hub
+    constructor() RigoblockGovernance(2) {}
     function setStrategy(address strategy_) external {
         _paramsWrapper().governanceParameters.strategy = strategy_;
     }
@@ -123,7 +126,11 @@ contract GovernanceVotingPowerTest is Test {
     function setUp() public {
         staking = new EpochStakingStub();
         governance = new VotingPowerHarness();
-        strategy = new RigoblockGovernanceStrategy(address(staking), address(0x4444), uint16(2));
+        address wormhole = makeAddr("wormhole");
+        // enough code for the constructor's code.length check and chainId() probe
+        vm.etch(wormhole, hex"00");
+        vm.mockCall(wormhole, abi.encodeCall(ICoreBridge.chainId, ()), abi.encode(uint16(2)));
+        strategy = new RigoblockGovernanceStrategy(address(staking), wormhole);
         governance.setStrategy(address(strategy));
         governance.setParams(1, 1);
         counter = new Counter();

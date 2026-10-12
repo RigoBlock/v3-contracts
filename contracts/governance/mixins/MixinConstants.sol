@@ -42,9 +42,6 @@ abstract contract MixinConstants is IRigoblockGovernance {
 
     bytes32 internal constant _RECEIPT_SLOT = 0x5a7421539532aa5504e4251551519aa0a06f7c2a3b40bbade5235843e09ad5fe;
 
-    /// @notice Wormhole chain id of the sender chain (Ethereum mainnet).
-    uint16 internal constant _EMITTER_CHAIN_ID = 2;
-
     /// @notice Maximum age of a delivered message; older VAAs revert and can be skipped
     ///         by delivering any later sequence.
     uint256 internal constant _MESSAGE_TIMEOUT = 2 days;

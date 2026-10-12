@@ -2,9 +2,11 @@
 pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
+import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
+import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
 import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
 import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
@@ -15,21 +17,24 @@ import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/Wo
 /// @notice Local governance is fail-closed until a recovery request crosses its challenge
 ///     window; the full recovery flow is covered in Governance.Recovery.t.sol.
 contract WormholeReceiverStrategyTest is Test {
-    address internal constant WORMHOLE = address(0x4444);
     address internal constant TARGET = address(0x3333);
     address internal constant GOVERNANCE_PROXY = address(0x5555);
-    uint16 internal constant TARGET_CHAIN_ID = 47;
     uint256 internal constant RECOVERY_WINDOW = 60 days;
 
+    address internal wormhole;
     WormholeReceiverStrategy internal strategy;
     address internal recovery = makeAddr("recovery");
 
     function setUp() public {
+        wormhole = makeAddr("wormhole");
+        // enough code for the constructor's code.length check and chainId() probe
+        vm.etch(wormhole, hex"00");
+        vm.mockCall(wormhole, abi.encodeCall(ICoreBridge.chainId, ()), abi.encode(uint16(47)));
         strategy = _receiverStrategy();
     }
 
     function _receiverStrategy() private returns (WormholeReceiverStrategy) {
-        return new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN_ID, GOVERNANCE_PROXY, recovery);
+        return new WormholeReceiverStrategy(wormhole, GOVERNANCE_PROXY, recovery);
     }
 
     function _actions(address target) private pure returns (ProposedAction[] memory) {
@@ -49,14 +54,33 @@ contract WormholeReceiverStrategyTest is Test {
     ///     hatch; the constructor must not allow it even in a hand deployment.
     function test_Constructor_ZeroRecoveryAddress_Reverts() public {
         vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
-        new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN_ID, GOVERNANCE_PROXY, address(0));
+        new WormholeReceiverStrategy(wormhole, GOVERNANCE_PROXY, address(0));
     }
 
     /// @dev The governance proxy authenticates recovery vetoes; a zero proxy would make the
     ///     veto unreachable.
     function test_Constructor_ZeroGovernanceProxy_Reverts() public {
         vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
-        new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN_ID, address(0), recovery);
+        new WormholeReceiverStrategy(wormhole, address(0), recovery);
+    }
+
+    /// @dev A zero wormhole address would make receiveMessage unusable.
+    function test_Constructor_ZeroWormhole_Reverts() public {
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
+        new WormholeReceiverStrategy(address(0), GOVERNANCE_PROXY, recovery);
+    }
+
+    /// @dev An EOA wormhole would make the constructor probe return empty returndata.
+    function test_Constructor_EoaWormhole_Reverts() public {
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
+        new WormholeReceiverStrategy(makeAddr("eoa"), GOVERNANCE_PROXY, recovery);
+    }
+
+    /// @dev A contract without chainId() fails the constructor probe.
+    function test_Constructor_NonWormholeContract_Reverts() public {
+        address nonWormhole = address(new NonWormholeContract());
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
+        new WormholeReceiverStrategy(nonWormhole, GOVERNANCE_PROXY, recovery);
     }
 
     function test_BeforePropose_WithoutActiveRecovery_Reverts() public {
@@ -69,8 +93,8 @@ contract WormholeReceiverStrategyTest is Test {
     ///     emitter pinning, not by the strategy.
     function test_BeforePropose_ActiveRecovery_WormholeTarget_Passes() public {
         _activateRecovery();
-        ProposedAction[] memory result = strategy.beforePropose(_actions(WORMHOLE));
-        assertEq(result[0].target, WORMHOLE);
+        (ProposedAction[] memory result, , ) = strategy.beforePropose(_actions(wormhole));
+        assertEq(result[0].target, wormhole);
     }
 
     function test_BeforeExecute_PassesThrough() public {
@@ -135,19 +159,51 @@ contract WormholeReceiverStrategyTest is Test {
         assertEq(strategy.votingPeriod(), 0);
     }
 
-    function test_VotingTimestamps_ReturnsCurrentTimestamp() public {
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.votingTimestamps(TimeType.Timestamp);
+    /// @dev The voting window is empty: start == end == block.timestamp, so a non-recovery
+    ///     proposal is never votable.
+    function test_BeforePropose_ActiveRecovery_ReturnsEmptyWindow() public {
+        _activateRecovery();
+        (, uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.beforePropose(_actions(TARGET));
         assertEq(startBlockOrTime, block.timestamp);
         assertEq(endBlockOrTime, block.timestamp);
     }
 
-    function test_TotalVotingPower_ReturnsZero() public {
-        assertEq(strategy.totalVotingPower(), 0);
+    /// @dev No staking on receiver chains: the first-vote snapshot total is zero.
+    function test_BeforeVote_ReturnsZero() public {
+        assertEq(strategy.beforeVote(), 0);
+    }
+
+    /// @dev Executed is terminal: a recovery proposal that has been executed keeps reading
+    ///     Executed after the recovery is vetoed and cleared (audit-#5 regression).
+    function test_GetProposalState_ExecutedStaysExecuted_AfterRecoveryCleared() public {
+        IGovernanceState.Proposal memory proposal = IGovernanceState.Proposal({
+            actionsLength: 1,
+            startBlockOrTime: 1,
+            endBlockOrTime: 2,
+            votesFor: 0,
+            votesAgainst: 0,
+            votesAbstain: 0,
+            executed: true
+        });
+
+        _activateRecovery();
+        assertEq(
+            uint256(strategy.getProposalState(proposal, recovery, 0, 0, TimeType.Timestamp)),
+            uint256(ProposalStatus.Executed)
+        );
+
+        vm.prank(GOVERNANCE_PROXY);
+        strategy.rejectRecover();
+
+        assertEq(
+            uint256(strategy.getProposalState(proposal, recovery, 0, 0, TimeType.Timestamp)),
+            uint256(ProposalStatus.Executed)
+        );
     }
 
     /// @dev The receiver governance has no thresholds: any value is accepted, including zero
     ///     and values far above the recovery address's fixed power.
-    function test_AssertValidInitParams_OnlyValidatesName() public {
+    function test_ValidateParams_OnlyValidatesName() public {
         IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
             implementation: address(0),
             governanceStrategy: address(strategy),
@@ -156,24 +212,30 @@ contract WormholeReceiverStrategyTest is Test {
             timeType: TimeType.Blocknumber,
             name: "Rigoblock Governance"
         });
-        strategy.assertValidInitParams(params);
+        strategy.validateParams(params);
 
         params.name = "Wrong Name";
         vm.expectRevert();
-        strategy.assertValidInitParams(params);
+        strategy.validateParams(params);
     }
 
-    /// @dev Receiver governance has no voting thresholds, so the threshold validators accept
-    ///     any value.
-    function test_ThresholdValidators_AcceptAnything() public {
-        strategy.assertValidProposalThreshold(0);
-        strategy.assertValidProposalThreshold(type(uint256).max);
-        strategy.assertValidQuorumThreshold(0);
-        strategy.assertValidQuorumThreshold(type(uint256).max);
+    /// @dev Receiver governance has no voting thresholds: there is nothing to validate, so
+    ///     an updateThresholds proposal passes propose-time validation untouched.
+    function test_BeforePropose_ActiveRecovery_ThresholdUpdate_Passes() public {
+        _activateRecovery();
+        bytes memory data = abi.encodeWithSelector(IGovernanceUpgrade.updateThresholds.selector, 0, type(uint256).max);
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: TARGET, data: data, value: 0});
+        (ProposedAction[] memory result, , ) = strategy.beforePropose(actions);
+        assertEq(result[0].target, TARGET);
     }
 
     function test_WormholeConfig_Readable() public {
-        assertEq(strategy.wormhole(), WORMHOLE);
-        assertEq(strategy.wormholeChainId(), TARGET_CHAIN_ID);
+        assertEq(strategy.wormhole(), wormhole);
+        // the local Wormhole chain id is not strategy state: it is read from the core contract
+        assertEq(ICoreBridge(wormhole).chainId(), 47);
     }
 }
+
+/// @dev A plain contract without a chainId() function, for the constructor probe test.
+contract NonWormholeContract {}

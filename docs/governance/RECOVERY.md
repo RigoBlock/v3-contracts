@@ -51,12 +51,13 @@ Verified against the current code:
 
 ### Strategy changes
 
-New constructor arguments (immutables, validated by the deploy script: both are required on
-receiver chains, forbidden elsewhere — a chain can never ship with an unset or unintended
-configuration):
+New constructor arguments (immutables — `GovRecoveryAddressZero` so even a hand deployment
+cannot ship a permanently dead hatch; the wormhole address must additionally be a contract that
+answers a `chainId()` probe):
 
-- `recoveryAddress` — a Rigoblock-team address, required non-zero (`GovRecoveryAddressZero`):
-  even a hand deployment cannot ship a permanently dead hatch.
+- `wormhole` — the Wormhole core bridge on the local chain. The local Wormhole chain id is
+  derived from it at runtime (`ICoreBridge.chainId()`), not passed as a constructor argument.
+- `recoveryAddress` — a Rigoblock-team address.
 - `governanceProxy` — the governance proxy, deterministically deployed at the same address on
   every chain. The strategy authenticates a recovery rejection (`rejectRecover`) against this
   address; it is constructor-wired rather than a source constant, but there is still no
@@ -97,11 +98,12 @@ single-proposer local governance):
   staking contract (global delegated = 0), and the proposal state stays readable at every
   step. `execute` still enforces the ordinary `Succeeded` gate, so the recovery proposal is
   executable at the next block.
-- `votingTimestamps` returns `(block.timestamp, block.timestamp)` and `votingPeriod` returns
-  0 — the window is empty, so no flash-vote risk and no staking-derived start to compute:
-  voting power is fixed to the recovery address, so only it can vote.
+- `votingPeriod` returns 0 and `beforePropose` returns the empty window
+  `(block.timestamp, block.timestamp)` — the window is empty, so no flash-vote risk and no
+  staking-derived start to compute: voting power is fixed to the recovery address, so only it
+  can vote. `beforeVote` returns 0 (no staking to snapshot).
 - `beforePropose`: allows non-Wormhole actions under an active recovery (reverts
-  `GovLocalGovernanceDisabled` otherwise). Wormhole `publishMessage` targets are *not*
+  `GovLocalGovernanceDisabled` otherwise). Wormhole `publishMessage` targets are _not_
   special-cased here — that protection is the implementation's pinning of the trusted emitter
   to Wormhole chain id 2 (mainnet), which rejects a VAA published by a recovered chain no
   matter what its strategy allows (asserted by
@@ -110,10 +112,11 @@ single-proposer local governance):
   balance on receiver chains); keeping `beforePropose` gate-free means a recovery batch never
   fails on strategy validation before it can fix the bridge pointer.
 - `beforeExecute`: pure pass-through.
-- Threshold validators and `assertValidInitParams`: empty — receiver governance has no voting
-  thresholds, so any value is accepted (`assertValidInitParams` only asserts the name is
-  `"Rigoblock Governance"`). This also keeps a mainnet-sent crosschain `updateThresholds`
-  action from reverting and bricking the whole VAA batch.
+- Threshold validators: removed — receiver governance has no voting thresholds of its own, so
+  there is nothing to validate. `validateParams` only asserts the name is
+  `"Rigoblock Governance"`. The bounds for a crosschain `updateThresholds` action are enforced
+  on the sender, at execution time in `MixinUpgrade.updateThresholds`, before the effects land —
+  this keeps the action from reverting on the receiver and bricking the whole VAA batch.
 
 ### Veto path (mainnet, while Wormhole is alive)
 
@@ -153,7 +156,7 @@ window arithmetic above is the monitoring SLA.
 | Parameter                     | Value                                        | Rationale                                                                                                                                                                                         |
 | ----------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `RECOVERY_WINDOW`             | 60 days                                      | Mainnet notices and delivers one veto within ~2 epochs (2 weeks each) with large margin; long enough to survive congestion, short enough that a dead bridge does not freeze the chain for months. |
-| `votingPeriod` under recovery | 0 (empty window)                            | The proposal reads `Succeeded` immediately at creation (proposer-based state), so no voting window ever runs — the period is inert.                                                            |
+| `votingPeriod` under recovery | 0 (empty window)                             | The proposal reads `Succeeded` immediately at creation (proposer-based state), so no voting window ever runs — the period is inert.                                                               |
 | Execution scope               | whatever the ordinary governance can execute | The recovery flows through normal `execute`, so no new execution primitive is introduced.                                                                                                         |
 
 ## Security analysis

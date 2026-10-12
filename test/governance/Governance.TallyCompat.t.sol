@@ -109,11 +109,7 @@ contract MockCompatStrategy is IGovernanceStrategy {
         quorumThreshold = quorumThreshold_;
     }
 
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
-
-    function assertValidProposalThreshold(uint256) external pure {}
-
-    function assertValidQuorumThreshold(uint256) external pure {}
+    function validateParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
 
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
@@ -123,6 +119,8 @@ contract MockCompatStrategy is IGovernanceStrategy {
         TimeType timeType
     ) external view returns (ProposalStatus) {
         assert(timeType == TimeType.Timestamp);
+        // executed is terminal and must be reported regardless of the clock
+        if (proposal.executed) return ProposalStatus.Executed;
         if (block.timestamp <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
         } else if (block.timestamp <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
@@ -147,24 +145,20 @@ contract MockCompatStrategy is IGovernanceStrategy {
         return 7 days;
     }
 
-    function totalVotingPower() external view override returns (uint256) {
-        return votingPower;
-    }
-
-    function votingTimestamps(
-        TimeType timeType
-    ) external view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        assert(timeType == TimeType.Timestamp);
-        startBlockOrTime = block.timestamp + 1;
-        endBlockOrTime = startBlockOrTime + 7 days;
-    }
-
     function getVotingPower(address) external view returns (uint256) {
         return votingPower;
     }
 
-    function beforePropose(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
-        return actions;
+    function beforePropose(
+        ProposedAction[] calldata actions
+    ) external view returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        startBlockOrTime = block.timestamp + 1;
+        endBlockOrTime = startBlockOrTime + 7 days;
+        return (actions, startBlockOrTime, endBlockOrTime);
+    }
+
+    function beforeVote() external view returns (uint256) {
+        return votingPower;
     }
 
     function beforeExecute(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
@@ -174,15 +168,12 @@ contract MockCompatStrategy is IGovernanceStrategy {
     function wormhole() external pure returns (address) {
         return address(0);
     }
-
-    function wormholeChainId() external pure returns (uint16) {
-        return 0;
-    }
 }
 
 /// @dev Harness using the real mixins, same pattern as the migration tests.
 contract CompatHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgrade, MixinCrosschain {
-    constructor() MixinStorage() {}
+    // 2 is the Wormhole chain id of Ethereum, the governance hub
+    constructor() MixinStorage(2) {}
 
     function setStrategy(address strategy_) external {
         _paramsWrapper().governanceParameters.strategy = strategy_;

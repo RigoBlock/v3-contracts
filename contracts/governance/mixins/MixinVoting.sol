@@ -104,12 +104,12 @@ abstract contract MixinVoting is MixinState {
         require(length <= PROPOSAL_MAX_OPERATIONS, GovTooManyActions(length, PROPOSAL_MAX_OPERATIONS));
 
         address strategy = _governanceParameters().strategy;
-        // validates and optionally modifies the actions; on non-receiver chains also rolls a
-        // finished staking epoch so the voting window starts at the fresh epoch's boundary
-        actions = IGovernanceStrategy(strategy).beforePropose(actions);
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(strategy).votingTimestamps(
-            _governanceParameters().timeType
-        );
+        // validates and optionally modifies the actions, and fixes the proposal's voting window;
+        // on non-receiver chains also rolls a finished staking epoch so the window starts at the
+        // fresh epoch's boundary
+        uint256 startBlockOrTime;
+        uint256 endBlockOrTime;
+        (actions, startBlockOrTime, endBlockOrTime) = IGovernanceStrategy(strategy).beforePropose(actions);
 
         // proposals start from id = 1
         _proposalCount().value++;
@@ -187,12 +187,12 @@ abstract contract MixinVoting is MixinState {
         IGovernanceState.Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, GovAlreadyVoted(proposalId, voter));
 
-        // the total voting power is snapshotted on the first vote so the qualified-majority
-        // denominator stays fixed for the proposal's whole life
+        // the voting-power snapshot is taken on the first vote via the strategy hook, so the
+        // qualified-majority denominator stays fixed for the proposal's whole life
         ProposalExtraData storage extraData = _proposalExtraData().proposalExtraDataById[proposalId];
         if (extraData.votingPower == 0) {
             extraData.votingPower = SafeCast.toUint128(
-                IGovernanceStrategy(_governanceParameters().strategy).totalVotingPower()
+                IGovernanceStrategy(_governanceParameters().strategy).beforeVote()
             );
         }
 

@@ -29,21 +29,15 @@ interface IGovernanceStrategy {
     /// @notice Thrown when the governance time type is not TimeType.Timestamp.
     error GovStrategyInvalidTimeType(TimeType timeType);
 
-    /// @notice Reverts if initialization paramters are incorrect.
-    /// @dev Only used at initialization, as params deleted from factory storage after setup.
+    /// @notice Reverts unless the governance parameters are valid for this strategy.
+    /// @dev Called directly at initialization and by `updateThresholds` at execution time.
     /// @param params Tuple of factory parameters.
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
-
-    /// @notice Reverts if the proposal threshold is incorrect.
-    /// @param proposalThreshold Number of votes required to make a proposal.
-    function assertValidProposalThreshold(uint256 proposalThreshold) external view;
-
-    /// @notice Reverts if the quorum threshold is incorrect.
-    /// @param quorumThreshold Number of votes required for a proposal to succeed.
-    function assertValidQuorumThreshold(uint256 quorumThreshold) external view;
+    function validateParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
 
     /// @notice Returns the state of a proposal.
     /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
+    ///      The implementation passes the stored proposal, whose `executed` flag must be honored
+    ///      first: executed is terminal and must be reported regardless of clock or recovery state.
     /// @param proposal Tuple of the proposal.
     /// @param proposer The stored proposal proposer.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
@@ -58,39 +52,29 @@ interface IGovernanceStrategy {
         TimeType timeType
     ) external view returns (ProposalStatus);
 
-    /// @notice Returns the current total voting power.
-    /// @dev Snapshotted by the governance on the first vote of each proposal, so the denominator
-    ///      of qualified-majority calculations cannot shrink after votes are recorded.
-    function totalVotingPower() external view returns (uint256);
-
     /// @notice Return the voting period.
-    /// @dev Informational only: the enforceable window is the one returned by votingTimestamps.
+    /// @dev Informational only: the enforceable window is the one returned by `beforePropose`.
     /// @return Number of blocks or seconds of period duration, matching the governance's time type.
     function votingPeriod() external view returns (uint256);
-
-    /// @notice Returns the voting timestamps.
-    /// @dev Must produce start/end values expressed in the same unit as `timeType` (block numbers
-    ///      for TimeType.Blocknumber, timestamps for TimeType.Timestamp). See getProposalState.
-    ///      Never reverts: the staking epoch is rolled by `beforePropose` before this is read, and
-    ///      a stale or unreadable staking clock falls back to starting the window at the next
-    ///      timestamp.
-    /// @param timeType Time reference used by the proposal's voting period.
-    /// @return startBlockOrTime Timestamp when proposal starts.
-    /// @return endBlockOrTime Timestamp when voting ends.
-    function votingTimestamps(
-        TimeType timeType
-    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
 
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.
     function getVotingPower(address account) external view returns (uint256);
 
-    /// @notice Validates and optionally modifies every action before it is stored as part of a proposal.
-    /// @dev Called once per proposal; runs before the voting window is read and may roll the
-    ///      staking clock, so it is not a view function.
-    /// @param actions The actions to validate.
-    /// @return The validated (possibly modified) actions.
-    function beforePropose(ProposedAction[] calldata actions) external returns (ProposedAction[] memory);
+    /// @notice Validates and optionally modifies the actions before they are stored, and returns
+    ///         the proposal's fixed voting window.
+    /// @dev Called once per proposal. The returned start/end are stored in the proposal: they are
+    ///      fixed pointers, not a rolling window, so this is not a view function (it may roll the
+    ///      staking clock).
+    function beforePropose(
+        ProposedAction[] calldata actions
+    ) external returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime);
+
+    /// @notice Called by the governance before every vote.
+    /// @return totalVotingPower The current total voting power. The governance stores it as the
+    ///         proposal's voting-power snapshot on the first vote; the fixed snapshot is the
+    ///         qualified-majority denominator for the proposal's whole life.
+    function beforeVote() external returns (uint256 totalVotingPower);
 
     /// @notice Returns the actions as they should be executed, optionally modifying their values.
     /// @param actions The actions to execute.
@@ -101,7 +85,4 @@ interface IGovernanceStrategy {
     /// @return Address of the Wormhole core contract, or the zero address if this chain is not
     ///         configured as a cross-chain governance receiver.
     function wormhole() external view returns (address);
-
-    /// @notice Returns the Wormhole chain id of the chain this strategy is deployed on.
-    function wormholeChainId() external view returns (uint16);
 }

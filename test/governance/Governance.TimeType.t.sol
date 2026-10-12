@@ -57,6 +57,7 @@ contract GovernanceTimeTypeTest is Test {
     ///     block and can be executed from the next block on.
     function test_Blocknumber_QualifiedProposal_ExecutesNextBlock() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
 
         // voting starts at block.number + 1
@@ -81,6 +82,7 @@ contract GovernanceTimeTypeTest is Test {
     /// @notice Qualifying and executing in a single transaction reverts in Blocknumber mode.
     function test_Blocknumber_SameTxQualifyAndExecute_Reverts() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
         vm.roll(block.number + 2);
 
@@ -95,6 +97,7 @@ contract GovernanceTimeTypeTest is Test {
     ///     7 days to a block number) would still report Active after this roll.
     function test_Blocknumber_UnqualifiedProposal_ExpiresAfterBlockWindow() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
 
         // roll past the block-based window (7 days ≈ 50_400 blocks at ~12s blocks)

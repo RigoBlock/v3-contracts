@@ -11,7 +11,6 @@ import {IGovernanceVoting} from "../../contracts/governance/interfaces/governanc
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
 import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
-import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {IStorage} from "../../contracts/staking/interfaces/IStorage.sol";
@@ -27,7 +26,7 @@ import {Counter, CrosschainHarness} from "./Governance.Crosschain.t.sol";
 contract GovernanceRecoveryTest is Test {
     uint16 internal constant TARGET_CHAIN = CHAIN_ID_HYPER_EVM;
     address internal constant STAKING = address(0x1111);
-    address internal constant WORMHOLE = Constants.WORMHOLE_HYPEREVM;
+    address internal wormhole;
     uint256 internal constant PROPOSAL_THRESHOLD = 100_000e18;
     uint256 internal constant QUORUM_THRESHOLD = 400_000e18;
     uint256 internal constant RECOVERY_WINDOW = 60 days;
@@ -44,7 +43,12 @@ contract GovernanceRecoveryTest is Test {
         CrosschainHarness harness = new CrosschainHarness();
         vm.etch(Constants.GOV_PROXY, address(harness).code);
         governance = CrosschainHarness(payable(Constants.GOV_PROXY));
-        strategy = new WormholeReceiverStrategy(WORMHOLE, TARGET_CHAIN, Constants.GOV_PROXY, recovery);
+        wormhole = makeAddr("wormhole");
+        // enough code for the constructor's code.length check; the local Wormhole chain id is
+        // read from the core contract, which is not deployed in these tests
+        vm.etch(wormhole, hex"00");
+        vm.mockCall(wormhole, abi.encodeWithSelector(ICoreBridge.chainId.selector), abi.encode(TARGET_CHAIN));
+        strategy = new WormholeReceiverStrategy(wormhole, Constants.GOV_PROXY, recovery);
         governance.setStrategy(address(strategy));
         governance.setParams(PROPOSAL_THRESHOLD, QUORUM_THRESHOLD);
         // the etch skips the constructor, which defaults the params to Timestamp
@@ -118,10 +122,8 @@ contract GovernanceRecoveryTest is Test {
         vm.warp(block.timestamp + RECOVERY_WINDOW - 1);
 
         assertEq(strategy.getVotingPower(recovery), 0);
-        // the receiver has no voting window and no propose path outside a recovery
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.votingTimestamps(TimeType.Timestamp);
-        assertEq(startBlockOrTime, block.timestamp);
-        assertEq(endBlockOrTime, block.timestamp);
+        // the receiver has no voting window, no snapshot total and no propose path outside a recovery
+        assertEq(strategy.beforeVote(), 0);
         vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
         strategy.beforePropose(_incrementActions());
     }
@@ -158,15 +160,12 @@ contract GovernanceRecoveryTest is Test {
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
-    /// @notice Staking alive but emptied (global delegated 0, GRG total supply 1, the
-    ///     bridged-token-burn case): the receiver strategy never reads staking, so the
-    ///     recovery proposal is Succeeded from creation and the flow completes.
+    /// @notice Staking alive but emptied (global delegated 0, the bridged-token-burn case):
+    ///     the receiver strategy never reads staking, so the recovery proposal is Succeeded
+    ///     from creation and the flow completes.
     function test_Recovery_EmptiedStaking_RecoveryExecutes() public {
         IStructs.StoredBalance memory zeroBalance;
         vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGlobalStakeByStatus.selector), abi.encode(zeroBalance));
-        address grg = address(0x2222);
-        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.getGrgContract.selector), abi.encode(grg));
-        vm.mockCall(grg, abi.encodeWithSelector(IERC20.totalSupply.selector), abi.encode(uint256(1)));
 
         _activateRecovery();
 
@@ -216,7 +215,7 @@ contract GovernanceRecoveryTest is Test {
     function test_Recovery_WormholeAction_ProposePasses() public {
         _activateRecovery();
         ProposedAction[] memory actions = new ProposedAction[](1);
-        actions[0] = ProposedAction({target: WORMHOLE, data: "", value: 0});
+        actions[0] = ProposedAction({target: wormhole, data: "", value: 0});
         vm.prank(recovery);
         uint256 proposalId = governance.propose(actions, "wormhole-target proposal");
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
@@ -227,7 +226,7 @@ contract GovernanceRecoveryTest is Test {
     ///     governance is fail-closed right after the switch, and cross-chain receiving keeps
     ///     working unchanged.
     function test_StakingToReceiver_Transition_UpgradesSmoothly() public {
-        RigoblockGovernanceStrategy senderStrategy = new RigoblockGovernanceStrategy(STAKING, WORMHOLE, TARGET_CHAIN);
+        RigoblockGovernanceStrategy senderStrategy = new RigoblockGovernanceStrategy(STAKING, wormhole);
         governance.setStrategy(address(senderStrategy));
 
         // local voting power for the staking-backed phase
@@ -254,8 +253,7 @@ contract GovernanceRecoveryTest is Test {
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
         WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(
-            WORMHOLE,
-            TARGET_CHAIN,
+            wormhole,
             Constants.GOV_PROXY,
             recovery
         );
@@ -301,7 +299,7 @@ contract GovernanceRecoveryTest is Test {
             signatures: new GuardianSignature[](0),
             hash: keccak256(abi.encode(payload, uint64(0)))
         });
-        vm.mockCall(WORMHOLE, abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector), abi.encode(vaa, true, ""));
+        vm.mockCall(wormhole, abi.encodeWithSelector(ICoreBridge.parseAndVerifyVM.selector), abi.encode(vaa, true, ""));
         governance.receiveMessage("");
         assertEq(counter.value(), 1);
     }

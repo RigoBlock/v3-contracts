@@ -40,17 +40,13 @@ contract GovernanceMigrationForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork("mainnet", Constants.MAINNET_BLOCK);
-        newImpl = new RigoblockGovernance();
+        newImpl = new RigoblockGovernance(2);
         oldStrategy = IGovernanceState(PROXY).governanceParameters().params.strategy;
 
         // Deploy a strategy that supports the new hook interface. The implementation upgrade
-        // introduces beforePropose/beforeExecute calls, so proposals created after the upgrade
-        // need a strategy that implements them.
-        newStrategy = new RigoblockGovernanceStrategy(
-            Constants.GRG_STAKING,
-            Constants.WORMHOLE_ETHEREUM,
-            uint16(2) // Wormhole Ethereum chain id
-        );
+        // introduces beforePropose/beforeVote/beforeExecute calls, so proposals created after
+        // the upgrade need a strategy that implements them.
+        newStrategy = new RigoblockGovernanceStrategy(Constants.GRG_STAKING, Constants.WORMHOLE_ETHEREUM);
 
         // Give the test voter enough voting power to create and pass proposals. Voting power is
         // read from the strategy, so we mock it on both the old and the new strategy.

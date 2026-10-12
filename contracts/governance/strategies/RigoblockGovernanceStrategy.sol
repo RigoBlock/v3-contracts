@@ -6,7 +6,6 @@ import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol"
 import {CrossChainPayload, ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
@@ -18,42 +17,37 @@ import {TimeType} from "../types/TimeType.sol";
 ///      the only chain that can create local proposals and publish cross-chain governance
 ///      messages; every other chain runs a receiver strategy.
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
+    /// @notice Thrown when the Wormhole core contract address is the zero address.
+    error GovStrategyInvalidWormhole();
+
     /// @notice Wormhole core contract on the same chain as this strategy.
     address private immutable _wormhole;
 
     /// @notice Maximum voting period. The one-second margin under the staking epoch duration
-    ///         (see votingPeriod) keeps the whole voting window strictly inside a single
-    ///         staking epoch even when the epoch duration equals this cap, so votes can never
-    ///         mix epochs and no per-proposal epoch guard is needed.
+    ///         (see votingPeriod) keeps the whole voting window strictly inside the current
+    ///         staking epoch whenever the epoch cannot roll, so a stuck epoch cannot split
+    ///         the window across two epochs.
     uint256 private constant _VOTING_PERIOD = 7 days;
-
-    /// @notice Wormhole chain id of the chain this strategy is deployed on.
-    uint16 private immutable _wormholeChainId;
 
     address private immutable _stakingProxy;
 
-    constructor(address stakingProxy, address wormhole, uint16 wormholeChainId) {
+    constructor(address stakingProxy, address wormhole) {
+        // an EOA or a non-wormhole contract would return empty returndata from the probe, which
+        // the returns clause rejects
+        require(wormhole.code.length > 0, GovStrategyInvalidWormhole());
+        try ICoreBridge(wormhole).chainId() returns (uint16) {} catch {
+            revert GovStrategyInvalidWormhole();
+        }
         _stakingProxy = stakingProxy;
         _wormhole = wormhole;
-        _wormholeChainId = wormholeChainId;
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
+    function validateParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         _assertTimestamp(params.timeType);
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
-        assertValidProposalThreshold(params.proposalThreshold);
-        assertValidQuorumThreshold(params.quorumThreshold);
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function assertValidProposalThreshold(uint256 proposalThreshold) public view override {
-        _assertValidProposalThreshold(proposalThreshold);
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function assertValidQuorumThreshold(uint256 quorumThreshold) public view override {
-        _assertValidQuorumThreshold(quorumThreshold);
+        _assertValidProposalThreshold(params.proposalThreshold);
+        _assertValidQuorumThreshold(params.quorumThreshold);
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -64,6 +58,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         uint256 votingPower,
         TimeType timeType
     ) external view override returns (ProposalStatus) {
+        // executed is terminal and must be reported regardless of the clock or recovery state
+        if (proposal.executed) return ProposalStatus.Executed;
         _assertTimestamp(timeType);
         uint256 time = block.timestamp;
         if (time <= proposal.startBlockOrTime) {
@@ -92,11 +88,6 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function totalVotingPower() external view override returns (uint256) {
-        return IStaking(_stakingProxy).getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED).currentEpochBalance;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
         return
             IStaking(_stakingProxy).getOwnerStakeByStatus(account, IStructs.StakeStatus.DELEGATED).currentEpochBalance;
@@ -104,41 +95,22 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
     /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
-        uint256 epochDuration;
-        try IStorage(_stakingProxy).epochDurationInSeconds() returns (uint256 duration) {
-            epochDuration = duration;
-        } catch {
-            return _VOTING_PERIOD;
-        }
+        uint256 epochDuration = IStorage(_stakingProxy).epochDurationInSeconds();
         if (epochDuration < 2) return _VOTING_PERIOD;
         uint256 period = epochDuration - 1;
         return period < _VOTING_PERIOD ? period : _VOTING_PERIOD;
     }
 
-    /// @inheritdoc IGovernanceStrategy
-    function votingTimestamps(
-        TimeType timeType
-    ) public view override returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        _assertTimestamp(timeType);
-        uint256 earliestEnd;
-        try IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds() returns (uint256 end) {
-            earliestEnd = end;
-        } catch {
-            earliestEnd = block.timestamp;
-        }
-        // a stale clock (the roll attempt in beforePropose failed or this is a plain view call)
-        // falls back to starting the window at the next timestamp
-        startBlockOrTime = block.timestamp >= earliestEnd ? block.timestamp + 1 : earliestEnd;
-        endBlockOrTime = startBlockOrTime + votingPeriod();
-    }
-
-    /// @dev Attempts to roll a finished staking epoch. Governance must stay operational even
-    ///      if the staking contract cannot roll, so a reverting endEpoch is swallowed and the
-    ///      staking clock is used as-is.
-    function _rollEpochIfStale() private {
-        uint256 earliestEnd = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-        if (block.timestamp >= earliestEnd) {
+    /// @dev Returns the fixed start of the voting window: the current epoch's earliest end,
+    ///      read once at proposal time. A finished epoch is rolled best-effort first — a stuck
+    ///      epoch must never block governance — and only when the roll is impossible does the
+    ///      window start at the next timestamp (there is no future epoch boundary to anchor to).
+    function _rollEpochIfStale() private returns (uint256 startBlockOrTime) {
+        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+        if (block.timestamp >= startBlockOrTime) {
             try IStaking(_stakingProxy).endEpoch() {} catch {}
+            startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+            if (block.timestamp >= startBlockOrTime) startBlockOrTime = block.timestamp + 1;
         }
     }
 
@@ -174,9 +146,13 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     }
 
     /// @inheritdoc IGovernanceStrategy
-    function beforePropose(ProposedAction[] calldata actions) external override returns (ProposedAction[] memory) {
-        // roll a finished staking epoch so the voting window starts at a live epoch boundary
-        _rollEpochIfStale();
+    function beforePropose(
+        ProposedAction[] calldata actions
+    ) external override returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        // roll a finished staking epoch so the voting window starts at a live epoch boundary;
+        // a stale or unreadable clock falls back to starting at the next timestamp
+        startBlockOrTime = _rollEpochIfStale();
+        endBlockOrTime = startBlockOrTime + votingPeriod();
 
         // wormhole actions publish governance messages to the receiver chains
         for (uint256 i = 0; i < actions.length; i++) {
@@ -186,7 +162,16 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
             require(actions[i].value == 0, GovCrosschainInvalidValue(actions[i].value));
             _assertValidWormholeData(actions[i].data);
         }
-        return actions;
+
+        return (actions, startBlockOrTime, endBlockOrTime);
+    }
+
+    /// @inheritdoc IGovernanceStrategy
+    function beforeVote() external view override returns (uint256 totalVotingPower) {
+        // no epoch roll here: the window is fixed at propose time, and rolling mid-window is
+        // what would mix epochs; while an epoch cannot roll, the balances stay frozen, which
+        // keeps votes and the snapshot consistent (see the governance documentation)
+        return IStaking(_stakingProxy).getGlobalStakeByStatus(IStructs.StakeStatus.DELEGATED).currentEpochBalance;
     }
 
     /// @notice Decodes a Wormhole publishMessage call and validates its inner payload.
@@ -200,7 +185,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         require(consistencyLevel == 202, GovCrosschainInvalidConsistencyLevel(consistencyLevel));
         CrossChainPayload memory crossChainPayload = abi.decode(payload, (CrossChainPayload));
         require(
-            crossChainPayload.targetWormholeChainId != _wormholeChainId,
+            crossChainPayload.targetWormholeChainId != ICoreBridge(_wormhole).chainId(),
             GovCrosschainTargetSelf(crossChainPayload.targetWormholeChainId)
         );
         for (uint256 i = 0; i < crossChainPayload.actions.length; i++) {
@@ -225,10 +210,5 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function wormhole() external view override returns (address) {
         return _wormhole;
-    }
-
-    /// @inheritdoc IGovernanceStrategy
-    function wormholeChainId() external view override returns (uint16) {
-        return _wormholeChainId;
     }
 }
