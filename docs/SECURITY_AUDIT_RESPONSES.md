@@ -397,8 +397,8 @@ Equivalently, they can call the oracle directly to convert `minimumBase` from th
 **Mitigations applied (hardening, not a behavior fix)**:
 
 1. `RigoblockGovernanceStrategy` no longer half-supports `TimeType.Blocknumber`. It reverts with
-   `GovStrategyInvalidTimeType` at initialization (`assertValidInitParams`) and at runtime
-   (`votingTimestamps`, `getProposalState`). Rigoblock's strategy is specific to Rigoblock's
+   `GovStrategyInvalidTimeType` at initialization (`validateParams`) and at runtime
+   (`getProposalState`). Rigoblock's strategy is specific to Rigoblock's
    timestamp-based governance and is not meant for unmodified reuse by other projects.
 2. The runtime revert doubles as a guard against a hypothetical future rogue implementation upgrade
    that changed the stored `timeType`: governance would brick at `propose` time (loud, recoverable

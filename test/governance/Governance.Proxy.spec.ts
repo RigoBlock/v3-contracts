@@ -977,6 +977,9 @@ describe("Governance Proxy", async () => {
         toInfo,
         (amount / 10n) * 3n,
       );
+      // the proposal starts at the staking epoch boundary the proposal hook rolled forward:
+      // reach it, then roll the epoch so user2's delegation is current
+      await timeTravel({ days: 14, seconds: 1, mine: true });
       await staking.endEpoch();
       await governanceInstance.castVote(2, 1);
       await connect(governanceInstance, user2).castVote(2, 2);

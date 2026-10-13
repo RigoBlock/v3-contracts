@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {IRigoblockGovernance} from "../../../../governance/IRigoblockGovernance.sol";
+import {ProposedAction} from "../../../../governance/types/GovernanceTypes.sol";
 
 interface IAGovernance {
     /// @notice Allows to make a proposal to the Rigoblock governance.
@@ -9,7 +10,7 @@ interface IAGovernance {
     /// @param description A human-readable description.
     /// @return proposalId Number of the newly created proposal.
     function propose(
-        IRigoblockGovernance.ProposedAction[] calldata actions,
+        ProposedAction[] calldata actions,
         string calldata description
     ) external returns (uint256 proposalId);
 

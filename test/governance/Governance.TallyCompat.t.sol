@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
@@ -109,18 +109,18 @@ contract MockCompatStrategy is IGovernanceStrategy {
         quorumThreshold = quorumThreshold_;
     }
 
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
-
-    function assertValidProposalThreshold(uint256) external pure {}
-
-    function assertValidQuorumThreshold(uint256) external pure {}
+    function validateParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
 
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
+        address,
         uint256 minimumQuorum,
+        uint256,
         TimeType timeType
     ) external view returns (ProposalStatus) {
         assert(timeType == TimeType.Timestamp);
+        // executed is terminal and must be reported regardless of the clock
+        if (proposal.executed) return ProposalStatus.Executed;
         if (block.timestamp <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
         } else if (block.timestamp <= proposal.endBlockOrTime && _qualified(proposal, minimumQuorum)) {
@@ -129,8 +129,6 @@ contract MockCompatStrategy is IGovernanceStrategy {
             return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return ProposalStatus.Defeated;
-        } else if (proposal.executed) {
-            return ProposalStatus.Executed;
         } else {
             return ProposalStatus.Succeeded;
         }
@@ -147,42 +145,35 @@ contract MockCompatStrategy is IGovernanceStrategy {
         return 7 days;
     }
 
-    function votingTimestamps(
-        TimeType timeType
-    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        assert(timeType == TimeType.Timestamp);
-        startBlockOrTime = block.timestamp + 1;
-        endBlockOrTime = startBlockOrTime + 7 days;
-    }
-
     function getVotingPower(address) external view returns (uint256) {
         return votingPower;
     }
 
     function beforePropose(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+        ProposedAction[] calldata actions
+    ) external view returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        startBlockOrTime = block.timestamp + 1;
+        endBlockOrTime = startBlockOrTime + 7 days;
+        return (actions, startBlockOrTime, endBlockOrTime);
     }
 
-    function beforeExecute(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+    function beforeVote() external view returns (uint256) {
+        return votingPower;
+    }
+
+    function beforeExecute(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
+        return actions;
     }
 
     function wormhole() external pure returns (address) {
         return address(0);
     }
-
-    function wormholeChainId() external pure returns (uint16) {
-        return 0;
-    }
 }
 
 /// @dev Harness using the real mixins, same pattern as the migration tests.
 contract CompatHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgrade, MixinCrosschain {
-    constructor() MixinStorage() {}
+    // 2 is the Wormhole chain id of Ethereum, the governance hub
+    constructor() MixinStorage(2) {}
 
     function setStrategy(address strategy_) external {
         _paramsWrapper().governanceParameters.strategy = strategy_;
@@ -479,7 +470,7 @@ contract GovernanceTallyCompatTest is Test {
         uint256 proposalId = harness.propose(targets, values, calldatas, "oz proposal");
         assertEq(proposalId, 1);
 
-        IGovernanceVoting.ProposedAction[] memory actions = harness.getActions(proposalId);
+        ProposedAction[] memory actions = harness.getActions(proposalId);
         assertEq(actions.length, 1);
         assertEq(actions[0].target, address(compatTarget));
         assertEq(actions[0].value, 0);
@@ -832,8 +823,8 @@ contract GovernanceTallyCompatTest is Test {
 
     /// @notice updateThresholds emits the OZ ProposalThresholdSet event for Tally indexing.
     function test_UpdateThresholds_EmitsOZEvent() public {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
             target: address(harness),
             data: abi.encodeWithSelector(IGovernanceUpgrade.updateThresholds.selector, 1, 1),
             value: 0
@@ -899,21 +890,21 @@ contract GovernanceTallyCompatTest is Test {
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas
-    ) internal pure returns (IGovernanceVoting.ProposedAction[] memory actions) {
-        actions = new IGovernanceVoting.ProposedAction[](targets.length);
+    ) internal pure returns (ProposedAction[] memory actions) {
+        actions = new ProposedAction[](targets.length);
         for (uint256 i = 0; i < targets.length; i++) {
-            actions[i] = IGovernanceVoting.ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
+            actions[i] = ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
         }
     }
 
     function _proposeDefault() internal returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(compatTarget), data: hex"", value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(compatTarget), data: hex"", value: 0});
         return _propose(actions, "proposal");
     }
 
     function _propose(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) internal returns (uint256 proposalId) {
         vm.prank(whale);

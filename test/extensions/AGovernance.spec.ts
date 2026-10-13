@@ -4,6 +4,7 @@ import { ZeroAddress, parseEther } from "ethers";
 import { timeTravel, ProposedAction, TimeType, VoteType } from "../utils/utils";
 import { connect, getFixedGasSigners } from "../shared/helper";
 import { createFixture } from "../utils/fixtures";
+import { dummyWormholeInitCode } from "../../src/utils/constants";
 
 describe("AGovernance", async () => {
   const description = "gov proposal one";
@@ -91,16 +92,22 @@ describe("AGovernance", async () => {
       const govFactory = await ethers.deployContract(
         "RigoblockGovernanceFactory",
       );
+      // 2 is the Wormhole chain id of Ethereum, the governance hub
       const govImplementation = await ethers.deployContract(
         "RigoblockGovernance",
+        [2],
       );
+      // the strategy constructor probes the wormhole contract, so a minimal raw-contract
+      // stand-in (32 zero bytes for any call, so the probe passes) replaces the hub chain's
+      // Wormhole core contract
+      const dummyWormhole = await new ethers.ContractFactory(
+        [],
+        dummyWormholeInitCode,
+        user1,
+      ).deploy();
       const govStrategy = await ethers.deployContract(
         "RigoblockGovernanceStrategy",
-        [
-          await stakingProxy.getAddress(),
-          "0x1111111111111111111111111111111111111111",
-          1,
-        ],
+        [await stakingProxy.getAddress(), await dummyWormhole.getAddress()],
       );
       // we deploy from user2 as otherwise governance already exists
       const governance = await connect(

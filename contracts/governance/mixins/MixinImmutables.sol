@@ -6,5 +6,12 @@ import {MixinConstants} from "./MixinConstants.sol";
 /// @notice Immutables are copied in the bytecode and not assigned a storage slot
 /// @dev New immutables can safely be added to this contract without ordering.
 abstract contract MixinImmutables is MixinConstants {
-    constructor() {}
+    /// @notice Wormhole chain id of the governance hub chain (the only chain that publishes
+    ///         cross-chain governance messages). Identical on every deployment, so the
+    ///         deterministic implementation address is unchanged across chains.
+    uint16 internal immutable _hubWormholeChainId;
+
+    constructor(uint16 hubWormholeChainId) {
+        _hubWormholeChainId = hubWormholeChainId;
+    }
 }

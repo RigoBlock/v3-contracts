@@ -14,9 +14,7 @@ import {MixinStorage} from "./MixinStorage.sol";
 abstract contract MixinCrosschain is MixinStorage {
     /// @inheritdoc IGovernanceCrosschain
     function receiveMessage(bytes memory encodedMessage) external override {
-        address wormholeAddress = _wormhole();
-        require(wormholeAddress != address(0), GovReceiverNotConfigured());
-        ICoreBridge wormhole = ICoreBridge(wormholeAddress);
+        ICoreBridge wormhole = ICoreBridge(_wormhole());
 
         // verify the VAA. Forged or malformed messages return valid == false.
         (CoreBridgeVM memory verifiedVaa, bool valid, string memory reason) = wormhole.parseAndVerifyVM(encodedMessage);
@@ -25,15 +23,16 @@ abstract contract MixinCrosschain is MixinStorage {
         // the trusted emitter is the sender-chain governance proxy, deployed at the same address
         // as this receiver on every chain
         require(
-            verifiedVaa.emitterChainId == _EMITTER_CHAIN_ID &&
+            verifiedVaa.emitterChainId == _hubWormholeChainId &&
                 verifiedVaa.emitterAddress == bytes32(uint256(uint160(address(this)))),
             GovReceiverUnknownEmitter()
         );
 
         uint16 localChainId = _localWormholeChainId();
 
-        // a receiver must not accept messages from its own chain
-        require(_EMITTER_CHAIN_ID != localChainId, GovReceiverLocalEmitter(localChainId));
+        // never accept a message whose emitter chain is this chain (on the hub this is the
+        // same check as emitter == hub)
+        require(verifiedVaa.emitterChainId != localChainId, GovReceiverLocalEmitter(localChainId));
 
         // sequences must be strictly monotonically increasing but need not be consecutive
         // (audited Uniswap receiver model): a message that reverts on execution never
@@ -65,18 +64,15 @@ abstract contract MixinCrosschain is MixinStorage {
         return _crosschainSequence().value;
     }
 
-    /// @dev Returns the Wormhole core contract from the strategy, or the zero address when the
-    ///      strategy does not enable cross-chain governance.
+    /// @dev Returns the Wormhole core contract from the strategy. The strategy is asserted
+    ///      non-null at initialization and by both strategies' constructors.
     function _wormhole() private view returns (address) {
-        address strategy = _governanceParameters().strategy;
-        if (strategy == address(0)) {
-            return address(0);
-        }
-        return IGovernanceStrategy(strategy).wormhole();
+        return IGovernanceStrategy(_governanceParameters().strategy).wormhole();
     }
 
-    /// @dev Returns the Wormhole chain id of the current chain from the strategy.
+    /// @dev Returns the Wormhole chain id of the current chain, read from the verified
+    ///      Wormhole core contract itself.
     function _localWormholeChainId() private view returns (uint16) {
-        return IGovernanceStrategy(_governanceParameters().strategy).wormholeChainId();
+        return ICoreBridge(_wormhole()).chainId();
     }
 }

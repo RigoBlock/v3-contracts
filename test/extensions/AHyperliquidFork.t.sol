@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
+import {ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
@@ -987,7 +988,7 @@ contract AHyperliquidForkTest is Test {
 
         vm.startPrank(poolOwner);
         vm.expectRevert();
-        IAGovernance(pool).propose(new IGovernanceVoting.ProposedAction[](0), "");
+        IAGovernance(pool).propose(new ProposedAction[](0), "");
         vm.stopPrank();
 
         assertEq(ISmartPoolState(pool).getActiveApplications(), appsBefore, "No application bit changed");

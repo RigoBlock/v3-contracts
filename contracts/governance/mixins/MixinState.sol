@@ -11,16 +11,14 @@ import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 
 abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
-    function getActions(
-        uint256 proposalId
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
+    function getActions(uint256 proposalId) external view override returns (ProposedAction[] memory proposedActions) {
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
-        proposedActions = new IGovernanceVoting.ProposedAction[](actionsLength);
+        proposedActions = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -142,13 +140,13 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function state(uint256 proposalId) public view override(Governor, IGovernor) returns (IGovernor.ProposalState) {
         return _toOZState(_getProposalState(proposalId));
     }
 
     /// @dev Translates the native state into the OZ Governor numbering: Qualified maps to
-    ///      Succeeded, higher native values shift down one position. See docs/governance/TALLY_COMPAT.md.
+    ///      Succeeded, higher native values shift down one position.
     function _toOZState(ProposalStatus proposalState) private pure returns (IGovernor.ProposalState) {
         uint8 value = uint8(proposalState);
         if (value == uint8(ProposalStatus.Qualified)) {
@@ -159,7 +157,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
 
     /// @inheritdoc IGovernor
     function votingDelay() public pure override(Governor, IGovernor) returns (uint256) {
-        // voting starts at least one second in the future (see votingTimestamps)
+        // voting starts at least one second in the future (see the strategy's beforePropose)
         return 1;
     }
 
@@ -199,9 +197,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     ) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](
-            actionsLength
-        );
+        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -220,14 +216,16 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
             return ProposalStatus.Canceled;
         }
 
-        // prevent old-format proposals execution if quorum drops
-        uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
-        quorum = quorum > 0 ? quorum : type(uint256).max;
+        // a proposal without a stored quorum (legacy or corrupt) can never reach quorum
+        ProposalExtraData memory extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        uint256 quorum = extraData.quorum > 0 ? extraData.quorum : type(uint256).max;
 
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
+                _proposalMeta().proposalMetaById[proposalId].proposer,
                 quorum,
+                extraData.votingPower,
                 _governanceParameters().timeType
             );
     }

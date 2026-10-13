@@ -3,12 +3,13 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
 import {IGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {SafeCast} from "@openzeppelin-gov/utils/math/SafeCast.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinState} from "./MixinState.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 /// @dev Inherits `MixinState` (which inherits OZ `Governor`) as a single chain, avoiding a
@@ -66,14 +67,14 @@ abstract contract MixinVoting is MixinState {
 
     /// @inheritdoc IGovernanceVoting
     function propose(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) external override returns (uint256 proposalId) {
         proposalId = _propose(actions, description);
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function propose(
         address[] memory targets,
         uint256[] memory values,
@@ -82,15 +83,15 @@ abstract contract MixinVoting is MixinState {
     ) public override(Governor, IGovernor) returns (uint256 proposalId) {
         uint256 targetsLength = targets.length;
         require(targetsLength == values.length && targetsLength == calldatas.length, GovActionsLengthMismatch());
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](targetsLength);
+        ProposedAction[] memory actions = new ProposedAction[](targetsLength);
         for (uint256 i = 0; i < targetsLength; i++) {
-            actions[i] = IGovernanceVoting.ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
+            actions[i] = ProposedAction({target: targets[i], data: calldatas[i], value: values[i]});
         }
         proposalId = _propose(actions, description);
     }
 
     function _propose(
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         string memory description
     ) internal returns (uint256 proposalId) {
         uint256 length = actions.length;
@@ -103,9 +104,12 @@ abstract contract MixinVoting is MixinState {
         require(length <= PROPOSAL_MAX_OPERATIONS, GovTooManyActions(length, PROPOSAL_MAX_OPERATIONS));
 
         address strategy = _governanceParameters().strategy;
-        (uint256 startBlockOrTime, uint256 endBlockOrTime) = IGovernanceStrategy(strategy).votingTimestamps(
-            _governanceParameters().timeType
-        );
+        // validates and optionally modifies the actions, and fixes the proposal's voting window;
+        // on non-receiver chains also rolls a finished staking epoch so the window starts at the
+        // fresh epoch's boundary
+        uint256 startBlockOrTime;
+        uint256 endBlockOrTime;
+        (actions, startBlockOrTime, endBlockOrTime) = IGovernanceStrategy(strategy).beforePropose(actions);
 
         // proposals start from id = 1
         _proposalCount().value++;
@@ -121,14 +125,13 @@ abstract contract MixinVoting is MixinState {
             executed: false
         });
 
-        // Validate and optionally modify each action through the strategy before storing.
         for (uint256 i = 0; i < length; i++) {
-            actions[i] = IGovernanceStrategy(strategy).beforePropose(actions[i]);
             _proposedAction().proposedActionbyIndex[proposalId][i] = actions[i];
         }
 
         _proposal().proposalById[proposalId] = newProposal;
-        _proposalQuorum().proposalQuorumById[proposalId] = _governanceParameters().quorumThreshold;
+        ProposalExtraData storage extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        extraData.quorum = SafeCast.toUint128(_governanceParameters().quorumThreshold);
 
         emit ProposalCreated(msg.sender, proposalId, actions, startBlockOrTime, endBlockOrTime, description);
         _mapOzHashAndEmitOZProposalCreated(proposalId, actions, startBlockOrTime, endBlockOrTime, description);
@@ -138,7 +141,7 @@ abstract contract MixinVoting is MixinState {
     ///      resolves to the stored proposal) and emits the OZ-format ProposalCreated event.
     function _mapOzHashAndEmitOZProposalCreated(
         uint256 proposalId,
-        IGovernanceVoting.ProposedAction[] memory actions,
+        ProposedAction[] memory actions,
         uint256 startBlockOrTime,
         uint256 endBlockOrTime,
         string memory description
@@ -183,6 +186,15 @@ abstract contract MixinVoting is MixinState {
         IGovernanceState.Proposal storage proposal = _proposal().proposalById[proposalId];
         IGovernanceState.Receipt memory receipt = _receipt().userReceiptByProposal[proposalId][voter];
         require(!receipt.hasVoted, GovAlreadyVoted(proposalId, voter));
+
+        // the voting-power snapshot is taken on the first vote via the strategy hook, so the
+        // qualified-majority denominator stays fixed for the proposal's whole life
+        ProposalExtraData storage extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        if (extraData.votingPower == 0) {
+            extraData.votingPower = SafeCast.toUint128(
+                IGovernanceStrategy(_governanceParameters().strategy).beforeVote()
+            );
+        }
 
         if (voteType == IGovernanceVoting.VoteType.For) {
             proposal.votesFor += votingPower;
@@ -250,7 +262,7 @@ abstract contract MixinVoting is MixinState {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function execute(
         address[] memory targets,
         uint256[] memory values,
@@ -275,13 +287,15 @@ abstract contract MixinVoting is MixinState {
         uint256 length = proposal.actionsLength;
         address strategy = _governanceParameters().strategy;
 
-        // First pass: let the strategy prepare each action and compute the exact native amount required.
-        IGovernanceVoting.ProposedAction[] memory preparedActions = new IGovernanceVoting.ProposedAction[](length);
+        // First pass: let the strategy prepare the actions and compute the exact native amount required.
+        ProposedAction[] memory storedActions = new ProposedAction[](length);
+        for (uint256 i = 0; i < length; i++) {
+            storedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
+        }
+        storedActions = IGovernanceStrategy(strategy).beforeExecute(storedActions);
         uint256 requiredValue;
         for (uint256 i = 0; i < length; i++) {
-            IGovernanceVoting.ProposedAction memory action = _proposedAction().proposedActionbyIndex[proposalId][i];
-            preparedActions[i] = IGovernanceStrategy(strategy).beforeExecute(action);
-            requiredValue += preparedActions[i].value;
+            requiredValue += storedActions[i].value;
         }
 
         // exact value required, so no native tokens are left sitting in the governance
@@ -289,7 +303,7 @@ abstract contract MixinVoting is MixinState {
 
         // Second pass: execute the prepared actions atomically.
         for (uint256 i = 0; i < length; i++) {
-            GovernanceActionLib.execute(preparedActions[i]);
+            GovernanceActionLib.execute(storedActions[i]);
         }
 
         emit ProposalExecuted(proposalId);
@@ -301,7 +315,7 @@ abstract contract MixinVoting is MixinState {
     }
 
     /// @inheritdoc IGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
     function cancel(
         address[] memory targets,
         uint256[] memory values,

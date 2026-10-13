@@ -7,6 +7,7 @@ export const extensionsMapSalt = "extensionsMapSalt19";
 export const zeroExAllowanceHolder =
   "0x0000000000001fF3684f28c67538d4D072C22734";
 export const zeroExDeployer = "0x00000000000004533Fe15556B1E086BB1A72cEae";
+export const governanceRecovery = "0x002BA2351532a741043d874Bd0b12aAb21abc289";
 
 interface ChainConfig {
   rigoToken: string;
@@ -21,12 +22,18 @@ interface ChainConfig {
   wormholeChainId: number;
 }
 
-// Ethereum mainnet Rigoblock governance proxy. This address is the Wormhole emitter
-// for cross-chain governance messages and, since the governance proxy is deterministically
-// deployed at the same address on every chain, also the trusted emitter hardcoded in the
-// governance implementation's cross-chain receiver mixin.
-export const mainnetGovernanceProxy =
-  "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
+// The governance hub chain: the only chain with staking-backed sender governance. Every
+// other configured chain is a receiver and requires a governanceRecovery address.
+export const GOVERNANCE_HUB_CHAIN = 1;
+
+// The Rigoblock governance proxy, deployed at the same address on every chain; used by the
+// AGovernance adapter. The strategy contract authenticates recovery against the same value.
+export const governanceProxy = "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
+
+// Minimal init code for an in-memory Wormhole-core stand-in: runtime 0x60206000f3 returns 32
+// zero bytes for any call (constructor probe passes, chainId() decodes to 0). Used where
+// Hardhat cannot vm.mockCall.
+export const dummyWormholeInitCode = "0x6005600c60003960056000f360206000f3";
 
 // Chain-specific configuration
 export const chainConfig: { [chainId: number]: ChainConfig } = {

@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-09-29 (branch `feat/crosschain-gov-inbox`).
+Limit: 24576 bytes per contract. Last measured: 2026-10-13 (governance review round 11).
 
 ### Implementation and factory
 
@@ -99,8 +99,9 @@ deployed instance of its own.
 | --------------------------- | -----------: | -------: | ---------: |
 | Staking                     |        22820 |     1756 |     92.85% |
 | GrgVault                    |         4392 |    20184 |     17.87% |
-| RigoblockGovernance         |        22028 |     2548 |     89.63% |
-| RigoblockGovernanceStrategy |         5722 |    18854 |     23.28% |
+| RigoblockGovernance         |        22520 |     2056 |     91.67% |
+| RigoblockGovernanceStrategy |         6184 |    18392 |     25.16% |
+| WormholeReceiverStrategy    |         3000 |    21576 |     12.20% |
 
 ## Notes
 

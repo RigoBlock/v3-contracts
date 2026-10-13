@@ -1,6 +1,7 @@
 import { readArtifact } from "../../rocketh/artifacts.js";
 import { deployScript } from "../../rocketh/deploy.js";
 import { isLocalEnvironment, type Environment } from "../../rocketh/config.js";
+import { dummyWormholeInitCode } from "../utils/constants";
 
 export default deployScript(
   async (env: Environment) => {
@@ -172,7 +173,26 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("RigoblockGovernance"),
-        args: [],
+        // 2 is the Wormhole chain id of Ethereum, the governance hub; any value works on the
+        // in-memory network
+        args: [2],
+      },
+      { deterministic: true },
+    );
+
+    // the strategy constructor probes the wormhole contract, so a minimal raw-contract
+    // stand-in (32 zero bytes for any call, so the probe passes) replaces the hub chain's
+    // Wormhole core contract
+    const dummyWormhole = await env.deploy(
+      "DummyWormhole",
+      {
+        account: deployer,
+        artifact: {
+          abi: [],
+          bytecode: dummyWormholeInitCode,
+          metadata: "{}",
+          deployedBytecode: "0x60206000f3",
+        },
       },
       { deterministic: true },
     );
@@ -182,11 +202,9 @@ export default deployScript(
       {
         account: deployer,
         artifact: await readArtifact("RigoblockGovernanceStrategy"),
-        args: [
-          stakingProxy.address,
-          "0x1111111111111111111111111111111111111111",
-          1,
-        ],
+        // hardhat network (chain id 31337) stands in for the hub chain: the sender strategy
+        // takes the staking proxy and the dummy Wormhole configuration.
+        args: [stakingProxy.address, dummyWormhole.address],
       },
       { deterministic: true },
     );
