@@ -120,6 +120,14 @@ so execution is only possible in a later unit. Everything that depends on the st
   current timestamp — `time <= start` keeps the proposal `Pending` during the propose block,
   so it becomes voteable from the next block. The voting period is `min(epochDuration - 1, 7 days)`: the one-second margin
   keeps the window strictly inside the epoch it starts in, whenever the epoch cannot roll.
+- **Mid-window rolls are impossible in the healthy path**: voting opens exactly when the current
+  epoch becomes rollable (`start` is the epoch's earliest end and votes require `time > start`),
+  and any successful roll closes the window — Rigoblock epochs run from their start time, so a
+  roll at `t` produces a new earliest end of `t + epochDuration > start + epochDuration > end`.
+  Every vote therefore lands strictly inside a single epoch, in whichever of the two epochs the
+  first vote's snapshot was taken, and same-block vote/roll orderings are consistent either way
+  (vote-then-roll: all votes in the old epoch; roll-then-vote: all votes in the new one). The
+  mixed-epoch case exists only in the stuck-epoch fallback below.
 - **Voting window**: returned by `beforePropose` and stored in the proposal — fixed pointers,
   not a rolling view. `votingPeriod()` (`min(7 days, epoch duration - 1)`) is informational.
 - **Thresholds**: proposal threshold between 1% and 2% of GRG total supply (hard floor 20,000 GRG
@@ -147,6 +155,9 @@ so execution is only possible in a later unit. Everything that depends on the st
   `docs/wormhole/GOVERNANCE_CROSSCHAIN.md`.
 
 ### Known limitation: stuck epochs and mid-window rolls (by design)
+
+In the healthy path a mid-window roll cannot occur at all (see "Mid-window rolls are impossible
+in the healthy path" above). The limitation applies only to the fallback below.
 
 While a staking epoch cannot be rolled (e.g. pool-finalization delays, or many unfinalized pools
 from pool spam), `currentEpochBalance` is **frozen**: voting power, the `beforeVote` total and
