@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
+import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -43,6 +44,7 @@ contract GovernanceRecoveryTest is Test {
         CrosschainHarness harness = new CrosschainHarness();
         vm.etch(Constants.GOV_PROXY, address(harness).code);
         governance = CrosschainHarness(payable(Constants.GOV_PROXY));
+        governance.setName();
         wormhole = makeAddr("wormhole");
         // enough code for the constructor's code.length check; the local Wormhole chain id is
         // read from the core contract, which is not deployed in these tests
@@ -146,6 +148,62 @@ contract GovernanceRecoveryTest is Test {
         _activateRecovery();
         assertEq(strategy.getVotingPower(recovery), type(uint96).max);
         assertEq(strategy.getVotingPower(whale), 0);
+    }
+
+    /// @notice Thresholds at exactly type(uint96).max are reachable: the recovery power equals
+    ///     the cap, so the full recovery flow still completes.
+    function test_Recovery_MaxUint96Thresholds_RecoveryExecutes() public {
+        governance.setParams(uint256(type(uint96).max), uint256(type(uint96).max));
+        _activateRecovery();
+
+        uint256 proposalId = _proposeRecovery();
+        governance.execute(proposalId);
+        assertEq(counter.value(), 1);
+        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
+    }
+
+    /// @notice A recovery proposal carrying thresholds above the uint96 cap passes propose
+    ///     (no threshold checks at propose time) and reverts at execution, where
+    ///     updateThresholds runs validateParams on the post-update parameters.
+    function test_Recovery_UpdateThresholdsAboveUint96_RevertsAtExecute() public {
+        _activateRecovery();
+
+        vm.startPrank(recovery);
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({
+            target: address(governance),
+            data: abi.encodeCall(
+                IGovernanceUpgrade.updateThresholds,
+                (uint256(type(uint96).max) + 1, QUORUM_THRESHOLD)
+            ),
+            value: 0
+        });
+        uint256 proposalId = governance.propose(actions, "proposal threshold above the cap");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        governance.execute(proposalId);
+
+        actions[0] = ProposedAction({
+            target: address(governance),
+            data: abi.encodeCall(
+                IGovernanceUpgrade.updateThresholds,
+                (PROPOSAL_THRESHOLD, uint256(type(uint96).max) + 1)
+            ),
+            value: 0
+        });
+        uint256 quorumProposalId = governance.propose(actions, "quorum threshold above the cap");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        governance.execute(quorumProposalId);
+        vm.stopPrank();
     }
 
     /// @notice Full recovery flow with a fully bricked staking contract: the recovery proposal

@@ -114,11 +114,13 @@ single-proposer local governance):
   recovered chain no matter what its strategy allows (asserted by
   `test_ReceiveMessage_UnknownEmitterChain_Reverts`).
 - `beforeExecute`: pure pass-through.
-- Threshold validators: removed — receiver governance has no voting thresholds of its own, so
-  there is nothing to validate. `validateParams` only asserts the name is
-  `"Rigoblock Governance"`. The bounds for a crosschain `updateThresholds` action are enforced
-  on the sender, at execution time in `MixinUpgrade.updateThresholds`, before the effects land —
-  this keeps the action from reverting on the receiver and bricking the whole VAA batch.
+- Threshold validators: `validateParams` asserts the name and bounds both thresholds to
+  `0 < threshold <= type(uint96).max` — recovery voting power is hardcoded at
+  `type(uint96).max`, so a threshold above the cap makes the recovery path unreachable and a
+  zero threshold opens spam proposals during a recovery. The bound also applies to a
+  crosschain `updateThresholds` action at execution time in `MixinUpgrade.updateThresholds`;
+  legitimate sender-proposed values (1–10% of GRG supply) are far inside the cap, so VAA
+  batches are unaffected.
 
 ### Veto path (mainnet, while Wormhole is alive)
 

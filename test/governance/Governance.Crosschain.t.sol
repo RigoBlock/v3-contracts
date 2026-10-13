@@ -71,6 +71,12 @@ contract CrosschainHarness is RigoblockGovernance {
         _paramsWrapper().governanceParameters.timeType = timeType_;
     }
 
+    /// @dev The canonical proxy is produced by etching this contract's code over its address,
+    ///     which copies no storage: write the name validateParams asserts explicitly.
+    function setName() external {
+        _name().value = "Rigoblock Governance";
+    }
+
     function implementation() external view returns (address) {
         return _implementation().value;
     }

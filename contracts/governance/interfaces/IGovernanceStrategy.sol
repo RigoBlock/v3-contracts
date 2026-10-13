@@ -7,6 +7,12 @@ import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
+    /// @notice Thrown when the proposal threshold is outside the range the strategy can honor.
+    error GovStrategyInvalidProposalThreshold(uint256 threshold);
+
+    /// @notice Thrown when the quorum threshold is outside the range the strategy can honor.
+    error GovStrategyInvalidQuorumThreshold(uint256 threshold);
+
     /// @notice Reverts unless the governance parameters are valid for this strategy.
     /// @dev Called directly at initialization and by `updateThresholds` at execution time.
     /// @param params Tuple of factory parameters.

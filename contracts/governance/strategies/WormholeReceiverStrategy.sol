@@ -33,7 +33,9 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
         try ICoreBridge(wormhole).chainId() returns (uint16) {} catch {
             revert GovRecoveryAddressZero();
         }
-        require(governanceProxy != address(0), GovRecoveryAddressZero());
+        // the proxy is not yet wired to this strategy, so no interface can be probed; code.length
+        // at least rules out the zero address and EOAs, which could never deliver a recovery veto
+        require(governanceProxy.code.length > 0, GovRecoveryInvalidProxy(governanceProxy));
         require(recoveryAddress != address(0), GovRecoveryAddressZero());
         _wormhole = wormhole;
         _governanceProxy = governanceProxy;
@@ -59,9 +61,19 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev Receiver governance has no voting thresholds, so any value is accepted.
+    /// @dev Thresholds must stay reachable by the recovery address, whose voting power is
+    ///      hardcoded at type(uint96).max: a zero threshold would let anyone spam proposals
+    ///      during a recovery, and a threshold above the cap makes the recovery path unreachable.
     function validateParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
+        require(
+            params.proposalThreshold > 0 && params.proposalThreshold <= type(uint96).max,
+            GovStrategyInvalidProposalThreshold(params.proposalThreshold)
+        );
+        require(
+            params.quorumThreshold > 0 && params.quorumThreshold <= type(uint96).max,
+            GovStrategyInvalidQuorumThreshold(params.quorumThreshold)
+        );
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -100,6 +112,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
         require(_isRecoveryActive(), GovLocalGovernanceDisabled());
 
         for (uint256 i = 0; i < actions.length; i++) {
+            // early revert as a wormhole action would revert during execution
             require(actions[i].target != _wormhole, GovCrosschainNotSender());
         }
 

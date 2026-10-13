@@ -446,7 +446,8 @@ both the numerator and the denominator. The staking clock is permissionless,
 so the strategy rolls a finished epoch in `beforePropose` when it can (the
 revert is swallowed — a dead scheduler must not block governance) and the
 voting window is fixed at proposal time; if the roll does not happen, the
-window falls back to `start = block.timestamp + 1` with the 7-day default
+window falls back to `start = block.timestamp` (Pending during the propose
+block, voteable from the next) with the 7-day default
 period, and the snapshot is taken from whatever epoch is current at the first
 vote. The voting period is
 `min(epochDuration - 1, 7 days)`, so the window always fits inside the current

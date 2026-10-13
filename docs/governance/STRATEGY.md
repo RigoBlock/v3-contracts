@@ -117,7 +117,8 @@ so execution is only possible in a later unit. Everything that depends on the st
   current epoch's earliest end, so the whole window lands strictly inside one epoch). The roll is
   best-effort: governance must stay operational even if `endEpoch` reverts (e.g. the staking
   scheduler is stuck), so the revert is swallowed and the window falls back to starting at the
-  next timestamp. The voting period is `min(epochDuration - 1, 7 days)`: the one-second margin
+  current timestamp — `time <= start` keeps the proposal `Pending` during the propose block,
+  so it becomes voteable from the next block. The voting period is `min(epochDuration - 1, 7 days)`: the one-second margin
   keeps the window strictly inside the epoch it starts in, whenever the epoch cannot roll.
 - **Voting window**: returned by `beforePropose` and stored in the proposal — fixed pointers,
   not a rolling view. `votingPeriod()` (`min(7 days, epoch duration - 1)`) is informational.
@@ -129,6 +130,14 @@ so execution is only possible in a later unit. Everything that depends on the st
   `updateThresholds` values passes `propose` and voting but reverts when executed — including
   when supply inflation drifted a stored threshold out of range since it was set.
   `beforePropose` performs no threshold checks.
+- **Error-handling policy**: the staking proxy is a trusted, governance-owned contract, and the
+  policy on `try/catch` is deliberate even though it is not uniform. The only `try/catch` in
+  the strategy wraps the `endEpoch` **write** in `_rollEpochIfStale`: a refused roll is a
+  normal transient state (unfinalized staking pools delaying epoch finalization), not a
+  fault, and governance must never get stuck because staking cannot roll. Every staking
+  **view** read (`getOwnerStakeByStatus`, `epochDurationInSeconds`, `getGrgContract`) is a
+  direct call: if one reverts, staking is genuinely broken and no local handling saves
+  governance anyway — the revert surfaces as-is.
 - **Cross-chain proposals** (Wormhole): only from Ethereum mainnet, only via
   `publishMessage(uint32,bytes,uint8)`, never targeting the local chain, and always with zero
   value — the wrapper `action.value` and every inner payload action's `value` are validated at
@@ -143,7 +152,8 @@ While a staking epoch cannot be rolled (e.g. pool-finalization delays, or many u
 from pool spam), `currentEpochBalance` is **frozen**: voting power, the `beforeVote` total and
 the snapshotted denominator are all unchanged, so governance stays fully consistent — not just
 operational. `beforePropose` and `beforeVote` never force a roll; a stuck scheduler makes the
-window fall back to `block.timestamp + 1` instead of reverting.
+window fall back to `start = block.timestamp` (Pending during the propose block, voteable from
+the next) instead of reverting.
 
 If the epoch then rolls mid-voting-window (the roll is permissionless and the window is fixed at
 propose time), post-roll votes carry new-epoch power against the frozen snapshot. This only
@@ -218,21 +228,32 @@ including the local one — is read from the Wormhole core contract's `chainId()
     can never open a local path: `Defeated` can never satisfy the `Succeeded` gate in
     `execute`, and the governance implementation reverts for non-stored proposals before
     reaching the strategy, so the values are only observable on direct strategy calls.
-  - `validateParams` validates only the governance name: receiver governance has no
-    voting thresholds of its own, so a mainnet-sent crosschain `updateThresholds` action
-    must not revert here and brick the whole VAA batch — the bounds are enforced on the
-    sender, in `MixinUpgrade.updateThresholds` at execution time, before the effects land.
+  - `validateParams` validates the governance name and bounds both thresholds to
+    `0 < threshold <= type(uint96).max`: recovery voting power is hardcoded at
+    `type(uint96).max`, so a threshold above the cap makes the recovery path unreachable and
+    a zero threshold opens spam proposals during a recovery. The bounds also cover
+    `MixinUpgrade.updateThresholds` at execution time, so a crosschain `updateThresholds`
+    reverts on out-of-bounds values like any invalid action — legitimate sender-proposed
+    values (1–10% of GRG supply) are far inside the cap, so VAA batches are unaffected.
   - The crosschain receiver path (`receiveMessage`) is unaffected: it reads the strategy only
     for `wormhole()` and never touches staking.
   - The constructor takes `(wormhole, governanceProxy, recoveryAddress)`. The wormhole
     address must be a contract that answers a `chainId()` probe (reusing
-    `GovRecoveryAddressZero`); governanceProxy and recoveryAddress must be non-zero. The
+    `GovRecoveryAddressZero`); recoveryAddress must be non-zero, and governanceProxy must
+    have code — an EOA could never deliver a recovery veto, and there is no probeable
+    interface at construction time, so `code.length` is the only on-chain check (reverts
+    `GovRecoveryInvalidProxy`, covering the zero address too). Correctness-of-address is
+    off-chain's job: the deploy script verifies the governance
+    proxy address appears in the deployed strategy bytecode. The
     strategy carries the recovery escape hatch:
     after a 60-day challenge window with no mainnet veto, the recovery address can drive the
     ordinary local proposal flow — the proposal reads `Succeeded` immediately at creation
     (proposer-based) and is executable at the next block. Error ownership:
-    `IGovernanceStrategy` declares functions only — the sender strategy's crosschain and
-    threshold errors (`GovCrosschain*`, `GovStrategyInvalid*`) live in
+    `IGovernanceStrategy` declares the shared threshold errors
+    (`GovStrategyInvalidProposalThreshold`, `GovStrategyInvalidQuorumThreshold`) — the two
+    strategies enforce different ranges (sender: 1–2% / 4–10% of GRG supply; receiver:
+    `0 < threshold <= type(uint96).max`) behind the same selectors — while the sender-only
+    crosschain errors (`GovCrosschain*`) and `GovStrategyInvalidTimeType` live in
     `RigoblockGovernanceStrategy`, and the recovery errors and events live in
     `strategies/interfaces/IWormholeReceiverStrategy.sol`. See RECOVERY.md for the full design.
 

@@ -29,8 +29,12 @@ interface IWormholeReceiverStrategy {
     /// @notice Thrown when no recovery request is pending.
     error GovRecoveryNotPending();
 
-    /// @notice Thrown when a receiver-chain strategy is deployed without a recovery address.
+    /// @notice Thrown when the wormhole core or the recovery address is the zero address.
     error GovRecoveryAddressZero();
+
+    /// @notice Thrown when the governance proxy is not a contract: the zero address and EOAs
+    ///      alike could never deliver a recovery veto.
+    error GovRecoveryInvalidProxy(address proxy);
 
     /// @notice Requests the governance recovery; executable after the challenge window.
     /// @dev Only callable by the recovery address, and only when no request is pending or active.

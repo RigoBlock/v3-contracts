@@ -65,8 +65,6 @@ abstract contract MixinUpgrade is MixinVoting {
         require(newStrategy != oldStrategy, GovUpgradeSameAsCurrent());
         require(_isContract(newStrategy), GovUpgradeNotContract(newStrategy));
 
-        // TODO: should we assert that strategy is a strategy type of contract? like a supportsInterface?
-
         // we write the new address in the strategy storage slot
         _governanceParameters().strategy = newStrategy;
         emit StrategyUpgraded(newStrategy);

@@ -292,10 +292,10 @@ abstract contract MixinVoting is MixinState {
         for (uint256 i = 0; i < length; i++) {
             storedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
-        ProposedAction[] memory preparedActions = IGovernanceStrategy(strategy).beforeExecute(storedActions);
+        storedActions = IGovernanceStrategy(strategy).beforeExecute(storedActions);
         uint256 requiredValue;
         for (uint256 i = 0; i < length; i++) {
-            requiredValue += preparedActions[i].value;
+            requiredValue += storedActions[i].value;
         }
 
         // exact value required, so no native tokens are left sitting in the governance
@@ -303,7 +303,7 @@ abstract contract MixinVoting is MixinState {
 
         // Second pass: execute the prepared actions atomically.
         for (uint256 i = 0; i < length; i++) {
-            GovernanceActionLib.execute(preparedActions[i]);
+            GovernanceActionLib.execute(storedActions[i]);
         }
 
         emit ProposalExecuted(proposalId);

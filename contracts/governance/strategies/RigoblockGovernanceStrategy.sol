@@ -30,26 +30,20 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @param consistencyLevel The supplied consistency level.
     error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
 
-    /// @notice Thrown when the proposal threshold is outside the allowed range.
-    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
-
-    /// @notice Thrown when the quorum threshold is outside the allowed range.
-    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
-
     /// @notice Thrown when the governance time type is not TimeType.Timestamp.
     error GovStrategyInvalidTimeType(TimeType timeType);
 
     /// @notice Thrown when the Wormhole core contract address is the zero address.
     error GovStrategyInvalidWormhole();
 
-    /// @notice Wormhole core contract on the same chain as this strategy.
-    address private immutable _wormhole;
-
     /// @notice Maximum voting period. The one-second margin under the staking epoch duration
     ///         (see votingPeriod) keeps the whole voting window strictly inside the current
     ///         staking epoch whenever the epoch cannot roll, so a stuck epoch cannot split
     ///         the window across two epochs.
     uint256 private constant _VOTING_PERIOD = 7 days;
+
+    /// @notice Wormhole core contract on the same chain as this strategy.
+    address private immutable _wormhole;
 
     address private immutable _stakingProxy;
 
@@ -118,22 +112,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     /// @inheritdoc IGovernanceStrategy
     function votingPeriod() public view override returns (uint256) {
         uint256 epochDuration = IStorage(_stakingProxy).epochDurationInSeconds();
-        if (epochDuration < 2) return _VOTING_PERIOD;
-        uint256 period = epochDuration - 1;
+        uint256 period = epochDuration >= 2 ? epochDuration - 1 : _VOTING_PERIOD;
         return period < _VOTING_PERIOD ? period : _VOTING_PERIOD;
-    }
-
-    /// @dev Returns the fixed start of the voting window: the current epoch's earliest end,
-    ///      read once at proposal time. A finished epoch is rolled best-effort first — a stuck
-    ///      epoch must never block governance — and only when the roll is impossible does the
-    ///      window start at the next timestamp (there is no future epoch boundary to anchor to).
-    function _rollEpochIfStale() private returns (uint256 startBlockOrTime) {
-        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-        if (block.timestamp >= startBlockOrTime) {
-            try IStaking(_stakingProxy).endEpoch() {} catch {}
-            startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
-            if (block.timestamp >= startBlockOrTime) startBlockOrTime = block.timestamp + 1;
-        }
     }
 
     /// @dev Reverts unless the governance uses TimeType.Timestamp.
@@ -150,7 +130,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
 
         require(
             proposalThreshold >= floor && proposalThreshold <= cap,
-            GovStrategyInvalidProposalThreshold(proposalThreshold, floor, cap)
+            GovStrategyInvalidProposalThreshold(proposalThreshold)
         );
     }
 
@@ -161,10 +141,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         uint256 floor = grgTotalSupply / 25;
         uint256 cap = grgTotalSupply / 10;
 
-        require(
-            quorumThreshold >= floor && quorumThreshold <= cap,
-            GovStrategyInvalidQuorumThreshold(quorumThreshold, floor, cap)
-        );
+        require(quorumThreshold >= floor && quorumThreshold <= cap, GovStrategyInvalidQuorumThreshold(quorumThreshold));
     }
 
     /// @inheritdoc IGovernanceStrategy
@@ -172,7 +149,8 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         ProposedAction[] calldata actions
     ) external override returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
         // roll a finished staking epoch so the voting window starts at a live epoch boundary;
-        // a stale or unreadable clock falls back to starting at the next timestamp
+        // a stale or unreadable clock falls back to starting at the current timestamp, so the
+        // proposal is Pending during the propose block and voteable from the next block
         startBlockOrTime = _rollEpochIfStale();
         endBlockOrTime = startBlockOrTime + votingPeriod();
 
@@ -186,6 +164,24 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         }
 
         return (actions, startBlockOrTime, endBlockOrTime);
+    }
+
+    /// @dev Returns the fixed start of the voting window: the current epoch's earliest end,
+    ///      read once at proposal time. A finished epoch is rolled best-effort first — a stuck
+    ///      epoch must never block governance — and only when the roll is impossible does the
+    ///      window start at the current timestamp (there is no future epoch boundary to anchor
+    ///      to): `time <= start` keeps the proposal Pending during the propose block, so it
+    ///      becomes voteable from the next block.
+    function _rollEpochIfStale() private returns (uint256 startBlockOrTime) {
+        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+        if (block.timestamp < startBlockOrTime) return startBlockOrTime;
+        try IStaking(_stakingProxy).endEpoch() {} catch {
+            // the epoch cannot be rolled: governance must stay operational, so the window starts
+            // at the current timestamp and the proposal becomes voteable from the next block
+            return block.timestamp;
+        }
+        // a successful roll always produces a future earliest end
+        startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
     }
 
     /// @inheritdoc IGovernanceStrategy

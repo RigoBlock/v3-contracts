@@ -6,6 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 import {IERC20} from "../../contracts/tokens/ERC20/IERC20.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
+import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
@@ -205,9 +206,9 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(endBlockOrTime, startBlockOrTime + 7 days - 1);
     }
 
-    function test_VotingTimestamps_StaleEpoch_FallsBackToNextTimestamp() public {
+    function test_VotingTimestamps_StaleEpoch_FallsBackToCurrentTimestamp() public {
         // a stale clock with a stuck scheduler (endEpoch cannot complete): the window starts
-        // at the next timestamp
+        // at the current timestamp, so the proposal is Pending during the propose block
         vm.mockCall(
             STAKING,
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
@@ -215,7 +216,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         );
         vm.mockCallRevert(STAKING, abi.encodeWithSelector(IStaking.endEpoch.selector), abi.encode("endEpoch bricked"));
         (, uint256 startBlockOrTime, uint256 endBlockOrTime) = strategy.beforePropose(_actions(_action(TARGET, "", 0)));
-        assertEq(startBlockOrTime, block.timestamp + 1);
+        assertEq(startBlockOrTime, block.timestamp);
         assertEq(endBlockOrTime, startBlockOrTime + 7 days - 1);
     }
 
@@ -234,6 +235,16 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(strategy.votingPeriod(), 3 days - 1);
 
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(14 days));
+        assertEq(strategy.votingPeriod(), 7 days);
+    }
+
+    /// @dev An epoch duration below 2 seconds cannot host a one-second-margin window:
+    ///     votingPeriod falls back to the 7-day constant.
+    function test_VotingPeriod_EpochDurationBelowTwo_FallsBackToConstant() public {
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(0));
+        assertEq(strategy.votingPeriod(), 7 days);
+
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(1));
         assertEq(strategy.votingPeriod(), 7 days);
     }
 
@@ -351,12 +362,7 @@ contract RigoblockGovernanceStrategyTest is Test {
     function test_ProposalThreshold_BelowFloor_Reverts() public {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
-                99_999e18,
-                100_000e18,
-                200_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector, 99_999e18)
         );
         strategy.validateParams(_params(99_999e18, 400_000e18));
     }
@@ -364,12 +370,7 @@ contract RigoblockGovernanceStrategyTest is Test {
     function test_ProposalThreshold_AboveCap_Reverts() public {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
-                200_001e18,
-                100_000e18,
-                200_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector, 200_001e18)
         );
         strategy.validateParams(_params(200_001e18, 400_000e18));
     }
@@ -377,12 +378,7 @@ contract RigoblockGovernanceStrategyTest is Test {
     function test_QuorumThreshold_BelowFloor_Reverts() public {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
-                399_999e18,
-                400_000e18,
-                1_000_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector, 399_999e18)
         );
         strategy.validateParams(_params(100_000e18, 399_999e18));
     }
@@ -390,12 +386,7 @@ contract RigoblockGovernanceStrategyTest is Test {
     function test_QuorumThreshold_AboveCap_Reverts() public {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
-                1_000_001e18,
-                400_000e18,
-                1_000_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector, 1_000_001e18)
         );
         strategy.validateParams(_params(100_000e18, 1_000_001e18));
     }
@@ -468,12 +459,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         );
         _passAndWarpPastWindow(governance, whale, proposalId);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
-                99_999e18,
-                100_000e18,
-                200_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector, 99_999e18)
         );
         governance.execute(proposalId);
 
@@ -490,12 +476,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         );
         _passAndWarpPastWindow(governance, whale, proposalId);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
-                1_000_001e18,
-                400_000e18,
-                1_000_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector, 1_000_001e18)
         );
         governance.execute(proposalId);
     }
@@ -526,12 +507,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         // the 1% floor, so the post-update parameters fail validation
         _mockSupply(20_000_000e18);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
-                100_000e18,
-                200_000e18,
-                400_000e18
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector, 100_000e18)
         );
         governance.execute(proposalId);
     }
@@ -600,10 +576,72 @@ contract RigoblockGovernanceStrategyTest is Test {
         assertEq(governance.quorum(0), 500_000e18);
     }
 
+    /// @notice A proposal's quorum is frozen at propose time, not re-read at vote or execution
+    ///     time: a proposal created under Q1 keeps being judged against Q1 after a later
+    ///     proposal raises the global quorum to Q2, and only proposals created afterwards
+    ///     snapshot Q2. The whale's 500k balance clears Q1 (400k) but not Q2 (600k), so the
+    ///     frozen snapshot is observable in the outcome.
+    function test_Quorum_FrozenAtProposeTime_NotRereadAtVoteOrExecution() public {
+        _mockSupply(10_000_000e18);
+        address whale = makeAddr("whale");
+        StrategyHarness governance = _stakingBackedGovernance(whale);
+        governance.setParams(100_000e18, 400_000e18);
+
+        vm.startPrank(whale);
+        uint256 proposalA = governance.propose(
+            _actions(
+                _action(
+                    address(governance),
+                    abi.encodeCall(IGovernanceUpgrade.updateThresholds, (100_000e18, 600_000e18)),
+                    0
+                )
+            ),
+            "raise the quorum to Q2"
+        );
+        uint256 proposalB = governance.propose(_actions(_action(TARGET, "", 0)), "created under Q1");
+        vm.stopPrank();
+
+        assertEq(governance.proposalQuorum(proposalA), 400_000e18);
+        assertEq(governance.proposalQuorum(proposalB), 400_000e18);
+
+        // both proposals share the mocked window: vote both, then pass and execute A
+        vm.warp(governance.getProposalById(proposalA).proposal.startBlockOrTime + 1);
+        vm.prank(whale);
+        governance.castVote(proposalA, uint8(IGovernanceVoting.VoteType.For));
+        vm.prank(whale);
+        governance.castVote(proposalB, uint8(IGovernanceVoting.VoteType.For));
+        vm.warp(governance.getProposalById(proposalA).proposal.endBlockOrTime + 1);
+        governance.execute(proposalA);
+        assertEq(governance.quorum(0), 600_000e18);
+
+        // B was created under Q1: 500k does not reach Q2, yet B still succeeds against its
+        // frozen Q1 — a live re-read would have judged it Defeated
+        assertEq(governance.proposalQuorum(proposalB), 400_000e18);
+        vm.warp(governance.getProposalById(proposalB).proposal.endBlockOrTime + 1);
+        assertEq(uint256(governance.getProposalState(proposalB)), uint256(ProposalStatus.Succeeded));
+
+        // C is created after A executed: it snapshots Q2, and the same 500k vote no longer
+        // reaches quorum
+        vm.mockCall(
+            STAKING,
+            abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
+            abi.encode(block.timestamp + 100)
+        );
+        vm.prank(whale);
+        uint256 proposalC = governance.propose(_actions(_action(TARGET, "", 0)), "created under Q2");
+        assertEq(governance.proposalQuorum(proposalC), 600_000e18);
+
+        vm.warp(governance.getProposalById(proposalC).proposal.startBlockOrTime + 1);
+        vm.prank(whale);
+        governance.castVote(proposalC, uint8(IGovernanceVoting.VoteType.For));
+        vm.warp(governance.getProposalById(proposalC).proposal.endBlockOrTime + 1);
+        assertEq(uint256(governance.getProposalState(proposalC)), uint256(ProposalStatus.Defeated));
+    }
+
     /// @notice Governance must stay operational even when the staking contract cannot roll a
     ///     finished epoch: the swallowed endEpoch revert leaves the clock stale, the window
-    ///     falls back to starting at the next timestamp, and the full propose/vote/execute
-    ///     flow still works.
+    ///     falls back to starting at the current timestamp (Pending during the propose block,
+    ///     voteable from the next), and the full propose/vote/execute flow still works.
     function test_EndEpochReverting_GovernanceStaysOperational() public {
         address whale = makeAddr("whale");
         StrategyHarness governance = _stakingBackedGovernance(whale);
@@ -615,7 +653,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         vm.prank(whale);
         uint256 proposalId = governance.propose(_actions(_action(TARGET, "", 0)), "bricked staking");
         IGovernanceState.Proposal memory proposal = governance.getProposalById(proposalId).proposal;
-        assertEq(proposal.startBlockOrTime, block.timestamp + 1);
+        assertEq(proposal.startBlockOrTime, block.timestamp);
 
         vm.warp(block.timestamp + 2);
         vm.prank(whale);
@@ -630,8 +668,8 @@ contract RigoblockGovernanceStrategyTest is Test {
     }
 
     /// @notice With the epoch past its end and endEpoch reverting, proposing succeeds and the
-    ///     proposal starts at the next timestamp rather than reverting.
-    function test_Propose_StaleEpoch_EndEpochReverting_StartsNextTimestamp() public {
+    ///     proposal starts at the current timestamp rather than reverting.
+    function test_Propose_StaleEpoch_EndEpochReverting_StartsCurrentTimestamp() public {
         address whale = makeAddr("whale");
         StrategyHarness governance = _stakingBackedGovernance(whale);
 
@@ -640,7 +678,7 @@ contract RigoblockGovernanceStrategyTest is Test {
 
         vm.prank(whale);
         uint256 proposalId = governance.propose(_actions(_action(TARGET, "", 0)), "stale clock");
-        assertEq(governance.getProposalById(proposalId).proposal.startBlockOrTime, block.timestamp + 1);
+        assertEq(governance.getProposalById(proposalId).proposal.startBlockOrTime, block.timestamp);
     }
 
     /// @notice While the staking epoch cannot roll, the delegated balances are frozen: a
@@ -674,7 +712,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         // (2) propose (fallback start), two votes and execution all succeed
         vm.prank(voter1);
         uint256 proposalId = governance.propose(_actions(_action(TARGET, "", 0)), "stuck epoch");
-        assertEq(governance.getProposalById(proposalId).proposal.startBlockOrTime, block.timestamp + 1);
+        assertEq(governance.getProposalById(proposalId).proposal.startBlockOrTime, block.timestamp);
 
         vm.warp(block.timestamp + 2);
         vm.prank(voter1);
@@ -810,6 +848,10 @@ contract StrategyHarness is RigoblockGovernance {
 
     function proposalVotingPower(uint256 proposalId) external view returns (uint128) {
         return _proposalExtraData().proposalExtraDataById[proposalId].votingPower;
+    }
+
+    function proposalQuorum(uint256 proposalId) external view returns (uint128) {
+        return _proposalExtraData().proposalExtraDataById[proposalId].quorum;
     }
 }
 

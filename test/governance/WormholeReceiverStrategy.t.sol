@@ -30,6 +30,8 @@ contract WormholeReceiverStrategyTest is Test {
         // enough code for the constructor's code.length check and chainId() probe
         vm.etch(wormhole, hex"00");
         vm.mockCall(wormhole, abi.encodeCall(ICoreBridge.chainId, ()), abi.encode(uint16(47)));
+        // enough code for the constructor's governanceProxy code.length check
+        vm.etch(GOVERNANCE_PROXY, hex"00");
         strategy = _receiverStrategy();
     }
 
@@ -60,7 +62,7 @@ contract WormholeReceiverStrategyTest is Test {
     /// @dev The governance proxy authenticates recovery vetoes; a zero proxy would make the
     ///     veto unreachable.
     function test_Constructor_ZeroGovernanceProxy_Reverts() public {
-        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
+        vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryInvalidProxy.selector, address(0)));
         new WormholeReceiverStrategy(wormhole, address(0), recovery);
     }
 
@@ -74,6 +76,65 @@ contract WormholeReceiverStrategyTest is Test {
     function test_Constructor_EoaWormhole_Reverts() public {
         vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
         new WormholeReceiverStrategy(makeAddr("eoa"), GOVERNANCE_PROXY, recovery);
+    }
+
+    /// @dev An EOA governance proxy could never deliver a recovery veto.
+    function test_Constructor_EoaGovernanceProxy_Reverts() public {
+        address proxyEoa = makeAddr("proxyEoa");
+        vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryInvalidProxy.selector, proxyEoa));
+        new WormholeReceiverStrategy(wormhole, proxyEoa, recovery);
+    }
+
+    function _params(
+        uint256 proposalThreshold,
+        uint256 quorumThreshold
+    ) private pure returns (IRigoblockGovernanceFactory.Parameters memory) {
+        return
+            IRigoblockGovernanceFactory.Parameters({
+                implementation: address(0),
+                governanceStrategy: address(0),
+                proposalThreshold: proposalThreshold,
+                quorumThreshold: quorumThreshold,
+                timeType: TimeType.Timestamp,
+                name: "Rigoblock Governance"
+            });
+    }
+
+    /// @dev Recovery voting power is hardcoded at type(uint96).max, so a threshold above the
+    ///     cap bricks the recovery path and a zero threshold opens spam proposals.
+    function test_ValidateParams_ThresholdsWithinUint96Bounds_Pass() public {
+        strategy.validateParams(_params(1, 1));
+        strategy.validateParams(_params(type(uint96).max, type(uint96).max));
+    }
+
+    function test_ValidateParams_ZeroProposalThreshold_Reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector, 0));
+        strategy.validateParams(_params(0, 1));
+    }
+
+    function test_ValidateParams_ZeroQuorumThreshold_Reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector, 0));
+        strategy.validateParams(_params(1, 0));
+    }
+
+    function test_ValidateParams_ProposalThresholdAboveUint96_Reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        strategy.validateParams(_params(uint256(type(uint96).max) + 1, 1));
+    }
+
+    function test_ValidateParams_QuorumThresholdAboveUint96_Reverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                uint256(type(uint96).max) + 1
+            )
+        );
+        strategy.validateParams(_params(1, uint256(type(uint96).max) + 1));
     }
 
     /// @dev A contract without chainId() fails the constructor probe.
@@ -207,26 +268,18 @@ contract WormholeReceiverStrategyTest is Test {
         );
     }
 
-    /// @dev The receiver governance has no thresholds: any value is accepted, including zero
-    ///     and values far above the recovery address's fixed power.
-    function test_ValidateParams_OnlyValidatesName() public {
-        IRigoblockGovernanceFactory.Parameters memory params = IRigoblockGovernanceFactory.Parameters({
-            implementation: address(0),
-            governanceStrategy: address(strategy),
-            proposalThreshold: 0,
-            quorumThreshold: 0,
-            timeType: TimeType.Blocknumber,
-            name: "Rigoblock Governance"
-        });
-        strategy.validateParams(params);
-
+    /// @dev The governance name is validated; a wrong name fails the initializer-level assert
+    ///     regardless of threshold values.
+    function test_ValidateParams_WrongName_Reverts() public {
+        IRigoblockGovernanceFactory.Parameters memory params = _params(1, 1);
         params.name = "Wrong Name";
         vm.expectRevert();
         strategy.validateParams(params);
     }
 
-    /// @dev Receiver governance has no voting thresholds: there is nothing to validate, so
-    ///     an updateThresholds proposal passes propose-time validation untouched.
+    /// @dev `beforePropose` performs no threshold validation, so an updateThresholds proposal
+    ///     passes propose-time validation untouched; the bounds are enforced at execution
+    ///     time via validateParams.
     function test_BeforePropose_ActiveRecovery_ThresholdUpdate_Passes() public {
         _activateRecovery();
         bytes memory data = abi.encodeWithSelector(IGovernanceUpgrade.updateThresholds.selector, 0, type(uint256).max);
