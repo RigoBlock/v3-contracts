@@ -9,9 +9,9 @@ abstract contract MixinImmutables is MixinConstants {
     /// @notice Wormhole chain id of the governance hub chain (the only chain that publishes
     ///         cross-chain governance messages). Identical on every deployment, so the
     ///         deterministic implementation address is unchanged across chains.
-    uint16 internal immutable _HUB_WORMHOLE_CHAIN_ID;
+    uint16 internal immutable _hubWormholeChainId;
 
     constructor(uint16 hubWormholeChainId) {
-        _HUB_WORMHOLE_CHAIN_ID = hubWormholeChainId;
+        _hubWormholeChainId = hubWormholeChainId;
     }
 }

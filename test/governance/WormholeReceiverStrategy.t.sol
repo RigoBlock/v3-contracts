@@ -88,13 +88,19 @@ contract WormholeReceiverStrategyTest is Test {
         strategy.beforePropose(_actions(TARGET));
     }
 
-    /// @dev With an active recovery even a Wormhole-target action passes propose-time
-    ///     validation: sending is blocked on the receiver by the implementation's trusted
-    ///     emitter pinning, not by the strategy.
-    function test_BeforePropose_ActiveRecovery_WormholeTarget_Passes() public {
+    /// @dev Without an active recovery the local-governance gate reverts first, before the
+    ///     wormhole-target check.
+    function test_BeforePropose_WormholeTarget_WithoutActiveRecovery_RevertsDisabled() public {
+        vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
+        strategy.beforePropose(_actions(wormhole));
+    }
+
+    /// @dev A recovery batch can never carry a wormhole action: it would revert on the fee at
+    ///     execution time, and the succeeded proposal could not be cancelled.
+    function test_BeforePropose_ActiveRecovery_WormholeTarget_Reverts() public {
         _activateRecovery();
-        (ProposedAction[] memory result, , ) = strategy.beforePropose(_actions(wormhole));
-        assertEq(result[0].target, wormhole);
+        vm.expectRevert(IWormholeReceiverStrategy.GovCrosschainNotSender.selector);
+        strategy.beforePropose(_actions(wormhole));
     }
 
     function test_BeforeExecute_PassesThrough() public {

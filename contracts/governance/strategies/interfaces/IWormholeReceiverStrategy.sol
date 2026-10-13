@@ -16,6 +16,9 @@ interface IWormholeReceiverStrategy {
     /// @notice Thrown when a local governance method is called while recovery is not active.
     error GovLocalGovernanceDisabled();
 
+    /// @notice Thrown when a proposal on a non-sender chain targets the Wormhole core.
+    error GovCrosschainNotSender();
+
     /// @notice Thrown when an address other than the recovery address or the governance proxy
     ///      attempts to manage a recovery request.
     error GovRecoveryUnauthorized(address caller);

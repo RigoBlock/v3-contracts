@@ -209,16 +209,16 @@ contract GovernanceRecoveryTest is Test {
         assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Executed));
     }
 
-    /// @notice A Wormhole-target action no longer reverts at propose time: sending is blocked
-    ///     on a receiver chain by the implementation's trusted-emitter pinning, not by the
-    ///     strategy, and the governance proxy holds no native balance to pay a publish fee.
-    function test_Recovery_WormholeAction_ProposePasses() public {
+    /// @notice A Wormhole-target action in a recovery batch reverts at propose time: it would
+    ///     revert on the message fee at execution time, leaving the proposal stuck in
+    ///     Succeeded with no cancellation path.
+    function test_Recovery_WormholeAction_ProposeReverts() public {
         _activateRecovery();
         ProposedAction[] memory actions = new ProposedAction[](1);
         actions[0] = ProposedAction({target: wormhole, data: "", value: 0});
         vm.prank(recovery);
-        uint256 proposalId = governance.propose(actions, "wormhole-target proposal");
-        assertEq(uint256(governance.getProposalState(proposalId)), uint256(ProposalStatus.Succeeded));
+        vm.expectRevert(IWormholeReceiverStrategy.GovCrosschainNotSender.selector);
+        governance.propose(actions, "wormhole-target proposal");
     }
 
     /// @notice A staking-backed governance can be turned into a receiver governance by a single

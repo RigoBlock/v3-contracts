@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {CrossChainPayload, ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -98,18 +97,20 @@ contract RigoblockGovernanceStrategyTest is Test {
 
     function test_beforePropose_WormholeInvalidData_Reverts() public {
         bytes memory data = abi.encodePacked(bytes4(keccak256("unknown()")));
-        vm.expectRevert(IGovernanceStrategy.GovCrosschainInvalidData.selector);
+        vm.expectRevert(RigoblockGovernanceStrategy.GovCrosschainInvalidData.selector);
         strategy.beforePropose(_actions(_action(wormhole, data, 0)));
     }
 
     function test_beforePropose_WormholeTargetSelf_Reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainTargetSelf.selector, LOCAL_CHAIN_ID));
+        vm.expectRevert(
+            abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainTargetSelf.selector, LOCAL_CHAIN_ID)
+        );
         strategy.beforePropose(_actions(_action(wormhole, _wormholeData(LOCAL_CHAIN_ID), 0)));
     }
 
     function test_beforePropose_WormholeNonZeroValue_Reverts() public {
         uint256 value = 0.5 ether;
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
         strategy.beforePropose(_actions(_action(wormhole, _wormholeData(TARGET_CHAIN_ID), value)));
     }
 
@@ -128,7 +129,7 @@ contract RigoblockGovernanceStrategyTest is Test {
             abi.encode(crossChainPayload),
             uint8(202)
         );
-        vm.expectRevert(abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
+        vm.expectRevert(abi.encodeWithSelector(RigoblockGovernanceStrategy.GovCrosschainInvalidValue.selector, value));
         strategy.beforePropose(_actions(_action(wormhole, data, 0)));
     }
 
@@ -143,7 +144,10 @@ contract RigoblockGovernanceStrategyTest is Test {
                 levels[i]
             );
             vm.expectRevert(
-                abi.encodeWithSelector(IGovernanceStrategy.GovCrosschainInvalidConsistencyLevel.selector, levels[i])
+                abi.encodeWithSelector(
+                    RigoblockGovernanceStrategy.GovCrosschainInvalidConsistencyLevel.selector,
+                    levels[i]
+                )
             );
             strategy.beforePropose(_actions(_action(wormhole, data, 0)));
         }
@@ -182,7 +186,10 @@ contract RigoblockGovernanceStrategyTest is Test {
             name: "Rigoblock Governance"
         });
         vm.expectRevert(
-            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
+                TimeType.Blocknumber
+            )
         );
         strategy.validateParams(params);
     }
@@ -252,7 +259,10 @@ contract RigoblockGovernanceStrategyTest is Test {
             executed: false
         });
         vm.expectRevert(
-            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
+            abi.encodeWithSelector(
+                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
+                TimeType.Blocknumber
+            )
         );
         strategy.getProposalState(proposal, address(0), 100, 0, TimeType.Blocknumber);
     }
@@ -342,7 +352,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 99_999e18,
                 100_000e18,
                 200_000e18
@@ -355,7 +365,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 200_001e18,
                 100_000e18,
                 200_000e18
@@ -368,7 +378,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 399_999e18,
                 400_000e18,
                 1_000_000e18
@@ -381,7 +391,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(10_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 1_000_001e18,
                 400_000e18,
                 1_000_000e18
@@ -459,7 +469,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _passAndWarpPastWindow(governance, whale, proposalId);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 99_999e18,
                 100_000e18,
                 200_000e18
@@ -481,7 +491,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _passAndWarpPastWindow(governance, whale, proposalId);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidQuorumThreshold.selector,
                 1_000_001e18,
                 400_000e18,
                 1_000_000e18
@@ -517,7 +527,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         _mockSupply(20_000_000e18);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
+                RigoblockGovernanceStrategy.GovStrategyInvalidProposalThreshold.selector,
                 100_000e18,
                 200_000e18,
                 400_000e18

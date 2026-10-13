@@ -28,10 +28,12 @@ A chain's role is expressed entirely through its governance strategy:
   mainnet itself). The trusted emitter is checked as
   `emitterAddress == address(this)`: the proxy is deployed at the same deterministic
   address on every chain, so the mainnet instance of that shared address is the only
-  valid emitter. The receiver strategy no longer reverts wormhole targets itself —
-  fail-closed local governance is enforced by `beforePropose` gating on an active
-  recovery, so no ordinary local proposal can ever carry a `publishMessage` action to
-  the receiver chain.
+  valid emitter. The receiver strategy also reverts Wormhole-target actions in local
+  `beforePropose` (`GovCrosschainNotSender`): a wormhole action in a local batch would revert
+  on the message fee at execution and strand the proposal in `Succeeded` with no cancellation
+  path. Fail-closed local governance is enforced by `beforePropose` gating on an active
+  recovery, so no ordinary local proposal can ever carry a `publishMessage` action to the
+  receiver chain (delivered cross-chain messages do not go through `beforePropose`).
 - **Every other chain is a receiver** when its strategy has a nonzero Wormhole core
   address. Receiving is permissionless (any relayer can deliver a VAA) and independent
   of local governance.
@@ -152,7 +154,7 @@ steps as the Wormhole `HelloWorld` example:
    governance strategy. `parseAndVerifyVM` checks the guardian-set signature
    proof. Forged or malformed VAAs return `valid == false` and the receiver
    reverts with the reason provided by Wormhole.
-2. Asserts the emitter chain id (`_HUB_WORMHOLE_CHAIN_ID`, an implementation
+2. Asserts the emitter chain id (`_hubWormholeChainId`, an implementation
    immutable set to the hub chain's Wormhole id, `2` = Ethereum) and emitter
    address
    (`address(this)`, identical to the governance proxy on every chain) match the

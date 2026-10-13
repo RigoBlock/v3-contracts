@@ -103,14 +103,16 @@ single-proposer local governance):
   staking-derived start to compute: voting power is fixed to the recovery address, so only it
   can vote. `beforeVote` returns 0 (no staking to snapshot).
 - `beforePropose`: allows non-Wormhole actions under an active recovery (reverts
-  `GovLocalGovernanceDisabled` otherwise). Wormhole `publishMessage` targets are _not_
-  special-cased here — that protection is the implementation's pinning of the trusted emitter
-  to Wormhole chain id 2 (mainnet), which rejects a VAA published by a recovered chain no
-  matter what its strategy allows (asserted by
-  `test_ReceiveMessage_UnknownEmitterChain_Reverts`). A wormhole action in a recovery batch
-  would simply revert on the fee at execution time (the governance proxy holds no native
-  balance on receiver chains); keeping `beforePropose` gate-free means a recovery batch never
-  fails on strategy validation before it can fix the bridge pointer.
+  `GovLocalGovernanceDisabled` otherwise) and reverts `GovCrosschainNotSender` for any action
+  targeting the Wormhole core. A wormhole action in a recovery batch would revert on the
+  message fee at execution time (the governance proxy holds no native balance on receiver
+  chains), and the proposal would be stuck in `Succeeded` — cancel requires `Pending`, so a
+  recovery batch could permanently brick itself before fixing the bridge pointer. The
+  fail-fast only blocks the local path: delivered cross-chain messages execute wormhole
+  actions without going through `beforePropose`, and the implementation's pinning of the
+  trusted emitter to Wormhole chain id 2 (mainnet) still rejects a VAA published by a
+  recovered chain no matter what its strategy allows (asserted by
+  `test_ReceiveMessage_UnknownEmitterChain_Reverts`).
 - `beforeExecute`: pure pass-through.
 - Threshold validators: removed — receiver governance has no voting thresholds of its own, so
   there is nothing to validate. `validateParams` only asserts the name is
@@ -227,6 +229,6 @@ via the governance's normal strategy upgrade. Until adopted, exposure is the sta
 Test coverage: `test/governance/Governance.Recovery.t.sol` — auth, window boundary,
 recovery with a fully bricked staking contract, immediate `Succeeded` at creation
 (proposer-based state, no staking read), fixed uint96 recovery power, veto-after-request
-locking, wormhole actions passing `beforePropose` under recovery (execution still fails on
-the fee), and a full staking-backed → receiver strategy-switch transition (local governance
-fail-closed after the switch, cross-chain receiving unaffected).
+locking, wormhole-target actions rejected in `beforePropose` under recovery
+(`GovCrosschainNotSender`), and a full staking-backed → receiver strategy-switch transition
+(local governance fail-closed after the switch, cross-chain receiving unaffected).

@@ -98,6 +98,11 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
         ProposedAction[] calldata actions
     ) external view override returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
         require(_isRecoveryActive(), GovLocalGovernanceDisabled());
+
+        for (uint256 i = 0; i < actions.length; i++) {
+            require(actions[i].target != _wormhole, GovCrosschainNotSender());
+        }
+
         return (actions, block.timestamp, block.timestamp);
     }
 

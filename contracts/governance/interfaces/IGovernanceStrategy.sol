@@ -7,28 +7,6 @@ import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
-    /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
-    error GovCrosschainInvalidData();
-
-    /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
-    error GovCrosschainTargetSelf(uint16 targetChainId);
-
-    /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
-    error GovCrosschainInvalidValue(uint256 value);
-
-    /// @notice Thrown when a Wormhole message is published with a non-finalized consistency level.
-    /// @param consistencyLevel The supplied consistency level.
-    error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
-
-    /// @notice Thrown when the proposal threshold is outside the allowed range.
-    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
-
-    /// @notice Thrown when the quorum threshold is outside the allowed range.
-    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
-
-    /// @notice Thrown when the governance time type is not TimeType.Timestamp.
-    error GovStrategyInvalidTimeType(TimeType timeType);
-
     /// @notice Reverts unless the governance parameters are valid for this strategy.
     /// @dev Called directly at initialization and by `updateThresholds` at execution time.
     /// @param params Tuple of factory parameters.

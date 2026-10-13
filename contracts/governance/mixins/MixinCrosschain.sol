@@ -23,7 +23,7 @@ abstract contract MixinCrosschain is MixinStorage {
         // the trusted emitter is the sender-chain governance proxy, deployed at the same address
         // as this receiver on every chain
         require(
-            verifiedVaa.emitterChainId == _HUB_WORMHOLE_CHAIN_ID &&
+            verifiedVaa.emitterChainId == _hubWormholeChainId &&
                 verifiedVaa.emitterAddress == bytes32(uint256(uint160(address(this)))),
             GovReceiverUnknownEmitter()
         );

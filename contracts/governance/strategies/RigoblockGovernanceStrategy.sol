@@ -17,6 +17,28 @@ import {TimeType} from "../types/TimeType.sol";
 ///      the only chain that can create local proposals and publish cross-chain governance
 ///      messages; every other chain runs a receiver strategy.
 contract RigoblockGovernanceStrategy is IGovernanceStrategy {
+    /// @notice Thrown when a Wormhole cross-chain action has malformed calldata.
+    error GovCrosschainInvalidData();
+
+    /// @notice Thrown when a Wormhole cross-chain action targets the current chain.
+    error GovCrosschainTargetSelf(uint16 targetChainId);
+
+    /// @notice Thrown when a Wormhole cross-chain action carries a non-zero wrapper value.
+    error GovCrosschainInvalidValue(uint256 value);
+
+    /// @notice Thrown when a Wormhole message is published with a non-finalized consistency level.
+    /// @param consistencyLevel The supplied consistency level.
+    error GovCrosschainInvalidConsistencyLevel(uint8 consistencyLevel);
+
+    /// @notice Thrown when the proposal threshold is outside the allowed range.
+    error GovStrategyInvalidProposalThreshold(uint256 proposalThreshold, uint256 floor, uint256 cap);
+
+    /// @notice Thrown when the quorum threshold is outside the allowed range.
+    error GovStrategyInvalidQuorumThreshold(uint256 quorumThreshold, uint256 floor, uint256 cap);
+
+    /// @notice Thrown when the governance time type is not TimeType.Timestamp.
+    error GovStrategyInvalidTimeType(TimeType timeType);
+
     /// @notice Thrown when the Wormhole core contract address is the zero address.
     error GovStrategyInvalidWormhole();
 

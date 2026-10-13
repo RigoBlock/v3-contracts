@@ -182,7 +182,7 @@ combination, and the receiver contract is small enough to audit on its own.
 Sending and receiving are gated at two independent layers. Only the sender strategy can create
 crosschain proposals; the receiver mixin independently pins the trusted emitter to the hub
 chain's Wormhole chain id (2 = Ethereum mainnet) via an implementation immutable
-(`_HUB_WORMHOLE_CHAIN_ID` in `MixinImmutables.sol`), so a strategy swap can never re-point
+(`_hubWormholeChainId` in `MixinImmutables.sol`), so a strategy swap can never re-point
 which chain's governance is trusted — a message emitted by any other chain's governance proxy
 is rejected regardless of the local strategy. The value is a constructor argument of the
 governance implementation, set at deployment from `GOVERNANCE_HUB_CHAIN`'s `wormholeChainId`
@@ -200,7 +200,13 @@ including the local one — is read from the Wormhole core contract's `chainId()
   mainnet; local governance is fail-closed and the strategy never reads staking, so it works
   even where no staking system exists (e.g. HyperEVM):
   - `beforePropose` reverts `GovLocalGovernanceDisabled` unless a recovery is active — no
-    local proposal can be created outside a recovery. `beforeExecute` is a pure pass-through.
+    local proposal can be created outside a recovery — and reverts `GovCrosschainNotSender`
+    for any action targeting the Wormhole core: a wormhole action in a recovery batch would
+    revert on the message fee at execution time, leaving the proposal stuck in `Succeeded`
+    with no cancellation path (cancel requires `Pending`). Cross-chain messages execute
+    wormhole actions without going through `beforePropose`, so the fail-fast blocks only the
+    local path. `beforeExecute` is a pure pass-through (actions only execute from
+    `Succeeded`, and a wormhole action can no longer be proposed).
   - `getVotingPower` returns 0 (or `type(uint96).max` for the recovery address while a
     recovery is active) and `getProposalState` is proposer-based: a proposal whose proposer
     is the recovery address returns `Succeeded` while a recovery is active, everything else
@@ -224,13 +230,22 @@ including the local one — is read from the Wormhole core contract's `chainId()
     strategy carries the recovery escape hatch:
     after a 60-day challenge window with no mainnet veto, the recovery address can drive the
     ordinary local proposal flow — the proposal reads `Succeeded` immediately at creation
-    (proposer-based) and is executable at the next block. The recovery errors and events
-    live in `strategies/interfaces/IWormholeReceiverStrategy.sol`, not in the generic
-    `IGovernanceStrategy`. See RECOVERY.md for the full design.
+    (proposer-based) and is executable at the next block. Error ownership:
+    `IGovernanceStrategy` declares functions only — the sender strategy's crosschain and
+    threshold errors (`GovCrosschain*`, `GovStrategyInvalid*`) live in
+    `RigoblockGovernanceStrategy`, and the recovery errors and events live in
+    `strategies/interfaces/IWormholeReceiverStrategy.sol`. See RECOVERY.md for the full design.
 
 Upgrading a live governance between modes is a strategy swap via `upgradeStrategy`: deploy the
 new strategy for the chain, then execute a single proposal with `upgradeImplementation` (only
 if the implementation changed) and `upgradeStrategy` — never split the two across proposals.
+
+**Migration note.** With Dual mode removed, upgrading Arbitrum, Optimism, Base, Unichain or
+Polygon to this governance train replaces their existing local staking governance with pure
+receiver governance: local proposals become possible only through the recovery path, and
+day-to-day execution arrives exclusively from the hub chain via Wormhole. This is intentional
+— it is what enables offboarding L2 staking — but operators must know that local governance
+disappears on those chains when the upgrade executes.
 
 ## Factory and proxy address
 
