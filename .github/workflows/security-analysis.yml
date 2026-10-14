@@ -54,6 +54,17 @@ jobs:
           --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop,unused-return \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
           > slither-report-raw.md 2>/dev/null || true
+
+        # governance package under analysis too; proxies stay excluded (pinned legacy 0.8.17).
+        # The two packages run as separate invocations because a single contracts/ target makes
+        # slither parse the whole workspace, where staking inline assembly crashes its Yul parser.
+        slither contracts/governance/ \
+          --checklist \
+          --markdown-root ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/ \
+          --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop,unused-return \
+          --filter-paths "contracts/governance/proxies|lib/" \
+          > slither-report-gov.md 2>/dev/null || true
+        cat slither-report-gov.md >> slither-report-raw.md 2>/dev/null || true
         
         # Filter and truncate markdown for PR comment (GitHub limit: 65536 chars)
         if [ -f slither-report-raw.md ]; then
@@ -93,7 +104,12 @@ jobs:
           --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop,unused-return \
           --filter-paths "contracts/test|contracts/mocks|contracts/staking|contracts/governance|contracts/rigoToken|lib/" \
           2>/dev/null || true
-        
+        slither contracts/governance/ \
+          --sarif results-governance.sarif \
+          --exclude naming-convention,solc-version,assembly,unimplemented-functions,unindexed-event-address,low-level-calls,dead-code,cyclomatic-complexity,too-many-digits,uninitialized-local,missing-zero-check,reentrancy-benign,calls-loop,unused-return \
+          --filter-paths "contracts/governance/proxies|lib/" \
+          2>/dev/null || true
+
         echo "Reports generated"
 
     - name: Upload SARIF to Security tab
@@ -102,12 +118,22 @@ jobs:
       with:
         sarif_file: results.sarif
         category: slither-protocol
+
+    - name: Upload governance SARIF to Security tab
+      uses: github/codeql-action/upload-sarif@v4
+      if: (success() || failure()) && steps.slither.outcome != 'cancelled' && hashFiles('results-governance.sarif') != ''
+      with:
+        sarif_file: results-governance.sarif
+        category: slither-governance
     
     - name: Log SARIF size
       if: hashFiles('results.sarif') != ''
       run: |
         echo "SARIF file size: $(wc -c < results.sarif) bytes"
         echo "SARIF file location: $(pwd)/results.sarif"
+        if [ -f results-governance.sarif ]; then
+          echo "Governance SARIF file size: $(wc -c < results-governance.sarif) bytes"
+        fi
 
     - name: Create/update checklist as PR comment
       uses: actions/github-script@v9

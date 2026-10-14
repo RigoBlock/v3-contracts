@@ -101,7 +101,10 @@ single-proposer local governance):
 - `votingPeriod` returns 0 and `beforePropose` returns the empty window
   `(block.timestamp, block.timestamp)` — the window is empty, so no flash-vote risk and no
   staking-derived start to compute: voting power is fixed to the recovery address, so only it
-  can vote. `beforeVote` returns 0 (no staking to snapshot).
+  can vote. `beforeVote` returns the recognized total — `type(uint96).max` during an active
+  recovery (mirroring `getVotingPower`), 0 otherwise; the hook is unreachable in practice,
+  since receiver proposals are never `Active` and the Governor rejects every vote before a
+  snapshot could be taken.
 - `beforePropose`: allows non-Wormhole actions under an active recovery (reverts
   `GovLocalGovernanceDisabled` otherwise) and reverts `GovCrosschainNotSender` for any action
   targeting the Wormhole core. A wormhole action in a recovery batch would revert on the

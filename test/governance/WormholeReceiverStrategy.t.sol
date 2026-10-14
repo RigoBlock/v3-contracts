@@ -9,7 +9,7 @@ import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovern
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IRigoblockGovernanceFactory} from "../../contracts/governance/interfaces/IRigoblockGovernanceFactory.sol";
 import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
-import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 
@@ -235,9 +235,13 @@ contract WormholeReceiverStrategyTest is Test {
         assertEq(endBlockOrTime, block.timestamp);
     }
 
-    /// @dev No staking on receiver chains: the first-vote snapshot total is zero.
-    function test_BeforeVote_ReturnsZero() public {
-        assertEq(strategy.beforeVote(), 0);
+    /// @dev The recognized total mirrors `getVotingPower`: the recovery address's hardcoded
+    ///     power during an active recovery, 0 otherwise — and never the 0 that would alias the
+    ///     governance's not-yet-snapshotted sentinel.
+    function test_BeforeVote_ReturnsRecognizedTotal() public {
+        assertEq(strategy.beforeVote(ProposalExtraData(0, 0)), 0);
+        _activateRecovery();
+        assertEq(strategy.beforeVote(ProposalExtraData(0, 0)), type(uint96).max);
     }
 
     /// @dev Executed is terminal: a recovery proposal that has been executed keeps reading
@@ -274,6 +278,17 @@ contract WormholeReceiverStrategyTest is Test {
         IRigoblockGovernanceFactory.Parameters memory params = _params(1, 1);
         params.name = "Wrong Name";
         vm.expectRevert();
+        strategy.validateParams(params);
+    }
+
+    /// @dev The clock is timestamp-only: a Blocknumber clock would compare deadlines against
+    ///     the wrong unit and stall or instantly expire governance.
+    function test_ValidateParams_Blocknumber_Reverts() public {
+        IRigoblockGovernanceFactory.Parameters memory params = _params(1, 1);
+        params.timeType = TimeType.Blocknumber;
+        vm.expectRevert(
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
+        );
         strategy.validateParams(params);
     }
 

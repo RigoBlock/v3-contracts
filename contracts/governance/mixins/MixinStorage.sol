@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
-import {ProposedAction} from "../types/GovernanceTypes.sol";
+import {ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 import {MixinImmutables} from "./MixinImmutables.sol";
 
 abstract contract MixinStorage is MixinImmutables {
@@ -76,11 +76,6 @@ abstract contract MixinStorage is MixinImmutables {
         assembly {
             s.slot := _PROPOSAL_SLOT
         }
-    }
-
-    struct ProposalExtraData {
-        uint128 quorum;
-        uint128 votingPower;
     }
 
     struct ProposalExtraDataByIndex {

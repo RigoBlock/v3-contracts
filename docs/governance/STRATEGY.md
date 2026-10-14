@@ -16,16 +16,16 @@ The implementation talks to the strategy exclusively through hooks and read meth
 both validation and data: the governance does not ask the strategy for values it can pass back
 later — the hook returns them at the moment they are fixed.
 
-| Hook / method      | When                          | What it does                                                                                                                                                                                                                                                                         |
-| ------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `validateParams`   | proxy initialization          | Validates the factory parameters (name, time type, thresholds on the sender). Called directly after an interface-conformance probe, so the strategy's own errors surface at the initializer level (the legacy proxy constructor masks them into a panic; see the initializer tests). |
-| `beforePropose`    | inside `propose`, once        | Validates and optionally modifies the actions (Wormhole payload guard) **and returns the proposal's fixed voting window**. May roll the staking clock, so it is not a view.                                                                                                          |
-| `beforeVote`       | inside the first `castVote`   | Returns the current total voting power, which the governance stores as the proposal's snapshot — the qualified-majority denominator for the proposal's whole life. Called only until the snapshot is stored.                                                                         |
-| `beforeExecute`    | inside `execute`, once        | Returns the actions as they should be executed (the sender attaches the Wormhole message fee).                                                                                                                                                                                       |
-| `getProposalState` | every state read              | Full state machine. Receives the stored proposal (with its `executed` flag — executed is terminal and reported first), proposer, snapshotted quorum and snapshotted voting power, and the governance's `timeType`.                                                                   |
-| `getVotingPower`   | proposer gate and vote weight | Current voting power of an account.                                                                                                                                                                                                                                                  |
-| `votingPeriod`     | informational                 | Period duration in the governance's time unit; the enforceable window is the one `beforePropose` returned.                                                                                                                                                                           |
-| `wormhole`         | cross-chain receive path      | The Wormhole core address. The local Wormhole chain id is not strategy state: it is read from the core contract's `chainId()` at the point of use.                                                                                                                                   |
+| Hook / method      | When                          | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------ | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `validateParams`   | proxy initialization          | Validates the factory parameters (name, time type, thresholds on the sender). Called directly after an interface-conformance probe, so the strategy's own errors surface at the initializer level (the legacy proxy constructor masks them into a panic; see the initializer tests).                                                                                                                                                                                                                                                                                                                                                                  |
+| `beforePropose`    | inside `propose`, once        | Validates and optionally modifies the actions (Wormhole payload guard) **and returns the proposal's fixed voting window**. May roll the staking clock, so it is not a view.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `beforeVote`       | inside every `castVote`       | Called before every vote with the proposal's current extra data; returns the total voting power the strategy recognizes at vote time and must never revert the vote. The governance stores the return as the proposal's snapshot — the qualified-majority denominator for the proposal's whole life — **once, on the first vote only**; once a snapshot exists the return is ignored, and implementations return the stored value unchanged and skip any expensive work. Not a view: the sender rolls the staking clock best-effort pre-snapshot so the snapshot and all votes share one epoch — post-snapshot votes perform no staking calls at all. |
+| `beforeExecute`    | inside `execute`, once        | Returns the actions as they should be executed (the sender attaches the Wormhole message fee).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `getProposalState` | every state read              | Full state machine. Receives the stored proposal (with its `executed` flag — executed is terminal and reported first), proposer, snapshotted quorum and snapshotted voting power, and the governance's `timeType`.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `getVotingPower`   | proposer gate and vote weight | Current voting power of an account.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `votingPeriod`     | informational                 | Period duration in the governance's time unit; the enforceable window is the one `beforePropose` returned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `wormhole`         | cross-chain receive path      | The Wormhole core address. The local Wormhole chain id is not strategy state: it is read from the core contract's `chainId()` at the point of use.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 Earlier interface generations had the governance pull these values with separate calls —
 `votingTimestamps(timeType)`, `totalVotingPower()` and the `assertValidProposalThreshold` /
@@ -118,16 +118,25 @@ so execution is only possible in a later unit. Everything that depends on the st
   best-effort: governance must stay operational even if `endEpoch` reverts (e.g. the staking
   scheduler is stuck), so the revert is swallowed and the window falls back to starting at the
   current timestamp — `time <= start` keeps the proposal `Pending` during the propose block,
-  so it becomes voteable from the next block. The voting period is `min(epochDuration - 1, 7 days)`: the one-second margin
+  so it becomes voteable from the next block. `beforeVote` receives the proposal's extra data and
+  repeats the same best-effort roll before the first vote only, ahead of the snapshot read (see the
+  mid-window rolls bullet). The voting
+  period is `min(epochDuration - 1, 7 days)`: the one-second margin
   keeps the window strictly inside the epoch it starts in, whenever the epoch cannot roll.
-- **Mid-window rolls are impossible in the healthy path**: voting opens exactly when the current
-  epoch becomes rollable (`start` is the epoch's earliest end and votes require `time > start`),
-  and any successful roll closes the window — Rigoblock epochs run from their start time, so a
-  roll at `t` produces a new earliest end of `t + epochDuration > start + epochDuration > end`.
-  Every vote therefore lands strictly inside a single epoch, in whichever of the two epochs the
-  first vote's snapshot was taken, and same-block vote/roll orderings are consistent either way
-  (vote-then-roll: all votes in the old epoch; roll-then-vote: all votes in the new one). The
-  mixed-epoch case exists only in the stuck-epoch fallback below.
+- **Mid-window rolls**: the staking clock is permissionless, so a finished epoch can be rolled by
+  anyone at any time — including inside a voting window. The roll is harmless: the first vote
+  re-rolls best-effort before the snapshot is stored, so the snapshot and every vote land in the
+  same epoch. Proof: the window starts when the epoch becomes rollable (`start` is the epoch's
+  earliest end and votes require `time > start`), so at first-vote time `F` either nobody rolled
+  yet — the first vote's own roll succeeds and snapshot and votes share the new epoch — or
+  someone already rolled, in which case the first vote's roll is a no-op or harmlessly reverts
+  and the snapshot is the post-roll epoch either way. No roll can land after the first vote and
+  still precede another vote: a roll at `t` creates a boundary at `t + epochDuration`, and
+  `t > start` with period `<= epochDuration - 1` puts that boundary past `end`. Same-block
+  orderings are consistent either way (roll-then-vote and vote-with-internal-roll both snapshot
+  the freshest epoch). Governance votes never roll post-snapshot (the hook returns early once
+  `votingPower != 0`), so any post-snapshot clock movement requires a direct `endEpoch` on the
+  staking proxy. The genuine residual is the stuck-at-first-vote case below.
 - **Voting window**: returned by `beforePropose` and stored in the proposal — fixed pointers,
   not a rolling view. `votingPeriod()` (`min(7 days, epoch duration - 1)`) is informational.
 - **Thresholds**: proposal threshold between 1% and 2% of GRG total supply (hard floor 20,000 GRG
@@ -139,13 +148,19 @@ so execution is only possible in a later unit. Everything that depends on the st
   when supply inflation drifted a stored threshold out of range since it was set.
   `beforePropose` performs no threshold checks.
 - **Error-handling policy**: the staking proxy is a trusted, governance-owned contract, and the
-  policy on `try/catch` is deliberate even though it is not uniform. The only `try/catch` in
-  the strategy wraps the `endEpoch` **write** in `_rollEpochIfStale`: a refused roll is a
-  normal transient state (unfinalized staking pools delaying epoch finalization), not a
+  policy on `try/catch` is deliberate even though it is not uniform. Both `try/catch`es in the
+  strategy wrap the `endEpoch` **write** (in `_rollEpochIfStale` and in `beforeVote`): a refused
+  roll is a normal transient state (unfinalized staking pools delaying epoch finalization), not a
   fault, and governance must never get stuck because staking cannot roll. Every staking
-  **view** read (`getOwnerStakeByStatus`, `epochDurationInSeconds`, `getGrgContract`) is a
+  **view** read (`getOwnerStakeByStatus`, `epochDurationInSeconds`, `getGrgContract`,
+  `getCurrentEpochEarliestEndTimeInSeconds`, `getGlobalStakeByStatus`) is a
   direct call: if one reverts, staking is genuinely broken and no local handling saves
   governance anyway — the revert surfaces as-is.
+- **Reentrancy guard**: the governance entry points `propose`, `castVote` (all signature paths
+  funnel through the internal vote junction), `execute` and `receiveMessage` carry the protocol's
+  transient reentrancy guard (`ReentrancyGuardTransient`, EIP-1153), so a flawed upgradeable
+  strategy cannot reenter the governance from inside a hook: the nested call reverts before it
+  can touch state and the outer transaction unwinds.
 - **Cross-chain proposals** (Wormhole): only from Ethereum mainnet, only via
   `publishMessage(uint32,bytes,uint8)`, never targeting the local chain, and always with zero
   value — the wrapper `action.value` and every inner payload action's `value` are validated at
@@ -154,31 +169,43 @@ so execution is only possible in a later unit. Everything that depends on the st
   `chainId()` at the point of use, not held in strategy state. See
   `docs/wormhole/GOVERNANCE_CROSSCHAIN.md`.
 
-### Known limitation: stuck epochs and mid-window rolls (by design)
+### Known limitation: stuck at first vote, un-sticks mid-window (by design)
 
-In the healthy path a mid-window roll cannot occur at all (see "Mid-window rolls are impossible
-in the healthy path" above). The limitation applies only to the fallback below.
+The genuine residual of the first-vote roll: the staking epoch is **stuck at the proposal's
+first vote** (e.g. pool-finalization delays make `endEpoch` revert, so the try/catch swallows
+it and the snapshot freezes at the pre-roll electorate) **and** un-sticks mid-window. Because
+governance votes never roll the epoch once the snapshot exists, the mid-window promotion now
+requires a **direct external `endEpoch` on the staking proxy** (the clock is permissionless, so
+anyone can send it). Post-roll votes then carry new-epoch voting power against the frozen
+snapshot.
 
-While a staking epoch cannot be rolled (e.g. pool-finalization delays, or many unfinalized pools
-from pool spam), `currentEpochBalance` is **frozen**: voting power, the `beforeVote` total and
-the snapshotted denominator are all unchanged, so governance stays fully consistent — not just
-operational. `beforePropose` and `beforeVote` never force a roll; a stuck scheduler makes the
-window fall back to `start = block.timestamp` (Pending during the propose block, voteable from
-the next) instead of reverting.
+The mismatch is bounded:
 
-If the epoch then rolls mid-voting-window (the roll is permissionless and the window is fixed at
-propose time), post-roll votes carry new-epoch power against the frozen snapshot. This only
-affects the `_qualifiedConsensus` (`Qualified`) path: the post-window `Succeeded` path uses
-quorum + `votesFor > 2 * votesAgainst` with no denominator, and qualifying still requires
-`3 * votesFor > 2 * snapshot`, so post-roll newcomers need majority-scale token holdings, and
-existing voters keep full power to oppose. Making the epoch roll mandatory at vote time would
-revert votes during finalization delays — a self-inflicted DoS — which is why the system
-tolerates the mismatch instead.
+- votes are account-scoped (`receipt.hasVoted` per proposal and voter, voting power read live per
+  account), so the same stake can appear twice in `votesFor` only via a delegation move across
+  the single mid-window roll (A votes pre-roll, A's delegation moves to B at the roll, B votes
+  post-roll) — it cannot appear three times;
+- the effect touches only the `_qualifiedConsensus` (`Qualified`) path: the post-window
+  `Succeeded` path uses quorum + `votesFor > 2 * votesAgainst` with no denominator, and
+  qualifying still requires `3 * votesFor > 2 * snapshot`, so post-roll newcomers need
+  majority-scale token holdings while existing voters keep full power to oppose;
+- while the epoch stays stuck, the electorate is frozen instead: voting power, the `beforeVote`
+  total and the snapshotted denominator are all unchanged, so governance stays fully consistent
+  — not just operational.
+
+Making the epoch roll mandatory at vote time would revert votes during finalization delays — a
+self-inflicted DoS — which is why the system tolerates the mismatch instead.
 
 Covered by `test_StuckEpoch_BalancesFrozen_FlowConsistent`,
 `test_StuckEpoch_SecondVote_DoesNotMoveSnapshot`,
-`test_StuckEpoch_QualifiedAgainstFrozenSnapshot` and
-`test_VotingPower_MidWindowRoll_GrowElectorate_CannotQualifyAgainstFrozenSnapshot`.
+`test_StuckEpoch_QualifiedAgainstFrozenSnapshot`,
+`test_VotingPower_FirstVoteRolls_UnrolledEpoch_SnapshotInNewEpoch`,
+`test_VotingPower_PreFirstVoteRoll_Absorbed_SnapshotInPostRollEpoch` and
+`test_VotingPower_StuckAtFirstVote_UnsticksMidWindow_SameStakeCountedTwice` (the mid-window roll
+is a direct `endEpoch` on the staking proxy: governance votes no longer roll post-snapshot).
+Hook semantics per vote with zero post-snapshot staking calls are covered by
+`test_BeforeVoteHook_CalledPerVote_SnapshotStoredOnce` and
+`test_BeforeVoteHook_NoStakingCalls_AfterSnapshot`.
 
 ## Governance modes
 
@@ -235,7 +262,12 @@ including the local one — is read from the Wormhole core contract's `chainId()
     a proposal that was executed before the recovery window cleared stays `Executed`. The
     voting window is empty — `beforePropose` returns `(block.timestamp, block.timestamp)`
     and `votingPeriod()` is 0 — so a non-recovery proposal is never votable. `beforeVote`
-    returns 0 (no staking to snapshot). These are read methods and must not revert, but they
+    returns the recognized total — `type(uint96).max` during an active recovery (mirroring
+    `getVotingPower`), 0 otherwise: returning 0 during a recovery would alias the governance's
+    not-yet-snapshotted sentinel. The hook is unreachable in practice: receiver proposals are
+    never `Active` (recovery proposals read `Succeeded` at creation, all others `Defeated`),
+    so the Governor rejects every vote and no snapshot is ever taken on-chain. These are read
+    methods and must not revert, but they
     can never open a local path: `Defeated` can never satisfy the `Succeeded` gate in
     `execute`, and the governance implementation reverts for non-stored proposals before
     reaching the strategy, so the values are only observable on direct strategy calls.

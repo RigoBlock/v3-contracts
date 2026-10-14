@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IGovernanceState} from "./governance/IGovernanceState.sol";
 import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
-import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
@@ -13,15 +13,15 @@ interface IGovernanceStrategy {
     /// @notice Thrown when the quorum threshold is outside the range the strategy can honor.
     error GovStrategyInvalidQuorumThreshold(uint256 threshold);
 
+    /// @notice Thrown when the strategy does not support the governance's configured time type.
+    error GovStrategyInvalidTimeType(TimeType timeType);
+
     /// @notice Reverts unless the governance parameters are valid for this strategy.
-    /// @dev Called directly at initialization and by `updateThresholds` at execution time.
+    /// @dev Called at initialization and by parameter updates.
     /// @param params Tuple of factory parameters.
     function validateParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
 
     /// @notice Returns the state of a proposal.
-    /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
-    ///      The implementation passes the stored proposal, whose `executed` flag must be honored
-    ///      first: executed is terminal and must be reported regardless of clock or recovery state.
     /// @param proposal Tuple of the proposal.
     /// @param proposer The stored proposal proposer.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
@@ -36,9 +36,8 @@ interface IGovernanceStrategy {
         TimeType timeType
     ) external view returns (ProposalStatus);
 
-    /// @notice Return the voting period.
-    /// @dev Informational only: the enforceable window is the one returned by `beforePropose`.
-    /// @return Number of blocks or seconds of period duration, matching the governance's time type.
+    /// @notice Return the voting period in the governance's time unit.
+    /// @return Period duration in blocks or seconds.
     function votingPeriod() external view returns (uint256);
 
     /// @notice Return a user's voting power.
@@ -46,19 +45,16 @@ interface IGovernanceStrategy {
     function getVotingPower(address account) external view returns (uint256);
 
     /// @notice Validates and optionally modifies the actions before they are stored, and returns
-    ///         the proposal's fixed voting window.
-    /// @dev Called once per proposal. The returned start/end are stored in the proposal: they are
-    ///      fixed pointers, not a rolling window, so this is not a view function (it may roll the
-    ///      staking clock).
+    ///         the proposal's voting window.
+    /// @dev Called once per proposal; the returned window is stored in the proposal.
     function beforePropose(
         ProposedAction[] calldata actions
     ) external returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime);
 
-    /// @notice Called by the governance before every vote.
-    /// @return totalVotingPower The current total voting power. The governance stores it as the
-    ///         proposal's voting-power snapshot on the first vote; the fixed snapshot is the
-    ///         qualified-majority denominator for the proposal's whole life.
-    function beforeVote() external returns (uint256 totalVotingPower);
+    /// @notice Called before every vote. Returns the total voting power recognized at vote time.
+    /// @param extraData The proposal's current extra data.
+    /// @return totalVotingPower The total voting power the strategy recognizes right now.
+    function beforeVote(ProposalExtraData calldata extraData) external returns (uint256 totalVotingPower);
 
     /// @notice Returns the actions as they should be executed, optionally modifying their values.
     /// @param actions The actions to execute.

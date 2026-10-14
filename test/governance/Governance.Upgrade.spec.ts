@@ -392,7 +392,9 @@ describe("Governance Upgrades", async () => {
         0n,
       );
       await governanceInstance.propose([validAction], description);
-      await timeTravel({ days: 14, mine: true });
+      // the first vote's epoch roll moved this proposal's window to [+7d, +14d]: vote
+      // mid-window, then travel past the deadline for the execution
+      await timeTravel({ days: 10, mine: true });
       await governanceInstance.castVote(2, 1);
       await timeTravel({ days: 7, mine: true });
       await expect(governanceInstance.execute(2)).to.emit(
