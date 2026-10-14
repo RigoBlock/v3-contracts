@@ -40,6 +40,7 @@ abstract contract MixinCrosschain is MixinStorage, ReentrancyGuardTransient {
         require(sequence >= minimum, GovReceiverInvalidSequence(sequence, minimum));
         _crosschainSequence().value = sequence + 1;
 
+        // slither-disable-next-line timestamp -- VAA freshness window
         require(verifiedVaa.timestamp + _MESSAGE_TIMEOUT >= block.timestamp, GovReceiverMessageExpired(sequence));
 
         CrossChainPayload memory payload = abi.decode(verifiedVaa.payload, (CrossChainPayload));

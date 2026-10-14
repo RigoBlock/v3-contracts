@@ -71,10 +71,13 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
         if (proposal.executed) return ProposalStatus.Executed;
         _assertTimestamp(timeType);
         uint256 time = block.timestamp;
+        // slither-disable-next-line timestamp -- by-design timestamp clock
         if (time <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
+            // slither-disable-next-line timestamp -- by-design timestamp clock
         } else if (time <= proposal.endBlockOrTime && _qualifiedConsensus(proposal, minimumQuorum, votingPower)) {
             return ProposalStatus.Qualified;
+            // slither-disable-next-line timestamp -- by-design timestamp clock
         } else if (time <= proposal.endBlockOrTime) {
             return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
@@ -156,6 +159,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     ///      current timestamp so the proposal becomes voteable from the next block.
     function _rollEpochIfStale() private returns (uint256 startBlockOrTime) {
         startBlockOrTime = IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds();
+        // slither-disable-next-line timestamp -- by-design epoch staleness guard
         if (block.timestamp < startBlockOrTime) return startBlockOrTime;
         try IStaking(_stakingProxy).endEpoch() {} catch {
             return block.timestamp;
@@ -169,6 +173,7 @@ contract RigoblockGovernanceStrategy is IGovernanceStrategy {
     ///      stored snapshot unchanged once it exists.
     function beforeVote(ProposalExtraData calldata extraData) external virtual override returns (uint256) {
         if (extraData.votingPower != 0) return extraData.votingPower;
+        // slither-disable-next-line timestamp -- by-design epoch staleness guard
         if (block.timestamp >= IStaking(_stakingProxy).getCurrentEpochEarliestEndTimeInSeconds()) {
             try IStaking(_stakingProxy).endEpoch() {} catch {}
         }

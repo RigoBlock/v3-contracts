@@ -43,7 +43,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IWormholeReceiverStrategy
     function requestRecover() external override {
         require(msg.sender == _recoveryAddress, GovRecoveryUnauthorized(msg.sender));
-        // slither-disable-next-line incorrect-equality -- sentinel check on a timestamp, not an economic value
+        // slither-disable-next-line incorrect-equality,timestamp -- sentinel check on a timestamp, not an economic value
         require(_recoveryRequestedAt == 0, GovRecoveryAlreadyPending());
         _recoveryRequestedAt = block.timestamp;
         emit RecoverRequested(block.timestamp);
@@ -52,6 +52,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IWormholeReceiverStrategy
     function rejectRecover() external override {
         require(msg.sender == _governanceProxy, GovRecoveryUnauthorized(msg.sender));
+        // slither-disable-next-line timestamp -- by-design recovery window
         require(_recoveryRequestedAt != 0, GovRecoveryNotPending());
         _recoveryRequestedAt = 0;
         emit RecoverRejected();
@@ -83,6 +84,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     ) external view override returns (ProposalStatus) {
         // executed is terminal and reported first
         if (proposal.executed) return ProposalStatus.Executed;
+        // slither-disable-next-line timestamp -- by-design recovery window
         if (proposer == _recoveryAddress && _isRecoveryActive()) return ProposalStatus.Succeeded;
         return ProposalStatus.Defeated;
     }
@@ -90,6 +92,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
         // the recovery address always passes the proposer-threshold gate
+        // slither-disable-next-line timestamp -- by-design recovery window
         return _isRecoveryActive() && account == _recoveryAddress ? type(uint96).max : 0;
     }
 
@@ -132,6 +135,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     function _isRecoveryActive() private view returns (bool) {
         uint256 requestedAt = _recoveryRequestedAt;
+        // slither-disable-next-line timestamp -- by-design recovery window
         return requestedAt != 0 && block.timestamp >= requestedAt + _RECOVERY_WINDOW;
     }
 }
