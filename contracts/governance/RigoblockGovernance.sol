@@ -19,9 +19,12 @@ contract RigoblockGovernance is
     MixinUpgrade,
     MixinCrosschain
 {
-    /// @notice Constructor has no inputs to guarantee same deterministic address across chains.
+    /// @notice Single constructor input: the Wormhole chain id of the governance hub chain,
+    ///         identical on every deployment, so the deterministic implementation address is
+    ///         unchanged across chains.
     /// @dev Setting high proposal threshold locks propose action, which also lock vote actions.
-    constructor() MixinImmutables() MixinStorage() {
+    ///      MixinStorage forwards the hub chain id to MixinImmutables.
+    constructor(uint16 hubWormholeChainId) MixinStorage(hubWormholeChainId) {
         _paramsWrapper().governanceParameters = IGovernanceState.GovernanceParameters({
             strategy: address(0),
             proposalThreshold: type(uint256).max,

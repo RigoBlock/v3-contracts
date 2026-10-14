@@ -114,12 +114,11 @@ describe("Governance Flash Attack", async () => {
         [user2.address, amount],
       );
       const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
-      // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
-      // after the end of the new epoch, we make a proposal which can be voted from current block + 1
+      // a finished staking epoch is rolled forward when the proposal is created, so voting
+      // starts at the new epoch's boundary: move past it to reach the voting window
       await timeTravel({ days: 14, mine: true });
       await governanceInstance.propose([action], description);
-      // we move forward 2 seconds to make sure proposal can be voted on
-      await timeTravel({ seconds: 2, mine: true });
+      await timeTravel({ days: 14, seconds: 2, mine: true });
       // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
       amount = parseEther("400000");
       await grgToken.transfer(user2.address, amount);
@@ -176,12 +175,11 @@ describe("Governance Flash Attack", async () => {
         [user2.address, amount],
       );
       const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
-      // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
-      // after the end of the new epoch, we make a proposal which can be voted from current block + 1
+      // a finished staking epoch is rolled forward when the proposal is created, so voting
+      // starts at the new epoch's boundary: move past it to reach the voting window
       await timeTravel({ days: 14, mine: true });
       await governanceInstance.propose([action], description);
-      // we move forward 2 seconds to make sure proposal can be voted on
-      await timeTravel({ seconds: 2, mine: true });
+      await timeTravel({ days: 14, seconds: 2, mine: true });
       // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
       amount = parseEther("400000");
       const flashGovernance = await ethers.deployContract("FlashGovernance", [
@@ -236,12 +234,11 @@ describe("Governance Flash Attack", async () => {
         [user2.address, amount],
       );
       const action = new ProposedAction(await grgToken.getAddress(), data, 0n);
-      // at the beginning of the new epoch, we make a proposal which can be voted on in 14 days
-      // after the end of the new epoch, we make a proposal which can be voted from current block + 1
+      // a finished staking epoch is rolled forward when the proposal is created, so voting
+      // starts at the new epoch's boundary: move past it to reach the voting window
       await timeTravel({ days: 14, mine: true });
       await governanceInstance.propose([action], description);
-      // we move forward 2 seconds to make sure proposal can be voted on
-      await timeTravel({ seconds: 2, mine: true });
+      await timeTravel({ days: 14, seconds: 2, mine: true });
       // after the end of the epoch, we  flash borrow and stake GRG in order to gain quorum and > 2/3 of all stake
       amount = parseEther("400000");
       const flashGovernance = await ethers.deployContract("FlashGovernance", [

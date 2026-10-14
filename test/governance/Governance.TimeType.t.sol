@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {MigrationHarness, MockMigrationStrategy, MockTarget} from "./GovernanceMigration.t.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
@@ -57,6 +57,7 @@ contract GovernanceTimeTypeTest is Test {
     ///     block and can be executed from the next block on.
     function test_Blocknumber_QualifiedProposal_ExecutesNextBlock() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
 
         // voting starts at block.number + 1
@@ -81,6 +82,7 @@ contract GovernanceTimeTypeTest is Test {
     /// @notice Qualifying and executing in a single transaction reverts in Blocknumber mode.
     function test_Blocknumber_SameTxQualifyAndExecute_Reverts() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
         vm.roll(block.number + 2);
 
@@ -95,6 +97,7 @@ contract GovernanceTimeTypeTest is Test {
     ///     7 days to a block number) would still report Active after this roll.
     function test_Blocknumber_UnqualifiedProposal_ExpiresAfterBlockWindow() public {
         harness.setTimeType(TimeType.Blocknumber);
+        strategy.setBlockMode(true);
         uint256 proposalId = _createProposal();
 
         // roll past the block-based window (7 days ≈ 50_400 blocks at ~12s blocks)
@@ -167,16 +170,16 @@ contract GovernanceTimeTypeTest is Test {
 
     /// @dev Creates a no-op proposal and returns its id.
     function _createProposal() private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(target), data: "", value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(target), data: "", value: 0});
         vm.prank(whale);
         return harness.propose(actions, "time type proposal");
     }
 
     /// @dev Creates a proposal whose single action calls the harness with the given calldata.
     function _createProposalWithData(bytes memory data) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(harness), data: data, value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(harness), data: data, value: 0});
         vm.prank(whale);
         return harness.propose(actions, "time type proposal");
     }

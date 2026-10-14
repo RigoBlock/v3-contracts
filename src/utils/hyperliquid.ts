@@ -41,9 +41,15 @@ function encodeEvmUserModifyAction(usingBigBlocks: boolean): Uint8Array {
   // fixstr "type" -> fixstr "evmUserModify"
   const typeEntry = new Uint8Array([0xa4, ...typeKey, 0xad, ...typeValue]);
   // fixstr "usingBigBlocks" -> bool true/false
-  const flagEntry = new Uint8Array([0xae, ...flagKey, usingBigBlocks ? 0xc3 : 0xc2]);
+  const flagEntry = new Uint8Array([
+    0xae,
+    ...flagKey,
+    usingBigBlocks ? 0xc3 : 0xc2,
+  ]);
 
-  const out = new Uint8Array(header.length + typeEntry.length + flagEntry.length);
+  const out = new Uint8Array(
+    header.length + typeEntry.length + flagEntry.length,
+  );
   out.set(header, 0);
   out.set(typeEntry, header.length);
   out.set(flagEntry, header.length + typeEntry.length);
@@ -108,10 +114,14 @@ export async function enableHyperEVMBigBlocks(
     );
   }
 
-  const result = await response.json();
+  const result = (await response.json()) as {
+    status?: string;
+    response?: unknown;
+  };
   if (
     result.status === "err" ||
-    (typeof result.response === "string" && result.response.toLowerCase().includes("error"))
+    (typeof result.response === "string" &&
+      result.response.toLowerCase().includes("error"))
   ) {
     throw new Error(
       `Hyperliquid evmUserModify action failed: ${JSON.stringify(result)}. ` +

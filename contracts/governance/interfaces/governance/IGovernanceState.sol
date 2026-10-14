@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./IGovernanceVoting.sol";
-import {ProposalStatus} from "../../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction} from "../../types/GovernanceTypes.sol";
 import {TimeType} from "../../types/TimeType.sol";
 
 interface IGovernanceState {
@@ -18,15 +18,13 @@ interface IGovernanceState {
 
     struct ProposalWrapper {
         Proposal proposal;
-        IGovernanceVoting.ProposedAction[] proposedAction;
+        ProposedAction[] proposedAction;
     }
 
     /// @notice Returns the actions proposed for a given proposal.
     /// @param proposalId Number of the proposal.
     /// @return proposedActions Array of tuple of proposed actions.
-    function getActions(
-        uint256 proposalId
-    ) external view returns (IGovernanceVoting.ProposedAction[] memory proposedActions);
+    function getActions(uint256 proposalId) external view returns (ProposedAction[] memory proposedActions);
 
     /// @notice Returns a proposal for a given id.
     /// @param proposalId The number of the proposal.

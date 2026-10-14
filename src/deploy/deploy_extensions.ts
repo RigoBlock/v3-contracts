@@ -5,6 +5,7 @@ import type { Environment } from "../../rocketh/config.js";
 import {
   chainConfig,
   extensionsMapSalt,
+  governanceProxy,
   zeroExAllowanceHolder,
   zeroExDeployer,
 } from "../utils/constants";
@@ -35,6 +36,12 @@ export default deployScript(
     if (chainId === 999) {
       const signerProvider =
         env.addressSigners[deployer.toLowerCase() as `0x${string}`].signer;
+      // the typed overloads reject the extra primaryType field that Hardhat's local
+      // signer requires; this is a plain JSON-RPC boundary
+      const requestRpc = signerProvider.request.bind(signerProvider) as (args: {
+        method: string;
+        params: unknown[];
+      }) => Promise<unknown>;
       const signer = {
         getAddress: async () => deployer,
         signTypedData: async (
@@ -47,13 +54,10 @@ export default deployScript(
           const primaryType = Object.keys(
             types as Record<string, unknown>,
           ).find((key) => key !== "EIP712Domain");
-          return signerProvider.request({
+          return requestRpc({
             method: "eth_signTypedData_v4",
-            params: [
-              deployer as `0x${string}`,
-              { domain, types, message, primaryType },
-            ],
-          }) as unknown as Promise<string>;
+            params: [deployer, { domain, types, message, primaryType }],
+          }) as Promise<string>;
         },
       } as unknown as ethers.Signer;
       console.log("Enabling HyperEVM big blocks for the deployer...");
@@ -358,6 +362,21 @@ export default deployScript(
           account: deployer,
           artifact: await readArtifact("AHyperliquid"),
           args: [],
+        },
+        { deterministic: true, strictBytecodeMatch: true },
+      );
+    }
+
+    // AGovernance wraps the deterministic governance proxy. Skipped on HyperEVM,
+    // where the governance proxy has not been created yet, so there is no address
+    // to point the adapter at.
+    if (chainId !== 999) {
+      await env.deploy(
+        "AGovernance",
+        {
+          account: deployer,
+          artifact: await readArtifact("AGovernance"),
+          args: [governanceProxy],
         },
         { deterministic: true, strictBytecodeMatch: true },
       );

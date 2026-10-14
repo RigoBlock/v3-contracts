@@ -2,76 +2,67 @@
 pragma solidity ^0.8.0;
 
 import {IGovernanceState} from "./governance/IGovernanceState.sol";
-import {IGovernanceVoting} from "./governance/IGovernanceVoting.sol";
 import {IRigoblockGovernanceFactory} from "./IRigoblockGovernanceFactory.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 
 interface IGovernanceStrategy {
-    /// @notice Reverts if initialization paramters are incorrect.
-    /// @dev Only used at initialization, as params deleted from factory storage after setup.
+    /// @notice Thrown when the proposal threshold is outside the range the strategy can honor.
+    error GovStrategyInvalidProposalThreshold(uint256 threshold);
+
+    /// @notice Thrown when the quorum threshold is outside the range the strategy can honor.
+    error GovStrategyInvalidQuorumThreshold(uint256 threshold);
+
+    /// @notice Thrown when the strategy does not support the governance's configured time type.
+    error GovStrategyInvalidTimeType(TimeType timeType);
+
+    /// @notice Reverts unless the governance parameters are valid for this strategy.
+    /// @dev Called at initialization and by parameter updates.
     /// @param params Tuple of factory parameters.
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
+    function validateParams(IRigoblockGovernanceFactory.Parameters calldata params) external view;
 
-    /// @notice Reverts if the proposal threshold is incorrect.
-    /// @param proposalThreshold Number of votes required to make a proposal.
-    function assertValidProposalThreshold(uint256 proposalThreshold) external view;
-
-    /// @notice Reverts if the quorum threshold is incorrect.
-    /// @param quorumThreshold Number of votes required for a proposal to succeed.
-    function assertValidQuorumThreshold(uint256 quorumThreshold) external view;
-
-    /// @notice Returns the state of a proposal for a required quorum.
-    /// @dev Must use the same time reference as `timeType` and revert for unsupported time types.
-    ///      See docs/governance/STRATEGY.md.
+    /// @notice Returns the state of a proposal.
     /// @param proposal Tuple of the proposal.
+    /// @param proposer The stored proposal proposer.
     /// @param minimumQuorum Number of votes required for a proposal to pass.
+    /// @param votingPower Total voting power snapshotted by the governance on the first vote.
     /// @param timeType Time reference used by the proposal's voting period.
     /// @return Tuple of the proposal state.
     function getProposalState(
         IGovernanceState.Proposal calldata proposal,
+        address proposer,
         uint256 minimumQuorum,
+        uint256 votingPower,
         TimeType timeType
     ) external view returns (ProposalStatus);
 
-    /// @notice Return the voting period.
-    /// @dev Informational only: the enforceable window is the one returned by votingTimestamps.
-    /// @return Number of blocks or seconds of period duration, matching the governance's time type.
+    /// @notice Return the voting period in the governance's time unit.
+    /// @return Period duration in blocks or seconds.
     function votingPeriod() external view returns (uint256);
-
-    /// @notice Returns the voting timestamps.
-    /// @dev Must produce start/end values expressed in the same unit as `timeType` (block numbers
-    ///      for TimeType.Blocknumber, timestamps for TimeType.Timestamp). See getProposalState.
-    /// @param timeType Time reference used by the proposal's voting period.
-    /// @return startBlockOrTime Timestamp when proposal starts.
-    /// @return endBlockOrTime Timestamp when voting ends.
-    function votingTimestamps(
-        TimeType timeType
-    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime);
 
     /// @notice Return a user's voting power.
     /// @param account Address to check votes for.
     function getVotingPower(address account) external view returns (uint256);
 
-    /// @notice Validates and optionally modifies an action before it is stored as part of a proposal.
-    /// @param action The action to validate.
-    /// @return The validated (possibly modified) action.
+    /// @notice Validates and optionally modifies the actions before they are stored, and returns
+    ///         the proposal's voting window.
+    /// @dev Called once per proposal; the returned window is stored in the proposal.
     function beforePropose(
-        IGovernanceVoting.ProposedAction calldata action
-    ) external view returns (IGovernanceVoting.ProposedAction memory);
+        ProposedAction[] calldata actions
+    ) external returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime);
 
-    /// @notice Returns the action as it should be executed, optionally modifying the value.
-    /// @param action The action to execute.
-    /// @return The action to execute.
-    function beforeExecute(
-        IGovernanceVoting.ProposedAction calldata action
-    ) external view returns (IGovernanceVoting.ProposedAction memory);
+    /// @notice Called before every vote. Returns the total voting power recognized at vote time.
+    /// @param extraData The proposal's current extra data.
+    /// @return totalVotingPower The total voting power the strategy recognizes right now.
+    function beforeVote(ProposalExtraData calldata extraData) external returns (uint256 totalVotingPower);
+
+    /// @notice Returns the actions as they should be executed, optionally modifying their values.
+    /// @param actions The actions to execute.
+    /// @return The actions to execute.
+    function beforeExecute(ProposedAction[] calldata actions) external view returns (ProposedAction[] memory);
 
     /// @notice Returns the Wormhole core contract used for cross-chain governance.
     /// @return Address of the Wormhole core contract, or the zero address if this chain is not
     ///         configured as a cross-chain governance receiver.
     function wormhole() external view returns (address);
-
-    /// @notice Returns the Wormhole chain id of the chain this strategy is deployed on.
-    function wormholeChainId() external view returns (uint16);
 }

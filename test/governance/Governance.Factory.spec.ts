@@ -24,7 +24,22 @@ describe("Governance Factory", async () => {
     it("should not allow deploying governance if params verification fails", async () => {
       const { governanceFactory, implementation, strategy } =
         await setupTests();
-      // will revert if strategy contract does not implement method assertValidInitParams
+      // the proxy constructor asserts empty initialization returndata, so every initialization
+      // failure surfaces as panic 0x1 through createGovernance, masking the initializer's and
+      // the strategy's custom errors (the initializer's own errors are covered by
+      // Governance.Initializer.t.sol, which exercises initializeGovernance directly)
+      // an EOA strategy fails the factory's own contract check (assert → panic)
+      await expect(
+        governanceFactory.createGovernance(
+          implementation,
+          "0x1111111111111111111111111111111111111111",
+          parseEther("100000"),
+          parseEther("1000000"),
+          TimeType.Timestamp,
+          "Rigoblock Governance",
+        ),
+      ).to.be.revertedWithPanic(0x1);
+      // a contract without the strategy interface fails the initializer's conformance probe
       await expect(
         governanceFactory.createGovernance(
           implementation,
@@ -35,7 +50,7 @@ describe("Governance Factory", async () => {
           "Rigoblock Governance",
         ),
       ).to.be.revertedWithPanic(0x1);
-      // will revert without reason if assertion in strategy contract fails
+      // out-of-bounds thresholds fail the strategy's validateParams
       await expect(
         governanceFactory.createGovernance(
           implementation,
@@ -46,6 +61,7 @@ describe("Governance Factory", async () => {
           "Rigoblock Governance",
         ),
       ).to.be.revertedWithPanic(0x1);
+      // a wrong name fails the strategy's assertion
       await expect(
         governanceFactory.createGovernance(
           implementation,
@@ -61,7 +77,7 @@ describe("Governance Factory", async () => {
     it("should emit event when creating new governance", async () => {
       const { governanceFactory, implementation, strategy } =
         await setupTests();
-      // inputs validation in rigoblock strategy reverts without error, but other strategies could revert with error
+      // inputs validation in the rigoblock strategy surfaces the strategy's own errors
       const governance = await governanceFactory.createGovernance.staticCall(
         implementation,
         strategy,

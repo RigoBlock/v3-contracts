@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "./IGovernanceVoting.sol";
+import {ProposedAction} from "../../types/GovernanceTypes.sol";
 
 interface IGovernanceEvents {
     /// @notice Emitted when a new proposal is created.
@@ -14,7 +15,7 @@ interface IGovernanceEvents {
     event ProposalCreated(
         address proposer,
         uint256 proposalId,
-        IGovernanceVoting.ProposedAction[] actions,
+        ProposedAction[] actions,
         uint256 startBlockOrTime,
         uint256 endBlockOrTime,
         string description

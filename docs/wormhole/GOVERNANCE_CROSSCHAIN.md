@@ -21,13 +21,19 @@ target chains such as HyperEVM through Wormhole cross-chain messages.
 
 A chain's role is expressed entirely through its governance strategy:
 
-- **Ethereum mainnet is the only sender.** `RigoblockGovernanceStrategy.beforePropose`
-  rejects Wormhole actions on any other chain (`GovCrosschainNotMainnet`), and the
-  receiver mixin cannot run on mainnet at all (`GovReceiverLocalEmitter`, since the
-  trusted emitter is mainnet itself). The trusted emitter is checked as
+- **Ethereum mainnet is the only sender.** The sender strategy
+  (`RigoblockGovernanceStrategy`, deployed only on mainnet) validates Wormhole actions
+  in `beforePropose` (zero value, no local-chain `publishMessage`), and the receiver mixin
+  cannot run on mainnet at all (`GovReceiverLocalEmitter`, since the trusted emitter is
+  mainnet itself). The trusted emitter is checked as
   `emitterAddress == address(this)`: the proxy is deployed at the same deterministic
   address on every chain, so the mainnet instance of that shared address is the only
-  valid emitter.
+  valid emitter. The receiver strategy also reverts Wormhole-target actions in local
+  `beforePropose` (`GovCrosschainNotSender`): a wormhole action in a local batch would revert
+  on the message fee at execution and strand the proposal in `Succeeded` with no cancellation
+  path. Fail-closed local governance is enforced by `beforePropose` gating on an active
+  recovery, so no ordinary local proposal can ever carry a `publishMessage` action to the
+  receiver chain (delivered cross-chain messages do not go through `beforePropose`).
 - **Every other chain is a receiver** when its strategy has a nonzero Wormhole core
   address. Receiving is permissionless (any relayer can deliver a VAA) and independent
   of local governance.
@@ -48,7 +54,7 @@ A chain's role is expressed entirely through its governance strategy:
 Ethereum mainnet (sender chain)
   RigoblockGovernance proxy
     └─ MixinVoting.execute
-       └─ every action is routed through RigoblockGovernanceStrategy.beforeExecute
+       └─ every action is routed through the strategy's beforeExecute
        └─ Wormhole actions call IWormhole.publishMessage{value: messageFee}(payload)
 
 Target chain (e.g. HyperEVM, receiver chain)
@@ -65,13 +71,14 @@ deterministic address on every chain, the receiver asserts
 `emitterAddress == address(this)` — no emitter address needs to be configured per
 chain — and the receiver address on a new chain is known before deployment.
 
-The `RigoblockGovernance` implementation has no constructor arguments, so it can
-be deployed at the same deterministic address on every chain. The Wormhole core
-address and local Wormhole chain id are stored in `RigoblockGovernanceStrategy`,
-which is deployed per chain and therefore does not affect the governance
-implementation address. A chain is a **receiver** when its governance strategy
-has a nonzero Wormhole address; a chain with a zero Wormhole address in its
-strategy does not process cross-chain messages at all.
+The `RigoblockGovernance` implementation takes a single constructor argument, the
+Wormhole chain id of the governance hub (2 = Ethereum), identical on every deployment,
+so it is still deployed at the same deterministic address on every chain. The Wormhole core
+address and local Wormhole chain id are stored in the chain's strategy
+(`RigoblockGovernanceStrategy` on the hub chain, `WormholeReceiverStrategy`
+elsewhere), which is deployed per chain and therefore does not affect the
+governance implementation address. Every non-hub chain runs the receiver
+strategy and processes cross-chain messages.
 
 ## Native value policy
 
@@ -125,13 +132,13 @@ Encoding is client-side: the proposer builds the `publishMessage` calldata
 off-chain. The only on-chain Wormhole specificity is `beforeExecute`'s fresh fee
 read. `RigoblockGovernanceStrategy` enforces, via `beforePropose`:
 
-- Cross-chain actions are only allowed on Ethereum mainnet (`block.chainid == 1`).
+- Cross-chain actions are only allowed in Sender mode (deployed only on Ethereum mainnet).
 - If `action.target == wormhole`, the calldata selector must be
   `IWormhole.publishMessage.selector` and the decoded `CrossChainPayload` must
   target a chain other than the local Wormhole chain id.
-- The `consistencyLevel` argument must be `200` (Wormhole's finalized level):
-  governance messages must reach Ethereum finality before guardian attestation
-  (`GovCrosschainInvalidConsistencyLevel` otherwise).
+- The `consistencyLevel` argument must be `202` (Wormhole's finalized level; 200
+  is instant and 201 is safe): governance messages must reach Ethereum finality
+  before guardian attestation (`GovCrosschainInvalidConsistencyLevel` otherwise).
 - The wrapper `value` and every inner action `value` must be `0`
   (`GovCrosschainInvalidValue` otherwise).
 
@@ -147,9 +154,11 @@ steps as the Wormhole `HelloWorld` example:
    governance strategy. `parseAndVerifyVM` checks the guardian-set signature
    proof. Forged or malformed VAAs return `valid == false` and the receiver
    reverts with the reason provided by Wormhole.
-2. Asserts the emitter chain id (`2`, Ethereum) and emitter address
+2. Asserts the emitter chain id (`_hubWormholeChainId`, an implementation
+   immutable set to the hub chain's Wormhole id, `2` = Ethereum) and emitter
+   address
    (`address(this)`, identical to the governance proxy on every chain) match the
-   trusted sender-chain governance proxy. A receiver on the sender chain itself
+   trusted sender-chain governance proxy. A VAA emitted on the local chain itself
    reverts (`GovReceiverLocalEmitter`).
 3. Requires the VAA sequence to be at least `nextMinimumSequence` and advances
    the counter to `sequence + 1` — before anything executes, so a delivered VAA
@@ -173,9 +182,10 @@ steps as the Wormhole `HelloWorld` example:
    not silently skipped. The same VAA remains deliverable once the precondition
    is fixed.
 
-If the governance strategy has no Wormhole address configured,
-`receiveMessage` reverts with `GovReceiverNotConfigured`: the chain has not
-opted in as a receiver.
+Receiver configuration is enforced before any message can arrive: both strategies require the
+Wormhole address to be a contract answering a `chainId()` probe in their constructor, and
+`initializeGovernance` requires the strategy to be a contract implementing the strategy
+interface, so a chain deployed through the canonical paths always has a receiver wired.
 
 ### Ordered execution and replay protection
 
@@ -198,6 +208,18 @@ high (`GovReceiverInvalidSequence` otherwise), then advances the counter to
 - **Gaps are allowed**: a message with a higher sequence advances the minimum
   past any missing sequence, so a lost or permanently failing message can never
   clog the pipeline — exactly the property of the audited Uniswap receiver.
+  The deliberate trade-off: delivering a later message first permanently
+  invalidates any earlier undelivered sequence (`GovReceiverInvalidSequence`),
+  including an already-approved action that has not landed yet. This is why
+  delivery must happen in sequence order wherever possible: the Rigoblock keeper
+  filters Wormhole logs by the emitter governance proxy address and submits the
+  receiver chain's VAAs starting from `nextMinimumSequence`. If a skip is ever
+  observed — e.g. a veto or another approved action was leapfrogged — the sender
+  chain governance re-publishes the action as a fresh proposal: publication is a
+  normal governance execution on the sender chain and produces a new VAA with a
+  new sequence. A veto only needs one delivered message within the recovery
+  window, so a skipped veto is recoverable as long as Wormhole is alive and the
+  request is being monitored.
 - A message with a **past** sequence is a replay attempt and reverts.
 - An **expired** message (older than `2 days`) reverts without advancing the
   counter; it can be re-delivered after recovery, or leapfrogged by a later
@@ -323,9 +345,9 @@ governance's own existing mechanisms, with no separate owner or admin key:
   voting; it does not depend on Wormhole.
 - A **compromised Wormhole guardian set** (forged VAAs) is countered the same
   way: a local strategy upgrade pointing `wormhole()` at the zero address
-  disables the receiver instantly (`GovReceiverNotConfigured`), and a follow-up
-  upgrade can swap in a receiver for a different bridge. No externally owned
-  account is involved in either step.
+  disables the receiver instantly (`receiveMessage` can no longer verify any
+  VAA), and a follow-up upgrade can swap in a receiver for a different bridge.
+  No externally owned account is involved in either step.
 - A permanently **failing action** is never fatal: the delivery reverts without
   consuming the message, so the same VAA can be re-delivered after recovery, or
   simply abandoned — gaps are allowed and a later sequence leapfrogs it.
@@ -374,19 +396,22 @@ by the strategy.
 
 **Re-entrancy.** Actions execute as arbitrary calls from the governance, with no
 reentrancy lock (matching the Uniswap reference receiver). The sequence number is
-bumped *before* execution, so an action that re-delivers its own VAA reverts
+bumped _before_ execution, so an action that re-delivers its own VAA reverts
 (`GovReceiverInvalidSequence`) and the whole batch rolls back — same-VAA re-entrancy
-is impossible. An action that delivers a *different, later* VAA mid-execution would
+is impossible. An action that delivers a _different, later_ VAA mid-execution would
 nest a second batch; this is accepted because every delivered VAA still passes the
 full emitter/chain/sequence/expiry validation, so nesting grants no extra authority
 beyond what a valid later message already has.
 
 ## Quorum snapshot (issue #200)
 
-When a proposal is created, the current `quorumThreshold` is copied into a
-separate `proposalQuorumById` mapping. All subsequent state checks for that
-proposal use the snapshotted value. If the quorum is later changed by another
-successful proposal, the state of past proposals remains deterministic.
+When a proposal is created, the current `quorumThreshold` is copied into the
+proposal's entry of a merged `proposalExtraDataById` mapping (slot
+`_PROPOSAL_EXTRA_DATA_SLOT`), which packs the snapshot quorum and the
+delegated-total snapshot as two `uint128` values in one storage slot. All
+subsequent state checks for that proposal use the snapshotted value. If the
+quorum is later changed by another successful proposal, the state of past
+proposals remains deterministic.
 
 Proposals created before this feature was introduced do not have a snapshot;
 their mapping entry is `0`. `_getProposalState` treats those legacy proposals as
@@ -402,15 +427,59 @@ so existing strategies and external clients remain compatible. The snapshotted
 quorum is an internal implementation detail; external callers receive the
 effective quorum through `getProposalState(proposalId)`.
 
+## Delegated-total snapshot (qualified-majority denominator)
+
+The same merged extra-data slot protects the qualified-majority denominator. On
+the first vote of a proposal, `MixinVoting._countVote` calls the strategy's
+`beforeVote()` hook and stores the returned total voting power (the
+current-epoch global delegated balance on sender chain) into the proposal's
+`votingPower` field, and the strategy's `_qualifiedConsensus` evaluates
+`3 * votesFor > 2 * snapshot` against that fixed value instead of reading the
+live staking balance. This closes the epoch-rollover shrink vector: a coalition
+that votes and then activates queued undelegations to shrink the live electorate
+cannot manufacture an early `Qualified` from less than two-thirds of the
+snapshotted supply.
+
+The snapshot is taken on the first vote rather than at proposal creation, so
+delegations made after proposal creation but before the first vote count in
+both the numerator and the denominator. The staking clock is permissionless,
+so the strategy rolls a finished epoch in `beforePropose` when it can (the
+revert is swallowed — a dead scheduler must not block governance) and the
+voting window is fixed at proposal time; if the roll does not happen, the
+window falls back to `start = block.timestamp` (Pending during the propose
+block, voteable from the next) with the 7-day default
+period, and the snapshot is taken from whatever epoch is current at the first
+vote. The voting period is
+`min(epochDuration - 1, 7 days)`, so the window always fits inside the current
+epoch whenever the epoch could roll — but a mid-window epoch roll is _not_
+prevented: `endEpoch` is callable by anyone once `block.timestamp >= epochEnd`,
+and the window starts at the epoch boundary. A mid-proposal whale delegation
+after such a roll lands in the numerator but not the frozen denominator, so it
+cannot qualify against the snapshot (new votes must still clear
+`3 * votesFor > 2 * snapshot`). Proposals without votes have
+a zero entry and cannot qualify; the merged extra-data mapping already
+fail-closes pre-snapshot legacy proposals (zero quorum reads as
+`type(uint256).max`). Early qualification also requires `votesFor > 2 * votesAgainst`,
+the same ratio execution requires, so a proposal can never be closed early in a state
+that would read `Defeated` at the deadline.
+
 ## Deployment
 
 `src/deploy/deploy_governance.ts` deploys the same suite on every chain:
 `RigoblockGovernanceFactory` (no constructor arguments), `RigoblockGovernance`
-(no constructor arguments — same address on every chain), then
-`RigoblockGovernanceStrategy` with the chain's staking proxy and Wormhole
-configuration. A chain with a nonzero Wormhole address in
-`src/utils/constants.ts` is a receiver chain; a chain with a zero Wormhole
-address is not able to process cross-chain messages.
+with constructor argument `[hubWormholeChainId]` — derived from
+`GOVERNANCE_HUB_CHAIN`'s `wormholeChainId` in `src/utils/constants.ts`, identical
+on every chain, so the implementation keeps the same deterministic address — then
+the chain's strategy: `RigoblockGovernanceStrategy` with constructor arguments
+`[stakingProxy, wormhole]` on the hub chain, or `WormholeReceiverStrategy` with
+constructor arguments `[wormhole, governanceProxy, governanceRecovery]` on every
+other chain, which requires `governanceRecovery` (and the derived
+`governanceProxy`) to be configured. The local Wormhole chain id is not a
+constructor argument and no longer strategy state at all: every local id is read
+from the core bridge's `chainId()` at the point of use. The only Wormhole id
+configured anywhere is the hub's, as the implementation immutable, because VAA
+fields are Wormhole ids and no on-chain EVM↔Wormhole conversion exists (the SDK's
+`Chains.sol` is compile-time constants only).
 
 Chain-specific Wormhole addresses and chain ids are stored in
 `src/utils/constants.ts` and `contracts/test/Constants.sol`.
@@ -425,8 +494,10 @@ Chain-specific Wormhole addresses and chain ids are stored in
   real `publishMessage`, real consecutive sequence assignment, real `messageFee`; only
   guardian signature verification is mocked):
   `forge test --match-path test/governance/Governance.CrosschainFork.t.sol`
-- Foundry (strategy Wormhole validation):
+- Foundry (sender-strategy Wormhole validation):
   `forge test --match-path test/governance/RigoblockGovernanceStrategy.t.sol`
+- Foundry (receiver-strategy validation, including the recovery escape hatch):
+  `forge test --match-path test/governance/WormholeReceiverStrategy.t.sol`
 - Foundry (local migration simulation):
   `forge test --match-path test/governance/GovernanceMigration.t.sol`
 - Foundry (mainnet-fork migration simulation):

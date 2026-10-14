@@ -5,22 +5,20 @@ import {Governor} from "@openzeppelin-gov/governance/Governor.sol";
 import {IERC165} from "@openzeppelin-gov/utils/introspection/IERC165.sol";
 import {IERC5267} from "@openzeppelin-gov/interfaces/IERC5267.sol";
 import {IERC6372} from "@openzeppelin-gov/interfaces/IERC6372.sol";
-import {IGovernor as IOZGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
+import {IGovernor} from "@openzeppelin-gov/governance/IGovernor.sol";
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
-import {ProposalStatus} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 
 abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
-    function getActions(
-        uint256 proposalId
-    ) external view override returns (IGovernanceVoting.ProposedAction[] memory proposedActions) {
+    function getActions(uint256 proposalId) external view override returns (ProposedAction[] memory proposedActions) {
         IGovernanceState.Proposal memory proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposal.actionsLength;
-        proposedActions = new IGovernanceVoting.ProposedAction[](actionsLength);
+        proposedActions = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedActions[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -54,8 +52,8 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
             });
     }
 
-    /// @inheritdoc IOZGovernor
-    function name() public view override(Governor, IOZGovernor) returns (string memory) {
+    /// @inheritdoc IGovernor
+    function name() public view override(Governor, IGovernor) returns (string memory) {
         return _name().value;
     }
 
@@ -74,8 +72,8 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
         }
     }
 
-    /// @inheritdoc IOZGovernor
-    function votingPeriod() public view override(Governor, IOZGovernor) returns (uint256) {
+    /// @inheritdoc IGovernor
+    function votingPeriod() public view override(Governor, IGovernor) returns (uint256) {
         return IGovernanceStrategy(_governanceParameters().strategy).votingPeriod();
     }
 
@@ -93,103 +91,103 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     function supportsInterface(bytes4 interfaceId) public view override(Governor, IERC165) returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IOZGovernor).interfaceId ||
+            interfaceId == type(IGovernor).interfaceId ||
             interfaceId == type(IERC6372).interfaceId ||
             interfaceId == type(IERC5267).interfaceId;
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     function COUNTING_MODE() public pure override returns (string memory) {
         return "support=bravo&quorum=bravo";
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     function hashProposal(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public pure override(Governor, IOZGovernor) returns (uint256) {
+    ) public pure override(Governor, IGovernor) returns (uint256) {
         return _hashProposal(targets, values, calldatas, descriptionHash);
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     function getProposalId(
         address[] memory targets,
         uint256[] memory values,
         bytes[] memory calldatas,
         bytes32 descriptionHash
-    ) public view override(Governor, IOZGovernor) returns (uint256) {
+    ) public view override(Governor, IGovernor) returns (uint256) {
         return hashProposal(targets, values, calldatas, descriptionHash);
     }
 
-    /// @inheritdoc IOZGovernor
-    function proposalProposer(uint256 proposalId) public view override(Governor, IOZGovernor) returns (address) {
+    /// @inheritdoc IGovernor
+    function proposalProposer(uint256 proposalId) public view override(Governor, IGovernor) returns (address) {
         return _proposalMeta().proposalMetaById[proposalId].proposer;
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     /// @dev eta is the timelock availability timestamp, written by `queue()`. With no
     ///      timelock nothing is ever queued, so it is always 0; returning the voting
     ///      deadline here would flip OZ `state()` from Succeeded to Queued.
-    function proposalEta(uint256) public pure override(Governor, IOZGovernor) returns (uint256) {
+    function proposalEta(uint256) public pure override(Governor, IGovernor) returns (uint256) {
         return 0;
     }
 
-    /// @inheritdoc IOZGovernor
-    function proposalNeedsQueuing(uint256) public pure override(Governor, IOZGovernor) returns (bool) {
+    /// @inheritdoc IGovernor
+    function proposalNeedsQueuing(uint256) public pure override(Governor, IGovernor) returns (bool) {
         return false; // no timelock
     }
 
-    /// @inheritdoc IOZGovernor
-    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty. See docs/governance/TALLY_COMPAT.md.
-    function state(uint256 proposalId) public view override(Governor, IOZGovernor) returns (IOZGovernor.ProposalState) {
+    /// @inheritdoc IGovernor
+    /// @dev Must not call super: OZ Governor linear storage (slots 0-6) must stay empty.
+    function state(uint256 proposalId) public view override(Governor, IGovernor) returns (IGovernor.ProposalState) {
         return _toOZState(_getProposalState(proposalId));
     }
 
     /// @dev Translates the native state into the OZ Governor numbering: Qualified maps to
-    ///      Succeeded, higher native values shift down one position. See docs/governance/TALLY_COMPAT.md.
-    function _toOZState(ProposalStatus proposalState) private pure returns (IOZGovernor.ProposalState) {
+    ///      Succeeded, higher native values shift down one position.
+    function _toOZState(ProposalStatus proposalState) private pure returns (IGovernor.ProposalState) {
         uint8 value = uint8(proposalState);
         if (value == uint8(ProposalStatus.Qualified)) {
-            return IOZGovernor.ProposalState.Succeeded;
+            return IGovernor.ProposalState.Succeeded;
         }
-        return IOZGovernor.ProposalState(value > uint8(ProposalStatus.Canceled) ? value - 1 : value);
+        return IGovernor.ProposalState(value > uint8(ProposalStatus.Canceled) ? value - 1 : value);
     }
 
-    /// @inheritdoc IOZGovernor
-    function votingDelay() public pure override(Governor, IOZGovernor) returns (uint256) {
-        // voting starts at least one second in the future (see votingTimestamps)
+    /// @inheritdoc IGovernor
+    function votingDelay() public pure override(Governor, IGovernor) returns (uint256) {
+        // voting starts at least one second in the future (see the strategy's beforePropose)
         return 1;
     }
 
-    /// @inheritdoc IOZGovernor
-    function proposalSnapshot(uint256 proposalId) public view override(Governor, IOZGovernor) returns (uint256) {
+    /// @inheritdoc IGovernor
+    function proposalSnapshot(uint256 proposalId) public view override(Governor, IGovernor) returns (uint256) {
         return _proposal().proposalById[proposalId].startBlockOrTime;
     }
 
-    /// @inheritdoc IOZGovernor
-    function proposalDeadline(uint256 proposalId) public view override(Governor, IOZGovernor) returns (uint256) {
+    /// @inheritdoc IGovernor
+    function proposalDeadline(uint256 proposalId) public view override(Governor, IGovernor) returns (uint256) {
         return _proposal().proposalById[proposalId].endBlockOrTime;
     }
 
-    /// @inheritdoc IOZGovernor
-    function proposalThreshold() public view override(Governor, IOZGovernor) returns (uint256) {
+    /// @inheritdoc IGovernor
+    function proposalThreshold() public view override(Governor, IGovernor) returns (uint256) {
         return _governanceParameters().proposalThreshold;
     }
 
-    /// @inheritdoc IOZGovernor
-    function quorum(uint256) public view override(Governor, IOZGovernor) returns (uint256) {
+    /// @inheritdoc IGovernor
+    function quorum(uint256) public view override(Governor, IGovernor) returns (uint256) {
         return _governanceParameters().quorumThreshold;
     }
 
-    /// @inheritdoc IOZGovernor
+    /// @inheritdoc IGovernor
     function hasVoted(uint256 proposalId, address account) public view override returns (bool) {
         return _receipt().userReceiptByProposal[proposalId][account].hasVoted;
     }
 
-    /// @inheritdoc IOZGovernor
-    function version() public view override(Governor, IOZGovernor) returns (string memory) {
+    /// @inheritdoc IGovernor
+    function version() public view override(Governor, IGovernor) returns (string memory) {
         return VERSION;
     }
 
@@ -199,9 +197,7 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     ) public view override returns (IGovernanceState.ProposalWrapper memory proposalWrapper) {
         proposalWrapper.proposal = _proposal().proposalById[proposalId];
         uint256 actionsLength = proposalWrapper.proposal.actionsLength;
-        IGovernanceVoting.ProposedAction[] memory proposedAction = new IGovernanceVoting.ProposedAction[](
-            actionsLength
-        );
+        ProposedAction[] memory proposedAction = new ProposedAction[](actionsLength);
         for (uint256 i = 0; i < actionsLength; i++) {
             proposedAction[i] = _proposedAction().proposedActionbyIndex[proposalId][i];
         }
@@ -220,14 +216,16 @@ abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
             return ProposalStatus.Canceled;
         }
 
-        // prevent old-format proposals execution if quorum drops
-        uint256 quorum = _proposalQuorum().proposalQuorumById[proposalId];
-        quorum = quorum > 0 ? quorum : type(uint256).max;
+        // a proposal without a stored quorum (legacy or corrupt) can never reach quorum
+        ProposalExtraData memory extraData = _proposalExtraData().proposalExtraDataById[proposalId];
+        uint256 quorum = extraData.quorum > 0 ? extraData.quorum : type(uint256).max;
 
         return
             IGovernanceStrategy(_governanceParameters().strategy).getProposalState(
                 proposal,
+                _proposalMeta().proposalMetaById[proposalId].proposer,
                 quorum,
+                extraData.votingPower,
                 _governanceParameters().timeType
             );
     }

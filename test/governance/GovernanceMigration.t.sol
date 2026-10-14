@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
 import {MixinStorage} from "../../contracts/governance/mixins/MixinStorage.sol";
@@ -23,19 +23,22 @@ import {IGovernor as OZGovernorV5} from "@openzeppelin-gov/governance/IGovernor.
 /// @title MockMigrationStrategy
 /// @notice Simplified strategy that returns deterministic voting power and timestamps
 ///     so the migration test can focus on the implementation transition, not on staking.
+///     Threshold updates are validated in beforePropose, mirroring the sender strategy.
 contract MockMigrationStrategy is IGovernanceStrategy {
-    /// @notice Marker errors proving a threshold validator was invoked.
+    /// @notice Marker errors proving a threshold validation was invoked.
     error MockInvalidProposalThreshold();
     error MockInvalidQuorumThreshold();
 
-    /// @dev Voting period in blocks for TimeType.Blocknumber, i.e. 7 days at ~12s blocks.
-    ///      Must be denominated in blocks: the timestamp period (7 days) is expressed in
-    ///      seconds and cannot be added to a block number without corrupting the window.
+    /// @dev Voting period in blocks for block mode, i.e. 7 days at ~12s blocks. Must be
+    ///      denominated in blocks: the timestamp period (7 days) is expressed in seconds and
+    ///      cannot be added to a block number without corrupting the window.
     uint256 public constant BLOCK_VOTING_PERIOD = 50_400;
 
     uint256 public proposalThreshold;
     uint256 public quorumThreshold;
     uint256 public votingPower;
+    /// @dev Window unit: an integrator strategy knows its governance's TimeType at deploy time.
+    bool public blockMode;
 
     bool private immutable _revertOnProposalValidation;
     bool private immutable _revertOnQuorumValidation;
@@ -51,21 +54,21 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         votingPower = votingPower_;
     }
 
-    function assertValidInitParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
-
-    function assertValidProposalThreshold(uint256) external view override {
-        require(!_revertOnProposalValidation, MockInvalidProposalThreshold());
+    function setBlockMode(bool blockMode_) external {
+        blockMode = blockMode_;
     }
 
-    function assertValidQuorumThreshold(uint256) external view override {
-        require(!_revertOnQuorumValidation, MockInvalidQuorumThreshold());
-    }
+    function validateParams(IRigoblockGovernanceFactory.Parameters calldata) external pure {}
 
     function getProposalState(
         IRigoblockGovernance.Proposal memory proposal,
+        address,
         uint256 minimumQuorum,
+        uint256,
         TimeType timeType
     ) external view returns (ProposalStatus) {
+        // executed is terminal and must be reported regardless of the clock
+        if (proposal.executed) return ProposalStatus.Executed;
         uint256 blockOrTime = timeType == TimeType.Timestamp ? block.timestamp : block.number;
         if (blockOrTime <= proposal.startBlockOrTime) {
             return ProposalStatus.Pending;
@@ -75,8 +78,6 @@ contract MockMigrationStrategy is IGovernanceStrategy {
             return ProposalStatus.Active;
         } else if (proposal.votesFor <= 2 * proposal.votesAgainst || proposal.votesFor < minimumQuorum) {
             return ProposalStatus.Defeated;
-        } else if (proposal.executed) {
-            return ProposalStatus.Executed;
         } else {
             return ProposalStatus.Succeeded;
         }
@@ -93,47 +94,51 @@ contract MockMigrationStrategy is IGovernanceStrategy {
         return 7 days;
     }
 
-    function votingTimestamps(
-        TimeType timeType
-    ) external view returns (uint256 startBlockOrTime, uint256 endBlockOrTime) {
-        if (timeType == TimeType.Timestamp) {
-            startBlockOrTime = block.timestamp + 1;
-            endBlockOrTime = startBlockOrTime + 7 days;
-        } else {
-            startBlockOrTime = block.number + 1;
-            endBlockOrTime = startBlockOrTime + BLOCK_VOTING_PERIOD;
-        }
-    }
-
     function getVotingPower(address) external view returns (uint256) {
         return votingPower;
     }
 
     function beforePropose(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+        ProposedAction[] calldata actions
+    ) external view returns (ProposedAction[] memory, uint256 startBlockOrTime, uint256 endBlockOrTime) {
+        // threshold updates are validated here, at propose time; a flag that rejects a changed
+        // threshold must not block an update that leaves it unchanged
+        for (uint256 i = 0; i < actions.length; i++) {
+            if (actions[i].target != msg.sender || actions[i].data.length < 4) continue;
+            if (bytes4(actions[i].data) != IGovernanceUpgrade.updateThresholds.selector) continue;
+            (uint256 newProposalThreshold, uint256 newQuorumThreshold) = abi.decode(
+                actions[i].data[4:],
+                (uint256, uint256)
+            );
+            require(
+                !_revertOnProposalValidation || newProposalThreshold == proposalThreshold,
+                MockInvalidProposalThreshold()
+            );
+            require(!_revertOnQuorumValidation || newQuorumThreshold == quorumThreshold, MockInvalidQuorumThreshold());
+        }
+        startBlockOrTime = blockMode ? block.number + 1 : block.timestamp + 1;
+        endBlockOrTime = startBlockOrTime + (blockMode ? BLOCK_VOTING_PERIOD : 7 days);
+        return (actions, startBlockOrTime, endBlockOrTime);
     }
 
-    function beforeExecute(
-        IRigoblockGovernance.ProposedAction calldata action
-    ) external pure returns (IRigoblockGovernance.ProposedAction memory) {
-        return action;
+    function beforeVote(ProposalExtraData calldata) external view returns (uint256) {
+        return votingPower;
+    }
+
+    function beforeExecute(ProposedAction[] calldata actions) external pure returns (ProposedAction[] memory) {
+        return actions;
     }
 
     function wormhole() external pure returns (address) {
         return address(0);
-    }
-
-    function wormholeChainId() external pure returns (uint16) {
-        return 0;
     }
 }
 
 /// @title MigrationHarness
 /// @notice Exposes governance storage and uses the real new-implementation mixins.
 contract MigrationHarness is MixinStorage, MixinInitializer, MixinVoting, MixinUpgrade, MixinCrosschain {
-    constructor() MixinStorage() {}
+    // 2 is the Wormhole chain id of Ethereum, the governance hub
+    constructor() MixinStorage(2) {}
 
     function setStrategy(address strategy_) external {
         _paramsWrapper().governanceParameters.strategy = strategy_;
@@ -157,15 +162,15 @@ contract MigrationHarness is MixinStorage, MixinInitializer, MixinVoting, MixinU
     }
 
     function setProposalQuorum(uint256 proposalId, uint256 quorum) external {
-        _proposalQuorum().proposalQuorumById[proposalId] = quorum;
+        _proposalExtraData().proposalExtraDataById[proposalId].quorum = uint128(quorum);
     }
 
     function proposalSlot() external pure returns (bytes32) {
         return _PROPOSAL_SLOT;
     }
 
-    function proposalQuorumSlot() external pure returns (bytes32) {
-        return _PROPOSAL_QUORUM_SLOT;
+    function proposalExtraDataSlot() external pure returns (bytes32) {
+        return _PROPOSAL_EXTRA_DATA_SLOT;
     }
 
     function proposalMetaSlot() external pure returns (bytes32) {
@@ -193,8 +198,8 @@ contract MockTarget {
 
 /// @title GovernanceMigrationTest
 /// @notice Simulates the governance implementation upgrade that introduces the
-///     `proposalQuorumById` snapshot mapping. Verifies that:
-///     1. Proposals written by the old implementation (no quorum mapping entry) are treated
+///     merged proposal extra-data slot (quorum snapshot). Verifies that:
+///     1. Proposals written by the old implementation (no quorum snapshot) are treated
 ///        as legacy and rendered unexecutable.
 ///     2. New proposals created after the upgrade snapshot the current quorum in a mapping.
 ///     3. A later quorum reduction cannot resurrect a legacy proposal.
@@ -236,7 +241,7 @@ contract GovernanceMigrationTest is Test {
     function test_Migration_LegacyProposal_BecomesDefeated() public {
         uint256 legacyId = _createLegacyProposal(harness);
 
-        // The legacy proposal has no quorum mapping entry.
+        // The legacy proposal has no quorum snapshot.
         assertEq(_readProposalQuorum(harness, legacyId), 0);
 
         // Warp past voting period. The legacy proposal can never reach type(uint256).max quorum.
@@ -324,12 +329,12 @@ contract GovernanceMigrationTest is Test {
         assertEq(uint256(harness.getProposalState(postReductionId)), uint256(ProposalStatus.Succeeded));
     }
 
-    /// @notice An unchanged threshold must not be re-validated on update: supply inflation can
-    ///     drift a previously valid threshold out of range, and a single-threshold update must
-    ///     never be blocked by the other threshold's drift (a liveness hazard for governance).
-    function test_UpdateThresholds_ValidatesOnlyChangedThresholds() public {
+    /// @notice Threshold updates are validated by the strategy's beforePropose hook, at
+    ///     propose time: a strategy that rejects a changed proposal threshold must not block
+    ///     an update that leaves it unchanged, while a proposal changing it reverts at propose.
+    function test_UpdateThresholds_ValidatedAtProposeTime() public {
         // a strategy that rejects any NEW proposal threshold: a quorum-only update must still
-        // succeed, because the unchanged proposal threshold is not re-validated
+        // succeed, because the unchanged proposal threshold is not flagged
         MockMigrationStrategy rejectingProposal = new MockMigrationStrategy(true, false);
         rejectingProposal.setParams(PROPOSAL_THRESHOLD, INITIAL_QUORUM, VOTING_POWER);
         harness.setStrategy(address(rejectingProposal));
@@ -342,24 +347,31 @@ contract GovernanceMigrationTest is Test {
         _voteAndExecute(harness, quorumOnlyId);
         assertEq(_governanceQuorum(), LOWERED_QUORUM);
 
-        // an update that changes the proposal threshold is validated and reverts
+        // an update that changes the proposal threshold is validated and reverts at propose
         bytes memory both = abi.encodeWithSelector(
             IGovernanceUpgrade.updateThresholds.selector,
             LOWERED_PROPOSAL_THRESHOLD,
             LOWERED_QUORUM
         );
-        uint256 bothId = _createProposalWithData(harness, both, "both thresholds");
-        vm.warp(block.timestamp + 2);
-        vm.prank(whale);
-        harness.castVote(bothId, uint8(IGovernanceVoting.VoteType.For));
-        vm.warp(block.timestamp + 8 days);
         vm.expectRevert(MockMigrationStrategy.MockInvalidProposalThreshold.selector);
-        harness.execute(bothId);
+        _createProposalWithData(harness, both, "both thresholds");
 
-        // symmetric case: a strategy rejecting any new quorum must not block a proposal-only update
+        // symmetric case: a strategy rejecting any new quorum must not block a proposal-only
+        // update; the mock's notion of the current quorum is synced to the value the earlier
+        // quorum-only proposal stored
         MockMigrationStrategy rejectingQuorum = new MockMigrationStrategy(false, true);
-        rejectingQuorum.setParams(PROPOSAL_THRESHOLD, INITIAL_QUORUM, VOTING_POWER);
+        rejectingQuorum.setParams(PROPOSAL_THRESHOLD, LOWERED_QUORUM, VOTING_POWER);
         harness.setStrategy(address(rejectingQuorum));
+
+        // a proposal that changes the quorum is validated and reverts at propose
+        bytes memory changedQuorum = abi.encodeWithSelector(
+            IGovernanceUpgrade.updateThresholds.selector,
+            PROPOSAL_THRESHOLD,
+            INITIAL_QUORUM
+        );
+        vm.expectRevert(MockMigrationStrategy.MockInvalidQuorumThreshold.selector);
+        _createProposalWithData(harness, changedQuorum, "changed quorum");
+
         bytes memory proposalOnly = abi.encodeWithSelector(
             IGovernanceUpgrade.updateThresholds.selector,
             LOWERED_PROPOSAL_THRESHOLD,
@@ -497,7 +509,7 @@ contract GovernanceMigrationTest is Test {
         vm.prank(whale);
         harness.castVote(proposalId, uint8(IGovernanceVoting.VoteType.For));
 
-        IGovernanceVoting.ProposedAction[] memory actions = harness.getActions(proposalId);
+        ProposedAction[] memory actions = harness.getActions(proposalId);
         assertEq(actions.length, 1);
         assertEq(actions[0].target, address(target));
         assertEq(actions[0].value, 0);
@@ -550,8 +562,9 @@ contract GovernanceMigrationTest is Test {
         // `executed` is the last field of the 7-field Proposal struct.
         assertEq(vm.load(address(harness), executedSlot), bytes32(uint256(1)));
 
-        // The quorum snapshot lives in its own mapping at a different slot.
-        bytes32 quorumSlot = keccak256(abi.encode(uint256(proposalId), uint256(harness.proposalQuorumSlot())));
+        // The quorum snapshot lives in its own mapping at a different slot, packed with the
+        // first-vote voting-power snapshot as two uint128 in one slot value.
+        bytes32 quorumSlot = keccak256(abi.encode(uint256(proposalId), uint256(harness.proposalExtraDataSlot())));
         assertTrue(executedSlot != quorumSlot);
         assertEq(vm.load(address(harness), quorumSlot), bytes32(uint256(12345)));
     }
@@ -561,14 +574,14 @@ contract GovernanceMigrationTest is Test {
         MigrationHarness instance,
         string memory description
     ) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(target), data: "", value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(target), data: "", value: 0});
         vm.prank(whale);
         return instance.propose(actions, description);
     }
 
     /// @dev Simulates a proposal written by the old implementation by creating a
-    ///     proposal with the new implementation and then deleting its quorum mapping entry.
+    ///     proposal with the new implementation and then deleting its quorum snapshot.
     function _createLegacyProposal(MigrationHarness instance) private returns (uint256 proposalId) {
         proposalId = _createProposal(instance, "legacy proposal");
         instance.setProposalQuorum(proposalId, 0);
@@ -579,8 +592,8 @@ contract GovernanceMigrationTest is Test {
 
     /// @dev Returns the raw quorum snapshot for a proposal from storage.
     function _readProposalQuorum(MigrationHarness instance, uint256 proposalId) private view returns (uint256) {
-        bytes32 quorumSlot = keccak256(abi.encode(proposalId, uint256(instance.proposalQuorumSlot())));
-        return uint256(vm.load(address(instance), quorumSlot));
+        bytes32 extraDataSlot = keccak256(abi.encode(proposalId, uint256(instance.proposalExtraDataSlot())));
+        return uint128(uint256(vm.load(address(instance), extraDataSlot)));
     }
 
     /// @dev Creates a proposal whose single action calls the given instance with the given calldata.
@@ -589,8 +602,8 @@ contract GovernanceMigrationTest is Test {
         bytes memory data,
         string memory description
     ) private returns (uint256 proposalId) {
-        IGovernanceVoting.ProposedAction[] memory actions = new IGovernanceVoting.ProposedAction[](1);
-        actions[0] = IGovernanceVoting.ProposedAction({target: address(instance), data: data, value: 0});
+        ProposedAction[] memory actions = new ProposedAction[](1);
+        actions[0] = ProposedAction({target: address(instance), data: data, value: 0});
         vm.prank(whale);
         return instance.propose(actions, description);
     }

@@ -1,12 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
-
 /// @title GovernanceTypes - Shared types for governance.
-/// @notice This file holds types that are not already declared inside the public
-///         governance interfaces, which must keep their types as interface members
-///         for backwards compatibility with deployed contracts.
+/// @notice Shared governance structs and types live here and are imported by the public
+///         interfaces and implementations alike.
 ///         The native proposal-state enum lives here under the name `ProposalStatus`:
 ///         two inherited enums cannot share the `ProposalState` name (solc 9097
 ///         "Identifier already declared" — see `IRigoblockGovernance`, which inherits
@@ -28,6 +25,24 @@ enum ProposalStatus {
     Executed
 }
 
+/// @notice A single governance action: a contract call with optional native value.
+/// @param target The contract to call.
+/// @param data The calldata for the call.
+/// @param value The native value attached to the call.
+struct ProposedAction {
+    address target;
+    bytes data;
+    uint256 value;
+}
+
+/// @notice Per-proposal data the strategy hooks receive and the governance snapshots.
+/// @param quorum The quorum threshold snapshotted at proposal time.
+/// @param votingPower Total voting power snapshotted on the proposal's first vote; 0 until then.
+struct ProposalExtraData {
+    uint128 quorum;
+    uint128 votingPower;
+}
+
 /// @notice Payload delivered through Wormhole to a target-chain receiver.
 /// @param targetWormholeChainId Wormhole chain id of the target chain.
 /// @param proposalId Mainnet proposal id that produced the message.
@@ -36,5 +51,5 @@ enum ProposalStatus {
 struct CrossChainPayload {
     uint16 targetWormholeChainId;
     uint256 proposalId;
-    IGovernanceVoting.ProposedAction[] actions;
+    ProposedAction[] actions;
 }

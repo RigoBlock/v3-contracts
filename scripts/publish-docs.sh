@@ -25,7 +25,12 @@ DOCS_COMMIT_MESSAGE="${DOCS_COMMIT_MESSAGE:-chore: update Solidity API docs}"
 
 cd "$REPO_ROOT"
 
-# 1. Generate docs
+# 0. Ensure Node has enough heap for hardhat-markup over the full artifact set
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=12288}"
+
+# 1. Build (cache-hit when artifacts are fresh) then generate docs from artifacts
+echo "Building contracts..."
+npx hardhat build --no-tests
 echo "Generating API docs..."
 yarn docgen
 

@@ -1,3 +1,19 @@
+# [2.9.0](https://github.com/RigoBlock/v3-contracts/compare/v2.8.2...v2.9.0) (2026-10-14)
+
+
+### Bug Fixes
+
+* gov strategy on receiver chains ([dafe2fd](https://github.com/RigoBlock/v3-contracts/commit/dafe2fd49e6587a82614f10b6c46c8e9b17e6af4))
+* slither gov analysis fixes ([4171cc0](https://github.com/RigoBlock/v3-contracts/commit/4171cc0dfa33bf0c39c5b38f159fdbece18d6389))
+
+
+### Features
+
+* add recoverer ([27ec14d](https://github.com/RigoBlock/v3-contracts/commit/27ec14d22b6fcb0eb6502b0177ebcc41691a712c))
+* separate receiver strategy logic from rest ([b35a9f7](https://github.com/RigoBlock/v3-contracts/commit/b35a9f75b7d436a4df883eaf05e09b392dd8cb3e))
+
+
+
 ## [2.8.2](https://github.com/RigoBlock/v3-contracts/compare/v2.8.1...v2.8.2) (2026-10-05)
 
 
@@ -56,15 +72,6 @@
 
 * canonical CBOR tails restore cross-chain CREATE2 parity under Hardhat 3 ([a2e3638](https://github.com/RigoBlock/v3-contracts/commit/a2e3638ebb1e2ef4184ec5b2c6b21e6d796a821b))
 * fail closed when deploying to an unconfigured live chain ([9abdbd0](https://github.com/RigoBlock/v3-contracts/commit/9abdbd0a7502390c2bf4c1c5fbe8b61281afbe40))
-
-
-
-## [2.6.4](https://github.com/RigoBlock/v3-contracts/compare/v2.6.3...v2.6.4) (2026-09-12)
-
-
-### Bug Fixes
-
-* same block nav lock on hyperEvm ([db2816f](https://github.com/RigoBlock/v3-contracts/commit/db2816f0a9a987a352919dac32e0ef02fb66dfe9))
 
 
 
