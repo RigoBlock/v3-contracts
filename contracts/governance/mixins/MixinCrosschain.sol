@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ICoreBridge, CoreBridgeVM} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
+import {ReentrancyGuardTransient} from "../../protocol/libraries/ReentrancyGuardTransient.sol";
 import {CrossChainPayload} from "../types/GovernanceTypes.sol";
 import {GovernanceActionLib} from "../libraries/GovernanceActionLib.sol";
 import {IGovernanceCrosschain} from "../interfaces/governance/IGovernanceCrosschain.sol";
@@ -11,9 +12,9 @@ import {MixinStorage} from "./MixinStorage.sol";
 
 /// @title Cross-chain governance receiver mixin.
 /// @notice Executes actions decided by the sender-chain governance and delivered through Wormhole.
-abstract contract MixinCrosschain is MixinStorage {
+abstract contract MixinCrosschain is MixinStorage, ReentrancyGuardTransient {
     /// @inheritdoc IGovernanceCrosschain
-    function receiveMessage(bytes memory encodedMessage) external override {
+    function receiveMessage(bytes memory encodedMessage) external override nonReentrant {
         ICoreBridge wormhole = ICoreBridge(_wormhole());
 
         // verify the VAA. Forged or malformed messages return valid == false.
@@ -30,14 +31,10 @@ abstract contract MixinCrosschain is MixinStorage {
 
         uint16 localChainId = _localWormholeChainId();
 
-        // never accept a message whose emitter chain is this chain (on the hub this is the
-        // same check as emitter == hub)
+        // never accept a message emitted on this chain
         require(verifiedVaa.emitterChainId != localChainId, GovReceiverLocalEmitter(localChainId));
 
-        // sequences must be strictly monotonically increasing but need not be consecutive
-        // (audited Uniswap receiver model): a message that reverts on execution never
-        // clogs the pipeline, as any later message still passes the check; re-delivered
-        // messages are rejected by the same check
+        // sequences must be strictly increasing, not consecutive: a reverted message never clogs the pipeline
         uint64 sequence = verifiedVaa.sequence;
         uint64 minimum = _crosschainSequence().value;
         require(sequence >= minimum, GovReceiverInvalidSequence(sequence, minimum));
@@ -64,8 +61,7 @@ abstract contract MixinCrosschain is MixinStorage {
         return _crosschainSequence().value;
     }
 
-    /// @dev Returns the Wormhole core contract from the strategy. The strategy is asserted
-    ///      non-null at initialization and by both strategies' constructors.
+    /// @dev Returns the Wormhole core contract from the strategy.
     function _wormhole() private view returns (address) {
         return IGovernanceStrategy(_governanceParameters().strategy).wormhole();
     }

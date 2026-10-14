@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MixinCrosschain} from "../../contracts/governance/mixins/MixinCrosschain.sol";
@@ -157,7 +157,7 @@ contract MockCompatStrategy is IGovernanceStrategy {
         return (actions, startBlockOrTime, endBlockOrTime);
     }
 
-    function beforeVote() external view returns (uint256) {
+    function beforeVote(ProposalExtraData calldata) external view returns (uint256) {
         return votingPower;
     }
 

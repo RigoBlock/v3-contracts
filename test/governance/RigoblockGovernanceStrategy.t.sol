@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {CrossChainPayload, ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus, ProposedAction, ProposalExtraData} from "../../contracts/governance/types/GovernanceTypes.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
@@ -187,10 +187,7 @@ contract RigoblockGovernanceStrategyTest is Test {
             name: "Rigoblock Governance"
         });
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
-                TimeType.Blocknumber
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
         );
         strategy.validateParams(params);
     }
@@ -270,10 +267,7 @@ contract RigoblockGovernanceStrategyTest is Test {
             executed: false
         });
         vm.expectRevert(
-            abi.encodeWithSelector(
-                RigoblockGovernanceStrategy.GovStrategyInvalidTimeType.selector,
-                TimeType.Blocknumber
-            )
+            abi.encodeWithSelector(IGovernanceStrategy.GovStrategyInvalidTimeType.selector, TimeType.Blocknumber)
         );
         strategy.getProposalState(proposal, address(0), 100, 0, TimeType.Blocknumber);
     }
@@ -707,7 +701,7 @@ contract RigoblockGovernanceStrategyTest is Test {
         staking.setOwnerDelegated(voter1, 1_200_000e18, 2_000_000e18);
         staking.setGlobalDelegated(2_000_000e18, 2_800_000e18);
         assertEq(stubStrategy.getVotingPower(voter1), 1_200_000e18);
-        assertEq(stubStrategy.beforeVote(), 2_000_000e18);
+        assertEq(stubStrategy.beforeVote(ProposalExtraData(0, 0)), 2_000_000e18);
 
         // (2) propose (fallback start), two votes and execution all succeed
         vm.prank(voter1);

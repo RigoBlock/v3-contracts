@@ -6,7 +6,7 @@ import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovern
 import {IWormholeReceiverStrategy} from "../../contracts/governance/strategies/interfaces/IWormholeReceiverStrategy.sol";
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 import {MixinVoting} from "../../contracts/governance/mixins/MixinVoting.sol";
-import {CrossChainPayload, ProposalStatus, ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
+import {CrossChainPayload, ProposalStatus, ProposedAction, ProposalExtraData} from "../../contracts/governance/types/GovernanceTypes.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {IStructs} from "../../contracts/staking/interfaces/IStructs.sol";
@@ -125,7 +125,7 @@ contract GovernanceRecoveryTest is Test {
 
         assertEq(strategy.getVotingPower(recovery), 0);
         // the receiver has no voting window, no snapshot total and no propose path outside a recovery
-        assertEq(strategy.beforeVote(), 0);
+        assertEq(strategy.beforeVote(ProposalExtraData(0, 0)), 0);
         vm.expectRevert(IWormholeReceiverStrategy.GovLocalGovernanceDisabled.selector);
         strategy.beforePropose(_incrementActions());
     }
@@ -308,6 +308,9 @@ contract GovernanceRecoveryTest is Test {
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
             abi.encode(block.timestamp + 1)
         );
+        // the first vote's best-effort roll calls endEpoch: return proper ABI data, a bare
+        // no-code call would revert in a way that bypasses the strategy's try/catch
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.endEpoch.selector), abi.encode(uint256(0)));
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
         WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(

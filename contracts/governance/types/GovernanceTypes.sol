@@ -35,6 +35,14 @@ struct ProposedAction {
     uint256 value;
 }
 
+/// @notice Per-proposal data the strategy hooks receive and the governance snapshots.
+/// @param quorum The quorum threshold snapshotted at proposal time.
+/// @param votingPower Total voting power snapshotted on the proposal's first vote; 0 until then.
+struct ProposalExtraData {
+    uint128 quorum;
+    uint128 votingPower;
+}
+
 /// @notice Payload delivered through Wormhole to a target-chain receiver.
 /// @param targetWormholeChainId Wormhole chain id of the target chain.
 /// @param proposalId Mainnet proposal id that produced the message.

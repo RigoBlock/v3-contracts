@@ -11,6 +11,7 @@ import {IGovernanceVoting} from "../../contracts/governance/interfaces/governanc
 import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernance.sol";
 import {RigoblockGovernanceStrategy} from "../../contracts/governance/strategies/RigoblockGovernanceStrategy.sol";
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
+import {ReentrancyGuardTransient} from "../../contracts/protocol/libraries/ReentrancyGuardTransient.sol";
 
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge, CoreBridgeVM, GuardianSignature} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
@@ -300,9 +301,9 @@ contract GovernanceCrosschainTest is Test {
         assertEq(governance.nextMinimumSequence(), 1);
     }
 
-    /// @notice The sequence bump happens before action execution: an action that re-enters
-    ///     receiveMessage with the same VAA is rejected by the monotonic sequence check,
-    ///     reverting the whole batch atomically.
+    /// @notice An action that re-enters receiveMessage mid-execution is rejected by the
+    ///     transient reentrancy guard before it can touch state, reverting the whole batch
+    ///     atomically; the sequence stays unconsumed.
     function test_ReceiveMessage_Reentrancy_BumpsSequenceBeforeExecution() public {
         ReentrantRelayerTarget relayerTarget = new ReentrantRelayerTarget(address(governance));
         ProposedAction memory action = ProposedAction({
@@ -313,9 +314,7 @@ contract GovernanceCrosschainTest is Test {
         bytes memory payload = _encodePayload(action);
         _mockParseAndVerify(_buildVaa(payload, 0));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IGovernanceCrosschain.GovReceiverInvalidSequence.selector, uint64(0), uint64(1))
-        );
+        vm.expectRevert(ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector);
         governance.receiveMessage("");
 
         assertEq(governance.nextMinimumSequence(), 0);
@@ -636,6 +635,9 @@ contract GovernanceCrosschainTest is Test {
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
             abi.encode(block.timestamp + 1)
         );
+        // the first vote's best-effort roll calls endEpoch: return proper ABI data, a bare
+        // no-code call would revert in a way that bypasses the strategy's try/catch
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.endEpoch.selector), abi.encode(uint256(0)));
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
         // the cross-chain capability works...
@@ -699,6 +701,9 @@ contract GovernanceCrosschainTest is Test {
             abi.encodeWithSelector(IStaking.getCurrentEpochEarliestEndTimeInSeconds.selector),
             abi.encode(block.timestamp + 1)
         );
+        // the first vote's best-effort roll calls endEpoch: return proper ABI data, a bare
+        // no-code call would revert in a way that bypasses the strategy's try/catch
+        vm.mockCall(STAKING, abi.encodeWithSelector(IStaking.endEpoch.selector), abi.encode(uint256(0)));
         vm.mockCall(STAKING, abi.encodeWithSelector(IStorage.epochDurationInSeconds.selector), abi.encode(7 days));
 
         governance.setParams(1, 400_000e18);

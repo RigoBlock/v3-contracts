@@ -5,14 +5,13 @@ import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol"
 import {IGovernanceState} from "../interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IRigoblockGovernanceFactory} from "../interfaces/IRigoblockGovernanceFactory.sol";
-import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 import {TimeType} from "../types/TimeType.sol";
 import {IWormholeReceiverStrategy} from "./interfaces/IWormholeReceiverStrategy.sol";
 
 /// @title WormholeReceiverStrategy - Receiver-chain governance strategy.
-/// @dev Staking-free: local governance is fail-closed and the only execution path is
-///      cross-chain messages delivered from the sender chain. A recovery escape hatch
-///      (see the governance documentation) covers bridge failure.
+/// @dev Staking-free and fail-closed: the only execution path is cross-chain delivery.
+///      See docs/governance/RECOVERY.md for the recovery escape hatch.
 contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrategy {
     /// @notice Challenge window between a recovery request and its activation.
     uint256 private constant _RECOVERY_WINDOW = 60 days;
@@ -28,16 +27,15 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     uint256 private _recoveryRequestedAt;
 
-    constructor(address wormhole, address governanceProxy, address recoveryAddress) {
-        require(wormhole.code.length > 0, GovRecoveryAddressZero());
-        try ICoreBridge(wormhole).chainId() returns (uint16) {} catch {
+    constructor(address coreBridge, address governanceProxy, address recoveryAddress) {
+        require(coreBridge.code.length > 0, GovRecoveryAddressZero());
+        try ICoreBridge(coreBridge).chainId() returns (uint16) {} catch {
             revert GovRecoveryAddressZero();
         }
-        // the proxy is not yet wired to this strategy, so no interface can be probed; code.length
-        // at least rules out the zero address and EOAs, which could never deliver a recovery veto
+        // the proxy cannot be probed yet; code.length rules out the zero address and EOAs
         require(governanceProxy.code.length > 0, GovRecoveryInvalidProxy(governanceProxy));
         require(recoveryAddress != address(0), GovRecoveryAddressZero());
-        _wormhole = wormhole;
+        _wormhole = coreBridge;
         _governanceProxy = governanceProxy;
         _recoveryAddress = recoveryAddress;
     }
@@ -45,8 +43,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     /// @inheritdoc IWormholeReceiverStrategy
     function requestRecover() external override {
         require(msg.sender == _recoveryAddress, GovRecoveryUnauthorized(msg.sender));
-        // a nonzero timestamp covers a pending request and an active recovery alike:
-        // re-requesting an active recovery would overwrite its timestamp and disarm it
+        // slither-disable-next-line incorrect-equality -- sentinel check on a timestamp, not an economic value
         require(_recoveryRequestedAt == 0, GovRecoveryAlreadyPending());
         _recoveryRequestedAt = block.timestamp;
         emit RecoverRequested(block.timestamp);
@@ -61,11 +58,10 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev Thresholds must stay reachable by the recovery address, whose voting power is
-    ///      hardcoded at type(uint96).max: a zero threshold would let anyone spam proposals
-    ///      during a recovery, and a threshold above the cap makes the recovery path unreachable.
+    /// @dev Thresholds are bounded by the recovery address's hardcoded voting power.
     function validateParams(IRigoblockGovernanceFactory.Parameters memory params) external view override {
         assert(keccak256(abi.encodePacked(params.name)) == keccak256(abi.encodePacked(string("Rigoblock Governance"))));
+        require(params.timeType == TimeType.Timestamp, GovStrategyInvalidTimeType(params.timeType));
         require(
             params.proposalThreshold > 0 && params.proposalThreshold <= type(uint96).max,
             GovStrategyInvalidProposalThreshold(params.proposalThreshold)
@@ -77,8 +73,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev Local governance is fail-closed: only the recovery address can pass a proposal,
-    ///      and only while a recovery is active. Execution status is handled here, first.
+    /// @dev Fail-closed: only the recovery address passes, and only during an active recovery.
     function getProposalState(
         IGovernanceState.Proposal memory proposal,
         address proposer,
@@ -86,7 +81,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
         uint256,
         TimeType
     ) external view override returns (ProposalStatus) {
-        // executed is terminal and must be reported regardless of the clock or recovery state
+        // executed is terminal and reported first
         if (proposal.executed) return ProposalStatus.Executed;
         if (proposer == _recoveryAddress && _isRecoveryActive()) return ProposalStatus.Succeeded;
         return ProposalStatus.Defeated;
@@ -94,8 +89,7 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
 
     /// @inheritdoc IGovernanceStrategy
     function getVotingPower(address account) public view override returns (uint256) {
-        // the recovery address must always be able to pass the proposer-threshold gate,
-        // regardless of the configured threshold value
+        // the recovery address always passes the proposer-threshold gate
         return _isRecoveryActive() && account == _recoveryAddress ? type(uint96).max : 0;
     }
 
@@ -120,9 +114,10 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
     }
 
     /// @inheritdoc IGovernanceStrategy
-    /// @dev No staking on receiver chains.
-    function beforeVote() external pure override returns (uint256) {
-        return 0;
+    /// @dev Effectively unreachable: receiver proposals are never Active, so no vote reaches
+    ///      this hook in production.
+    function beforeVote(ProposalExtraData calldata) external override returns (uint256) {
+        return _isRecoveryActive() ? type(uint96).max : 0;
     }
 
     /// @inheritdoc IGovernanceStrategy

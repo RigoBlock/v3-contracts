@@ -11,7 +11,7 @@ import {IGovernanceStrategy} from "../interfaces/IGovernanceStrategy.sol";
 import {IGovernanceVoting} from "../interfaces/governance/IGovernanceVoting.sol";
 import {MixinAbstract} from "./MixinAbstract.sol";
 import {MixinStorage} from "./MixinStorage.sol";
-import {ProposalStatus, ProposedAction} from "../types/GovernanceTypes.sol";
+import {ProposalStatus, ProposedAction, ProposalExtraData} from "../types/GovernanceTypes.sol";
 
 abstract contract MixinState is Governor, MixinStorage, MixinAbstract {
     /// @inheritdoc IGovernanceState
