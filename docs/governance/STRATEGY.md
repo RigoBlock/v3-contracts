@@ -221,7 +221,7 @@ mode maps to a dedicated strategy contract:
 The deploy script (`src/deploy/deploy_governance.ts`) is authoritative for the mapping: it
 derives the mode from `GOVERNANCE_HUB_CHAIN` (`src/utils/constants.ts`) — a chain is the
 sender iff it is the hub — and validates that the hub chain's config actually carries a
-Wormhole core address and a `wormholeChainId`, so the hub cannot be wired with an incomplete
+Wormhole core address, so the hub cannot be wired with an incomplete
 configuration. There is no per-chain mode field left to disagree with the derivation. Splitting
 the modes into two contracts removes every runtime mode branch: each strategy implements
 exactly one behavior, the constructor cannot be handed a contradictory mode/recovery
@@ -233,8 +233,9 @@ chain's Wormhole chain id (2 = Ethereum mainnet) via an implementation immutable
 (`_hubWormholeChainId` in `MixinImmutables.sol`), so a strategy swap can never re-point
 which chain's governance is trusted — a message emitted by any other chain's governance proxy
 is rejected regardless of the local strategy. The value is a constructor argument of the
-governance implementation, set at deployment from `GOVERNANCE_HUB_CHAIN`'s `wormholeChainId`
-config field and identical on every chain, so the deterministic implementation address is
+governance implementation, set at deployment from the single `governanceHubWormholeChainId`
+constant in `src/utils/constants.ts` and identical on every chain, so the deterministic
+implementation address is
 unchanged; it lives in the implementation, not in the strategy constructor, because it must not
 be strategy-upgradeable. It is also the only Wormhole id configured anywhere: Wormhole ids
 exist on the wire (VAA fields), no on-chain EVM-chainid↔Wormhole-chainid conversion exists
@@ -282,12 +283,23 @@ including the local one — is read from the Wormhole core contract's `chainId()
     for `wormhole()` and never touches staking.
   - The constructor takes `(wormhole, governanceProxy, recoveryAddress)`. The wormhole
     address must be a contract that answers a `chainId()` probe (reusing
-    `GovRecoveryAddressZero`); recoveryAddress must be non-zero, and governanceProxy must
-    have code — an EOA could never deliver a recovery veto, and there is no probeable
-    interface at construction time, so `code.length` is the only on-chain check (reverts
-    `GovRecoveryInvalidProxy`, covering the zero address too). Correctness-of-address is
-    off-chain's job: the deploy script verifies the governance
-    proxy address appears in the deployed strategy bytecode. The
+    `GovRecoveryAddressZero`); recoveryAddress must be non-zero, and governanceProxy must be
+    non-zero (`GovRecoveryInvalidProxy`, covering the zero address). A `code.length` or
+    address-equality probe is impossible here: on a receiver chain the strategy is deployed
+    *before* the proxy, since the factory's initializer requires a live strategy — a runtime
+    existence check would make the receiver flow unbootstrappable (the original
+    `code.length` check did exactly that). The strategy is therefore generic across
+    governance deployments: `governanceProxy` is a plain immutable input, and a different
+    governance instance (different deterministic proxy address) deploys its own strategy
+    instance with no source change. Correctness of the configured address is enforced at
+    deployment time, not on-chain: `src/deploy/deploy_governance.ts` re-derives the proxy
+    address from the deterministic inputs (`create2(factory, keccak256(abi.encode(creator,
+    name)), proxyInitCode)`) and reverts unless the recorded `governanceProxy` in
+    `src/utils/constants.ts` matches the derivation — adding a receiver chain never requires
+    a code or script change. The script additionally verifies the deployed strategy bytecode
+    contains the address, and
+    `test/governance/Governance.ReceiverDeploy.t.sol` replays the real order (strategy first,
+    proxy via `createGovernance` second) against the canonical factory code. The
     strategy carries the recovery escape hatch:
     after a 60-day challenge window with no mainnet veto, the recovery address can drive the
     ordinary local proposal flow — the proposal reads `Succeeded` immediately at creation
@@ -325,10 +337,24 @@ time type are read from the factory's transient storage by the proxy constructor
   no two-step upgrade: pass the current implementation and strategy as `createGovernance`
   arguments.
 - Because the proxy address is chain-independent, the receiver strategy takes it as a
-  constructor argument (`governanceProxy`) to authenticate a recovery rejection
-  (`rejectRecover`) — it is still not part of per-chain configuration beyond the single
-  constructor wiring in the deploy script.
+  constructor argument (`governanceProxy`) stored as an immutable, to authenticate a recovery
+  rejection (`rejectRecover`). On-chain the constructor only asserts non-zero: the strategy
+  is generic, and any governance deployment with a different deterministic proxy address
+  gets its own strategy instance without a source change.
 - This is how HyperEVM is brought under the canonical governance: deploy (or reuse) the
   implementation and strategy, then `createGovernance(newImplementation, strategy, …)` from
   the same deployer key — the proxy is created already pointing at the new implementation,
-  natively bonded to the passed strategy.
+  natively bonded to the passed strategy. On receiver chains the order is strategy first,
+  proxy second: `createGovernance` requires a live strategy (factory `assert` plus the
+  initializer's interface probe), and the receiver strategy does not require the proxy to
+  exist. The deploy script gates the wiring: it re-derives the proxy address from the
+  deterministic deployment inputs and reverts unless the recorded `governanceProxy` matches,
+  so a receiver cannot be wired to an address the deployment would not reproduce.
+- Initialization runs inside the proxy constructor via `delegatecall` and the proxy asserts
+  empty returndata, so any initialization revert that carries data (every custom error, panic,
+  and `require` message in the current code paths) reverts the whole `createGovernance`. A
+  revert with empty returndata would slip through the returndata-length assert and deploy an
+  uninitialized, permanently stuck proxy (the initializer's `onlyUninitialized` gate can never
+  pass again), so governance code must never revert bare: any new initialization revert path
+  must carry a reason. The proxy bytecode is canonical — its source must not change, as even a
+  comment alters the metadata and shifts the proxy address on fresh chains.
