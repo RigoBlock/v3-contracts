@@ -4,6 +4,7 @@ pragma solidity 0.8.37;
 import {Test} from "forge-std/Test.sol";
 import {ICoreBridge} from "wormhole-solidity-sdk/src/interfaces/ICoreBridge.sol";
 
+import {Constants} from "../../contracts/test/Constants.sol";
 import {IGovernanceState} from "../../contracts/governance/interfaces/governance/IGovernanceState.sol";
 import {IGovernanceStrategy} from "../../contracts/governance/interfaces/IGovernanceStrategy.sol";
 import {IGovernanceUpgrade} from "../../contracts/governance/interfaces/governance/IGovernanceUpgrade.sol";
@@ -18,7 +19,9 @@ import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/Wo
 ///     window; the full recovery flow is covered in Governance.Recovery.t.sol.
 contract WormholeReceiverStrategyTest is Test {
     address internal constant TARGET = address(0x3333);
-    address internal constant GOVERNANCE_PROXY = address(0x5555);
+    // the canonical governance proxy address; no code exists at it on a blank chain, which is
+    // exactly the receiver-chain situation the strategy must support
+    address internal constant GOVERNANCE_PROXY = Constants.GOV_PROXY;
     uint256 internal constant RECOVERY_WINDOW = 60 days;
 
     address internal wormhole;
@@ -30,8 +33,7 @@ contract WormholeReceiverStrategyTest is Test {
         // enough code for the constructor's code.length check and chainId() probe
         vm.etch(wormhole, hex"00");
         vm.mockCall(wormhole, abi.encodeCall(ICoreBridge.chainId, ()), abi.encode(uint16(47)));
-        // enough code for the constructor's governanceProxy code.length check
-        vm.etch(GOVERNANCE_PROXY, hex"00");
+        assertEq(GOVERNANCE_PROXY.code.length, 0);
         strategy = _receiverStrategy();
     }
 
@@ -59,11 +61,32 @@ contract WormholeReceiverStrategyTest is Test {
         new WormholeReceiverStrategy(wormhole, GOVERNANCE_PROXY, address(0));
     }
 
-    /// @dev The governance proxy authenticates recovery vetoes; a zero proxy would make the
-    ///     veto unreachable.
+    /// @dev The strategy is deployed before the governance proxy exists on a receiver chain, so
+    ///     construction must succeed against the bare canonical address (regression test for the
+    ///     code.length probe that made the receiver flow unbootstrappable).
+    function test_Constructor_ProxyNotYetDeployed_Succeeds() public {
+        assertEq(GOVERNANCE_PROXY.code.length, 0);
+        _receiverStrategy();
+    }
+
+    /// @dev The governance proxy authenticates recovery vetoes; the strategy must pin the
+    ///     canonical address, zero would make the veto unreachable.
     function test_Constructor_ZeroGovernanceProxy_Reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryInvalidProxy.selector, address(0)));
         new WormholeReceiverStrategy(wormhole, address(0), recovery);
+    }
+
+    /// @dev The strategy is generic across governance deployments: any non-zero proxy address is
+    ///     accepted and stored as an immutable; the deploy script guarantees the configured
+    ///     address matches the deterministic proxy derivation.
+    function test_Constructor_AnyNonZeroGovernanceProxy_Succeeds() public {
+        _receiverStrategy();
+        address otherProxy = makeAddr("otherProxy");
+        WormholeReceiverStrategy other = new WormholeReceiverStrategy(wormhole, otherProxy, recovery);
+        // the veto authenticates against the configured address
+        vm.prank(otherProxy);
+        vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryNotPending.selector);
+        other.rejectRecover();
     }
 
     /// @dev A zero wormhole address would make receiveMessage unusable.
@@ -76,13 +99,6 @@ contract WormholeReceiverStrategyTest is Test {
     function test_Constructor_EoaWormhole_Reverts() public {
         vm.expectRevert(IWormholeReceiverStrategy.GovRecoveryAddressZero.selector);
         new WormholeReceiverStrategy(makeAddr("eoa"), GOVERNANCE_PROXY, recovery);
-    }
-
-    /// @dev An EOA governance proxy could never deliver a recovery veto.
-    function test_Constructor_EoaGovernanceProxy_Reverts() public {
-        address proxyEoa = makeAddr("proxyEoa");
-        vm.expectRevert(abi.encodeWithSelector(IWormholeReceiverStrategy.GovRecoveryInvalidProxy.selector, proxyEoa));
-        new WormholeReceiverStrategy(wormhole, proxyEoa, recovery);
     }
 
     function _params(

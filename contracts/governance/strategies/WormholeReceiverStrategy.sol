@@ -32,8 +32,11 @@ contract WormholeReceiverStrategy is IGovernanceStrategy, IWormholeReceiverStrat
         try ICoreBridge(coreBridge).chainId() returns (uint16) {} catch {
             revert GovRecoveryAddressZero();
         }
-        // the proxy cannot be probed yet; code.length rules out the zero address and EOAs
-        require(governanceProxy.code.length > 0, GovRecoveryInvalidProxy(governanceProxy));
+        // the proxy cannot be probed yet: the strategy is deployed before it on receiver chains
+        // (the factory's initializer requires a live strategy), and its address is an immutable
+        // property of this strategy instance. Correctness of the configured address is enforced
+        // at deployment time, against the deterministic derivation, not on-chain.
+        require(governanceProxy != address(0), GovRecoveryInvalidProxy(governanceProxy));
         require(recoveryAddress != address(0), GovRecoveryAddressZero());
         _wormhole = coreBridge;
         _governanceProxy = governanceProxy;

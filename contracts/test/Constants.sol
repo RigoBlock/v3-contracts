@@ -74,6 +74,13 @@ library Constants {
     /// @notice Rigoblock Governance Proxy
     address internal constant GOV_PROXY = 0x5F8607739c2D2d0b57a4292868C368AB1809767a;
 
+    /// @notice Rigoblock Governance Factory (same across all chains)
+    address internal constant GOV_FACTORY = 0xc1AdDa7605d2DC47Dd91A930c978Cd6a18D2D760;
+
+    /// @notice Wallet that created the governance proxy through the factory on every chain; the
+    ///         proxy's CREATE2 address depends on this creator, so it must be the factory caller
+    address internal constant GOV_CREATOR = 0x080f08076e8EAdC66006C3CbFEd28a34918A1fA6;
+
     /// @notice Oracle contract on Ethereum
     address internal constant ORACLE = 0xB13250f0Dc8ec6dE297E81CDA8142DB51860BaC4;
     address internal constant BASE_ORACLE = 0x59f39091Fd6f47e9D0bCB466F74e305f1709BAC4;
