@@ -2,6 +2,7 @@ import { expect } from "chai";
 import {
   chainConfig,
   GOVERNANCE_HUB_CHAIN,
+  governanceHubWormholeChainId,
   governanceRecovery,
 } from "../../src/utils/constants";
 
@@ -11,15 +12,16 @@ import {
 
 describe("Governance chain config", async () => {
   // Mirrors the deploy script validation in src/deploy/deploy_governance.ts: the hub chain's
-  // wormhole configuration must exist, since the implementation constructor takes the hub
-  // wormhole chain id and the hub strategy wraps the hub wormhole core contract.
-  it("hub chain has wormhole and wormholeChainId configured", async () => {
+  // wormhole configuration must exist, since the hub strategy wraps the hub wormhole core
+  // contract. The hub Wormhole chain id is a single top-level constant used as the governance
+  // implementation's immutable.
+  it("hub chain has wormhole configured and a hub wormhole chain id exists", async () => {
     const hubConfig = chainConfig[GOVERNANCE_HUB_CHAIN];
     expect(hubConfig, `chain ${GOVERNANCE_HUB_CHAIN}`).to.not.eq(undefined);
     expect(hubConfig.wormhole).to.match(/^0x[0-9a-fA-F]{40}$/);
     expect(BigInt(hubConfig.wormhole)).to.not.eq(0n);
-    expect(hubConfig.wormholeChainId).to.be.a("number");
-    expect(hubConfig.wormholeChainId).to.be.greaterThan(0);
+    expect(governanceHubWormholeChainId).to.be.a("number");
+    expect(governanceHubWormholeChainId).to.be.greaterThan(0);
   });
 
   // Mirrors the deploy script validation in src/deploy/deploy_governance.ts: a recovery

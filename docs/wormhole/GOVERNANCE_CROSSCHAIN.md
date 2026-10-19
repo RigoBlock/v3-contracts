@@ -467,21 +467,32 @@ that would read `Defeated` at the deadline.
 
 `src/deploy/deploy_governance.ts` deploys the same suite on every chain:
 `RigoblockGovernanceFactory` (no constructor arguments), `RigoblockGovernance`
-with constructor argument `[hubWormholeChainId]` — derived from
-`GOVERNANCE_HUB_CHAIN`'s `wormholeChainId` in `src/utils/constants.ts`, identical
-on every chain, so the implementation keeps the same deterministic address — then
+with constructor argument `[hubWormholeChainId]` — the single `governanceHubWormholeChainId`
+constant in `src/utils/constants.ts`, identical on every chain, so the implementation keeps
+the same deterministic address — then
 the chain's strategy: `RigoblockGovernanceStrategy` with constructor arguments
 `[stakingProxy, wormhole]` on the hub chain, or `WormholeReceiverStrategy` with
 constructor arguments `[wormhole, governanceProxy, governanceRecovery]` on every
 other chain, which requires `governanceRecovery` (and the derived
-`governanceProxy`) to be configured. The local Wormhole chain id is not a
+`governanceProxy`) to be configured. The receiver strategy is deployed before the governance
+proxy exists: `governanceProxy` is a plain immutable constructor input (only asserted
+non-zero on-chain, since the strategy is deployed first and the factory's initializer
+requires a live strategy), and the deploy script re-derives the proxy address from the
+deterministic deployment inputs — `create2(factory, keccak256(abi.encode(creator, name)),
+proxyInitCode)` — reverting unless the recorded `governanceProxy` matches, so a receiver can
+never be wired to an address the deployment would not reproduce. The proxy itself is created
+in a separate step by the canonical creator key via `factory.createGovernance(implementation,
+strategy, thresholds, Timestamp, "Rigoblock Governance")`, landing at the recorded
+`governanceProxy` address on every chain;
+`test/governance/Governance.ReceiverDeploy.t.sol` replays this exact order against the
+canonical factory code. The local Wormhole chain id is not a
 constructor argument and no longer strategy state at all: every local id is read
 from the core bridge's `chainId()` at the point of use. The only Wormhole id
 configured anywhere is the hub's, as the implementation immutable, because VAA
 fields are Wormhole ids and no on-chain EVM↔Wormhole conversion exists (the SDK's
 `Chains.sol` is compile-time constants only).
 
-Chain-specific Wormhole addresses and chain ids are stored in
+Chain-specific Wormhole addresses are stored in
 `src/utils/constants.ts` and `contracts/test/Constants.sol`.
 
 ## Testing
@@ -498,6 +509,9 @@ Chain-specific Wormhole addresses and chain ids are stored in
   `forge test --match-path test/governance/RigoblockGovernanceStrategy.t.sol`
 - Foundry (receiver-strategy validation, including the recovery escape hatch):
   `forge test --match-path test/governance/WormholeReceiverStrategy.t.sol`
+- Foundry (realistic receiver-chain deployment: canonical factory code, strategy before
+  proxy, proxy created via `createGovernance` at the canonical address):
+  `forge test --match-path test/governance/Governance.ReceiverDeploy.t.sol`
 - Foundry (local migration simulation):
   `forge test --match-path test/governance/GovernanceMigration.t.sol`
 - Foundry (mainnet-fork migration simulation):

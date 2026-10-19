@@ -2,15 +2,21 @@ import { expect } from "chai";
 import { AbiCoder, ZeroHash, getCreate2Address, keccak256 } from "ethers";
 import { getSingletonFactoryInfo } from "@safe-global/safe-singleton-factory";
 import { readArtifact } from "../../rocketh/artifacts";
+import {
+  governanceCreator,
+  governanceName,
+  governanceProxy,
+} from "../../src/utils/constants";
 
 // Live addresses, identical on every deployed chain
 // (https://docs.rigoblock.com/deployments/deployed-contracts-gov)
 const GOVERNANCE_FACTORY = "0xc1AdDa7605d2DC47Dd91A930c978Cd6a18D2D760";
-const GOVERNANCE_PROXY = "0x5F8607739c2D2d0b57a4292868C368AB1809767a";
 
-// Wallet that created the mainnet governance through RigoblockGovernanceFactory.createGovernance
-const MAINNET_GOVERNANCE_CREATOR = "0x080f08076e8EAdC66006C3CbFEd28a34918A1fA6";
-const GOVERNANCE_NAME = "Rigoblock Governance";
+function singletonFactoryAddress(): string {
+  const info = getSingletonFactoryInfo(1);
+  if (!info) throw new Error("Safe singleton factory info unavailable");
+  return info.address;
+}
 
 // Skipped under coverage: solidity-coverage recompiles with instrumented bytecode, so the
 // artifact init code (and therefore the CREATE2 hash) no longer matches the deployed one.
@@ -21,9 +27,12 @@ describeDeterministic("Governance deterministic deployment", async () => {
     const { bytecode } = await readArtifact("RigoblockGovernanceFactory");
     // src/deploy/deploy_governance.ts deploys the factory with deterministic: true and no args:
     // create2(Safe singleton factory, salt 0, initCode)
-    const { address: singletonFactory } = getSingletonFactoryInfo(1);
     expect(
-      getCreate2Address(singletonFactory, ZeroHash, keccak256(bytecode)),
+      getCreate2Address(
+        singletonFactoryAddress(),
+        ZeroHash,
+        keccak256(bytecode),
+      ),
     ).to.eq(GOVERNANCE_FACTORY);
   });
 
@@ -34,11 +43,34 @@ describeDeterministic("Governance deterministic deployment", async () => {
     const salt = keccak256(
       AbiCoder.defaultAbiCoder().encode(
         ["address", "string"],
-        [MAINNET_GOVERNANCE_CREATOR, GOVERNANCE_NAME],
+        [governanceCreator, governanceName],
       ),
     );
     expect(
       getCreate2Address(GOVERNANCE_FACTORY, salt, keccak256(bytecode)),
-    ).to.eq(GOVERNANCE_PROXY);
+    ).to.eq(governanceProxy);
+  });
+
+  // Mirrors the deploy-script gate in src/deploy/deploy_governance.ts: the recorded
+  // governanceProxy constant must equal the full deterministic derivation, so a receiver
+  // deployment can never be wired to an address the deployment would not reproduce.
+  it("recorded governanceProxy matches the full deterministic derivation", async () => {
+    const factory = await readArtifact("RigoblockGovernanceFactory");
+    const proxy = await readArtifact("RigoblockGovernanceProxy");
+    const factoryAddress = getCreate2Address(
+      singletonFactoryAddress(),
+      ZeroHash,
+      keccak256(factory.bytecode),
+    );
+    expect(factoryAddress).to.eq(GOVERNANCE_FACTORY);
+    const salt = keccak256(
+      AbiCoder.defaultAbiCoder().encode(
+        ["address", "string"],
+        [governanceCreator, governanceName],
+      ),
+    );
+    expect(
+      getCreate2Address(factoryAddress, salt, keccak256(proxy.bytecode)),
+    ).to.eq(governanceProxy);
   });
 });

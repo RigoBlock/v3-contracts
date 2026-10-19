@@ -467,7 +467,7 @@ contract GovernanceCrosschainTest is Test {
         CrosschainHarness newImpl = new CrosschainHarness();
         WormholeReceiverStrategy newStrategy = new WormholeReceiverStrategy(
             wormhole,
-            address(governance),
+            Constants.GOV_PROXY,
             makeAddr("recovery")
         );
 
@@ -738,7 +738,7 @@ contract GovernanceCrosschainTest is Test {
     function test_Receiver_LocalProposeReverts_ReceiveStillExecutes() public {
         WormholeReceiverStrategy receiverStrategy = new WormholeReceiverStrategy(
             wormhole,
-            address(governance),
+            Constants.GOV_PROXY,
             makeAddr("recovery")
         );
         governance.setStrategy(address(receiverStrategy));
