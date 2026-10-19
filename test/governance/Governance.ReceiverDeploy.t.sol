@@ -12,11 +12,11 @@ import {RigoblockGovernance} from "../../contracts/governance/RigoblockGovernanc
 import {TimeType} from "../../contracts/governance/types/TimeType.sol";
 import {WormholeReceiverStrategy} from "../../contracts/governance/strategies/WormholeReceiverStrategy.sol";
 
-/// @notice The canonical factory runtime code from deployments/mainnet, etched at its canonical
-///         address. Foundry compiles the factory and proxy with different metadata than the
-///         original Hardhat build, which would shift the proxy's CREATE2 address; etching the
-///         deployed runtime reproduces the exact cross-chain bytecode (and therefore the exact
-///         proxy address) on a blank chain.
+/// @notice The canonical factory runtime code, captured from deployments/mainnet (the
+///         deployments directory is gitignored). Foundry compiles the factory and proxy with
+///         different metadata than the original Hardhat build, which would shift the proxy's
+///         CREATE2 address; etching the deployed runtime reproduces the exact cross-chain
+///         bytecode (and therefore the exact proxy address) on a blank chain.
 contract WormholeCoreStub {
     function chainId() external pure returns (uint16) {
         return 47;
@@ -45,8 +45,10 @@ contract GovernanceReceiverDeployTest is Test {
 
     function setUp() public {
         // canonical factory runtime at its canonical address
-        string memory factoryJson = vm.readFile("deployments/mainnet/RigoblockGovernanceFactory.json");
-        vm.etch(Constants.GOV_FACTORY, vm.parseJsonBytes(factoryJson, ".deployedBytecode"));
+        bytes memory factoryRuntime = vm.parseBytes(
+            vm.readFile("test/fixtures/governance/RigoblockGovernanceFactory.mainnet.hex")
+        );
+        vm.etch(Constants.GOV_FACTORY, factoryRuntime);
         factory = IRigoblockGovernanceFactory(Constants.GOV_FACTORY);
 
         // the implementation constructor takes the hub's Wormhole chain id (Ethereum)
