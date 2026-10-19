@@ -50,6 +50,9 @@ const {
   PK,
   SOLIDITY_VERSION,
   SOLIDITY_SETTINGS,
+  LIGHTER_DEVNET_EXPLORER_URL,
+  LIGHTER_DEVNET_API_URL,
+  LIGHTER_DEVNET_BROWSER_URL,
 } = process.env;
 
 const DEFAULT_MNEMONIC =
@@ -96,7 +99,7 @@ if (
     "bsc",
     "unichain",
     "hyperliquid",
-    "lighter",
+    "lighterevm-devnet",
   ].includes(argv.network) &&
   INFURA_KEY === undefined
 ) {
@@ -283,13 +286,19 @@ const userConfig: HardhatUserConfig = {
       // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network
       // live in src/utils/networkFees.ts and are applied by the managed-nonce helper.
     },
-    // LighterEVM devnet has no public RPC yet (access-gated); LIGHTER_RPC_URL must be provided.
-    // The placeholder only satisfies Hardhat's URL validation at config load — it is never
-    // contacted unless a task explicitly targets the lighter network.
-    lighter: {
+    // LighterEVM devnet (chainId 19529), named per Lighter's docs. The
+    // access-gated LIGHTER_RPC_URL is preferred; LIGHTER_DEVNET_EXPLORER_URL
+    // (kept private) is the explorer RPC fallback. The placeholder only
+    // satisfies Hardhat's URL validation at config load — it is never
+    // contacted unless a task explicitly targets this network.
+    "lighterevm-devnet": {
       type: "http",
       ...sharedNetworkConfig,
-      url: process.env.LIGHTER_RPC_URL || "https://lighter.invalid",
+      chainId: 19529,
+      url:
+        process.env.LIGHTER_RPC_URL ||
+        process.env.LIGHTER_DEVNET_EXPLORER_URL ||
+        "https://lighter.invalid",
     },
   },
   test: {
@@ -299,9 +308,31 @@ const userConfig: HardhatUserConfig = {
       timeout: 2000000,
     },
   },
-  // Hardhat 3's verify plugin has no customChains: it resolves explorers from
-  // the chain registry and Etherscan's chainlist, and the v2 API takes a
-  // `chainid` parameter, so a single API key covers every supported network.
+  // Hardhat 3's verify plugin resolves Blockscout instances from chain
+  // descriptors — the HH3 equivalent of Hardhat 2's `customChains`, which the
+  // v3 plugin does not support (see Blockscout's hardhat verification guide).
+  // The devnet explorer is present in no chainlist, so its descriptor is
+  // declared here from the private env URLs; verification is scoped to the
+  // Blockscout provider with `npx hardhat verify blockscout --network
+  // lighterevm-devnet ...`, leaving this config's Etherscan/Sourcify behavior
+  // untouched.
+  chainDescriptors: LIGHTER_DEVNET_API_URL
+    ? {
+        19529: {
+          name: "LighterEVM Devnet",
+          blockExplorers: {
+            blockscout: {
+              name: "LighterEVM Devnet Explorer",
+              url: LIGHTER_DEVNET_BROWSER_URL ?? LIGHTER_DEVNET_API_URL,
+              apiUrl: LIGHTER_DEVNET_API_URL,
+            },
+          },
+        },
+      }
+    : undefined,
+  // Etherscan v2: a single API key covers every network (the v2 API takes a
+  // `chainid` parameter). Devnet verification does not go through this
+  // provider; see `chainDescriptors` above.
   verify: {
     etherscan: {
       apiKey: ETHERSCAN_API_KEY ?? "",

@@ -354,11 +354,14 @@ block limit (see Gas analysis) — no additional constraint beyond the tracked-m
 
 ## RPC / environment naming
 
-The env variable stays **`LIGHTER_RPC_URL`** (`foundry.toml` maps `lighter =
-"${LIGHTER_RPC_URL}"`, `hardhat.config.ts` has a `lighter` network). It currently points at the
-access-gated devnet endpoint; at mainnet launch only the URL value changes — no variable or
-config renames. `.env.sample` documents this. The fork suite auto-skips while the variable is
-unset, so CI is unaffected.
+The env variable stays **`LIGHTER_RPC_URL`** (foundry keeps its own `lighter` RPC alias in
+`foundry.toml`; the fork fixture forks `"lighter"`). Hardhat's network for the devnet is
+`lighterevm-devnet` (chainId 19529), named per Lighter's docs; its URL resolves from
+`LIGHTER_RPC_URL` or the private `LIGHTER_DEVNET_EXPLORER_URL`. The explorer URLs for
+verification are `LIGHTER_DEVNET_API_URL` / `LIGHTER_DEVNET_BROWSER_URL` — they are
+access-restricted and must not be committed or published. At mainnet launch only the URL
+values change — no variable or config renames. `.env.sample` documents this. The fork suite
+auto-skips while `LIGHTER_RPC_URL` is unset, so CI is unaffected.
 
 ## Gas analysis and the 32-market cap
 
@@ -481,8 +484,8 @@ No extension/adapter storage (Rigoblock hard rule).
   factory (preinstalled on LighterEVM → deterministic-address parity holds).
 - `src/utils/constants.ts` chainConfig: WETH9 predeploy as wrapped native; zero
   oracle/staking/uniV4/posm/router/across/wormhole entries; devnet USDC.
-- `hardhat.config.ts` `lighter` network + fee caps (`src/utils/networkFees.ts`: 1 gwei max /
-  0.01 gwei priority), `foundry.toml` `lighter = "${LIGHTER_RPC_URL}"`, `.env.sample` entry.
+- `hardhat.config.ts` `lighterevm-devnet` network + fee caps (`src/utils/networkFees.ts`: 1 gwei max /
+  0.01 gwei priority), `foundry.toml` `lighter = "${LIGHTER_RPC_URL}"`, `.env.sample` entries.
 - `src/deploy/deploy_extensions.ts`: chain-19529 branch skips Uniswap/0x/AGovernance (not
   deployed there) and deploys `ALighter`. Selector registration in Authority is governance-driven
   (no `addMethod` in the deploy scripts): before pools can use the adapter on 19529, governance
@@ -490,6 +493,41 @@ No extension/adapter storage (Rigoblock hard rule).
   `cancelAllOrders`, `getLighterBalances`, `trackMarket`, `untrackMarket`. Note that
   `getLighterBalances`/`trackMarket`/`untrackMarket` must be registered for NAV to work at all,
   since the `EApps`/`ENavView` LIGHTER branches route through it.
+- Explorer verification: Hardhat 3's verify plugin (v3.1.0+) has native Blockscout support and
+  does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin syntax — see
+  Blockscout's hardhat verification guide). The HH3 equivalent is a `chainDescriptors` entry in
+  `hardhat.config.ts`, declared for chainId 19529 from the private env URLs
+  (`LIGHTER_DEVNET_API_URL` / `LIGHTER_DEVNET_BROWSER_URL`; no explorer URL is committed to the
+  repo). Verify with the provider-scoped subcommand, which leaves the Etherscan/Sourcify config
+  untouched:
+  `npx hardhat verify blockscout --network lighterevm-devnet <address> [constructorArgs...]`.
+  `scripts/verify-lighter-devnet.sh` batch-verifies every artifact in a deployments dir
+  (`deployments/lighter` by default), decoding constructor args from each `argsData`.
+  `SOLIDITY_SETTINGS` is unset for every call because the value committed in `.env` is a JS
+  literal, not JSON, and crashes hardhat's config loader.
+- **Verification status (2026-10-19): blocked explorer-side.** Both explorer APIs accept
+  verification jobs but never process them: the Etherscan-emulation
+  `?action=verifysourcecode` returns a guid and then `checkverifystatus` →
+  `Fail - Unable to verify`, and the native Blockscout v2 endpoint
+  `POST /api/v2/smart-contracts/{address}/verification/via/standard-input` (multipart,
+  `compiler_version` / plain `contract_name` / `autodetect_constructor_args` / `files[0]`)
+  returns `{"message":"Smart-contract verification started"}` after which
+  `GET /api/v2/addresses/{address}` keeps reporting `is_verified: false` indefinitely.
+  Reproduced with the exact UI parameter semantics and with a trivial solc 0.8.24
+  single-file probe, so the failure is not our input. The v2 API is the right interface
+  once axiom fixes the backend; curl example for one contract:
+  `curl -X POST "$LIGHTER_DEVNET_BROWSER_URL/api/v2/smart-contracts/<address>/verification/via/standard-input" -F compiler_version=v0.8.37+commit.f401782d -F contract_name=<Name> -F autodetect_constructor_args=true -F "files[0]=@<Name>.json"`.
+  Reported for the Lighter/axiom team: the verifier worker appears unprovisioned on the
+  devnet.
+  Local correctness evidence while blocked: for 12 of 15 contracts the deployment
+  artifact's `deployedBytecode` is byte-identical to `build/artifacts` (metadata included).
+  `Authority`, `PoolRegistry`, and `RigoblockPoolProxyFactory` (all pinned-solc-0.8.17)
+  have byte-identical _executable_ code but their on-chain metadata CBOR tail is the
+  pre-Hardhat-3 canonical tail, which the current build's standard-json does not reproduce.
+  The exact input can be recovered from mainnet Etherscan instead — same deterministic
+  address, verified there with the historical standard-json: verified locally for
+  `Authority` (its Etherscan standard-json recompiles to the Lighter deployment
+  byte-for-byte with the cached `solc 0.8.17+commit.8df45f5f`), pending for the other two.
 
 ## Testing
 

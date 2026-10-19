@@ -15,5 +15,8 @@ export const NETWORK_FEE_CAPS: Record<
     maxFeePerGas: 1_000_000_000n,
     maxPriorityFeePerGas: 10_000_000n,
   }, // 1 / 0.01 gwei
-  lighter: { maxFeePerGas: 1_000_000_000n, maxPriorityFeePerGas: 10_000_000n }, // 1 / 0.01 gwei (initial base fee 1 gwei)
+  "lighterevm-devnet": {
+    maxFeePerGas: 1_000_000_000n,
+    maxPriorityFeePerGas: 10_000_000n,
+  }, // 1 / 0.01 gwei (initial base fee 1 gwei)
 };
