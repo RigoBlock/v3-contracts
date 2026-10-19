@@ -36,6 +36,10 @@ library Constants {
     /// @dev Re-exported from ForkBlocks for backward compatibility
     uint256 internal constant HYPEREVM_BLOCK = ForkBlocks.HYPEREVM_BLOCK;
 
+    /// @notice LighterEVM block number for fork tests (placeholder until public RPC access)
+    /// @dev Re-exported from ForkBlocks for backward compatibility
+    uint256 internal constant LIGHTER_BLOCK = ForkBlocks.LIGHTER_BLOCK;
+
     /*//////////////////////////////////////////////////////////////
                             CHAIN IDs
     //////////////////////////////////////////////////////////////*/
@@ -48,6 +52,7 @@ library Constants {
     uint256 internal constant BSC_CHAIN_ID = 56;
     uint256 internal constant UNICHAIN_CHAIN_ID = 130;
     uint256 internal constant HYPEREVM_CHAIN_ID = 999;
+    uint256 internal constant LIGHTEREVM_CHAIN_ID = 19_529;
 
     /*//////////////////////////////////////////////////////////////
                         RIGOBLOCK INFRASTRUCTURE
@@ -235,6 +240,16 @@ library Constants {
 
     /// @notice Wrapped HYPE on HyperEVM (canonical system contract).
     address internal constant HYPER_WHYPE = 0x5555555555555555555555555555555555555555;
+
+    /// @notice USDC on LighterEVM (protocol-linked representation, devnet address).
+    address internal constant LIGHTER_USDC = 0xf2A5728d366c6d0f764Af612cD47F3608E2B4d5B;
+
+    /// @notice Uniswap V4 is not deployed on LighterEVM. Checked by the Lighter fixture,
+    ///  mirroring the HyperEVM sentinels above.
+    address internal constant LIGHTER_UNISWAP_V4_POSM = address(0);
+
+    /// @notice Uniswap Universal Router is not deployed on LighterEVM. Checked by the Lighter fixture.
+    address internal constant LIGHTER_UNIVERSAL_ROUTER = address(0);
 
     // Additional tokens not in crosschain lib (chain-specific)
     address internal constant POLY_WPOL = 0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6;

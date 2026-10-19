@@ -25,6 +25,7 @@ import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {NavData} from "../types/NavData.sol";
 import {GmxLib} from "./GmxLib.sol";
 import {HyperliquidLib} from "./HyperliquidLib.sol";
+import {IALighter} from "../extensions/adapters/interfaces/IALighter.sol";
 /// @title NavView - Internal library for navigation and application view functionality
 /// @notice Provides internal functions to calculate NAV and retrieve application balances
 /// @dev This library contains the core logic for the ENavView extension
@@ -67,6 +68,12 @@ library NavView {
                 appBalances[activeAppIndex] = GmxLib.getGmxPositionBalances(pool);
             } else if (Applications(i) == Applications.HYPERLIQUID) {
                 appBalances[activeAppIndex] = HyperliquidLib.getHyperliquidBalances(pool);
+            } else if (Applications(i) == Applications.LIGHTER_PERPS) {
+                // Computed on ALighter (Authority-routed, staticcalled by the pool fallback) so
+                // LighterLib compiles into the adapter, not into this size-constrained extension;
+                // see docs/lighter/INTEGRATION.md ("NAV routing"). Views stay settlement-lock free,
+                // mirroring the Hyperliquid branch above.
+                appBalances[activeAppIndex] = IALighter(pool).getLighterBalances(pool);
             } else {
                 continue;
             }
@@ -74,35 +81,29 @@ library NavView {
             tokenIndex += appBalances[activeAppIndex++].length;
         }
 
-        // Flatten all app balances into a single array
-        AppTokenBalance[] memory flattenedBalances = new AppTokenBalance[](tokenIndex);
-        tokenIndex = 0;
-
-        for (uint256 i = 0; i < appBalances.length; i++) {
-            for (uint256 j = 0; j < appBalances[i].length; j++) {
-                flattenedBalances[tokenIndex++] = appBalances[i][j];
-            }
-        }
-
-        // we write a new array with total length but unique tokens
+        // Flatten and aggregate balances by token in a single pass over the populated apps
+        // (first occurrence order preserved), without an intermediate flattened array.
         AppTokenBalance[] memory uniqueBalances = new AppTokenBalance[](tokenIndex);
 
         uint256 uniqueTokensCount;
 
-        // Aggregate balances by token
-        for (uint256 i = 0; i < tokenIndex; i++) {
-            bool found;
+        for (uint256 i = 0; i < activeAppIndex; i++) {
+            AppTokenBalance[] memory appTokens = appBalances[i];
+            for (uint256 j = 0; j < appTokens.length; j++) {
+                AppTokenBalance memory tokenBalance = appTokens[j];
+                bool found;
 
-            for (uint256 j = 0; j < uniqueTokensCount; j++) {
-                if (uniqueBalances[j].token == flattenedBalances[i].token) {
-                    uniqueBalances[j].amount += flattenedBalances[i].amount;
-                    found = true;
-                    break;
+                for (uint256 k = 0; k < uniqueTokensCount; k++) {
+                    if (uniqueBalances[k].token == tokenBalance.token) {
+                        uniqueBalances[k].amount += tokenBalance.amount;
+                        found = true;
+                        break;
+                    }
                 }
-            }
 
-            if (!found) {
-                uniqueBalances[uniqueTokensCount++] = flattenedBalances[i];
+                if (!found) {
+                    uniqueBalances[uniqueTokensCount++] = tokenBalance;
+                }
             }
         }
 

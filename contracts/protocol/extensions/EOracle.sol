@@ -11,6 +11,7 @@ import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
+import {LighterConstants} from "../types/LighterConstants.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
@@ -104,6 +105,10 @@ contract EOracle is IEOracle {
         // USDC is Hyperliquid's collateral and numeraire, so it is the only token treated as having a feed.
         if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
             return token == HLConstants.usdc();
+        }
+        // Same carve-out on LighterEVM: no oracle deployment yet, USDC-only perps collateral.
+        if (block.chainid == LighterConstants.LIGHTEREVM_CHAIN_ID) {
+            return token == LighterConstants.USDC;
         }
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;

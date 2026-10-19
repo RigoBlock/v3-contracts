@@ -191,6 +191,12 @@ contract HyperliquidDeploymentFixture is Test {
         address authorityOwner = IOwnedUninitialized(authority).owner();
         vm.startPrank(authorityOwner);
 
+        // The live Authority owner is not a whitelister; self-grant the role on the fork
+        // before registering methods (addMethod is gated by onlyWhitelister).
+        if (usingLiveInfrastructure) {
+            IAuthority(authority).setWhitelister(authorityOwner, true);
+        }
+
         IAuthority(authority).setAdapter(aHyperliquid, true);
         _addOrReplaceMethod(ICoreDepositWallet.deposit.selector, aHyperliquid);
         _addOrReplaceMethod(ICoreDepositWallet.depositFor.selector, aHyperliquid);

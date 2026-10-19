@@ -19,7 +19,9 @@ import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
 import {GmxLib} from "../libraries/GmxLib.sol";
 import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
-import {Applications} from "../types/Applications.sol";
+import {LighterLib} from "../libraries/LighterLib.sol";
+import {IALighter} from "./adapters/interfaces/IALighter.sol";
+import {Applications, LighterSlot, LighterViewData, TrackedMarket} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
@@ -82,6 +84,26 @@ contract EApps is IEApps {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
 
+    /// @inheritdoc IEApps
+    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
+        LighterSlot storage slot = StorageLib.lighterSlot();
+        uint16[] storage markets = slot.trackedMarkets;
+        uint256 length = markets.length;
+        viewData.marketIds = new uint16[](length);
+        viewData.sizeDecimals = new uint8[](length);
+        viewData.priceDecimals = new uint8[](length);
+        for (uint256 i; i < length; ++i) {
+            uint16 marketId = markets[i];
+            viewData.marketIds[i] = marketId;
+            TrackedMarket memory market = slot.markets[marketId];
+            viewData.sizeDecimals[i] = market.sizeDecimals;
+            viewData.priceDecimals[i] = market.priceDecimals;
+        }
+        viewData.inFlightAmount = slot.data.inFlightAmount;
+        viewData.lastActionTimestamp = slot.data.lastActionTimestamp;
+        viewData.lastReqId = slot.data.lastReqId;
+    }
+
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
@@ -100,6 +122,16 @@ contract EApps is IEApps {
                 HyperliquidLib.assertNavUnlocked();
             }
             balances = HyperliquidLib.getHyperliquidBalances(address(this));
+        } else if (appType == Applications.LIGHTER_PERPS) {
+            // Same settlement-lock semantics as Hyperliquid, adapted to LighterEVM's block-pinned
+            // READ_CORE reads; see docs/lighter/INTEGRATION.md. The balance computation runs on
+            // ALighter (Authority-routed, staticcalled by the pool fallback) so LighterLib compiles
+            // into the adapter instead of this size-constrained extension; EApps exposes its Lighter
+            // storage to the adapter via getLighterTrackedMarkets.
+            if (!TransientStorage.getNavLockExempt()) {
+                LighterLib.assertNavUnlocked();
+            }
+            balances = IALighter(address(this)).getLighterBalances(address(this));
         } else {
             revert UnknownApplication(uint256(appType));
         }

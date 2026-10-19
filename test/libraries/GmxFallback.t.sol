@@ -160,15 +160,6 @@ contract GmxFallbackTest is Test {
         );
         entries.push(
             FallbackEntry(
-                0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964,
-                0x17d8D87dF3E279c737568aB0C5cC3fF750aB763e,
-                8,
-                18,
-                34
-            )
-        );
-        entries.push(
-            FallbackEntry(
                 0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be,
                 0x0C997958ccE7A0403AEA7E34d14bbaDA897B5bb3,
                 18,

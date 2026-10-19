@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-10-14 (governance review round 16, comment sweep).
+Limit: 24576 bytes per contract. Last measured: 2026-10-19 (Lighter integration: NAV loop routes through `ALighter` so `LighterLib` no longer inlines into `EApps`/`ENavView`; `NavView.getAppTokenBalances` flattened+deduped in a single pass to keep `ENavView` under the limit — its headroom dropped from 121 to 101 bytes, flag for future PRs).
 
 ### Implementation and factory
 
@@ -60,11 +60,11 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-14 (governance review ro
 
 | Contract     | Size (bytes) | Headroom | % of limit |
 | ------------ | -----------: | -------: | ---------: |
-| ENavView     |        24455 |      121 |     99.51% |
-| EApps        |        22668 |     1908 |     92.24% |
+| ENavView     |        24475 |      101 |     99.59% |
+| EApps        |        24078 |      498 |     98.05% |
 | EGmxCallback |         6227 |    18349 |     25.34% |
 | ECrosschain  |         5175 |    19401 |     21.06% |
-| EOracle      |         4609 |    19967 |     18.75% |
+| EOracle      |         4653 |    19923 |     18.93% |
 | EUpgrade     |          697 |    23879 |      2.84% |
 | EERC20       |          421 |    24155 |      1.71% |
 
@@ -73,13 +73,14 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-14 (governance review ro
 | Contract      | Size (bytes) | Headroom | % of limit |
 | ------------- | -----------: | -------: | ---------: |
 | Authority     |         3408 |    21168 |     13.87% |
-| ExtensionsMap |         1497 |    23079 |      6.09% |
+| ExtensionsMap |         1524 |    23052 |      6.20% |
 
 ### Adapters (stored in Authority — no salt bump needed on change)
 
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
 | AGmxV2          |        17828 |     6748 |     72.54% |
+| ALighter        |        10324 |    14252 |     42.01% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |

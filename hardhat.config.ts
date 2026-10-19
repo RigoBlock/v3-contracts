@@ -96,6 +96,7 @@ if (
     "bsc",
     "unichain",
     "hyperliquid",
+    "lighter",
   ].includes(argv.network) &&
   INFURA_KEY === undefined
 ) {
@@ -281,6 +282,14 @@ const userConfig: HardhatUserConfig = {
       // set the Core user flag `usingBigBlocks: true` via a HyperCore action (see
       // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network
       // live in src/utils/networkFees.ts and are applied by the managed-nonce helper.
+    },
+    // LighterEVM devnet has no public RPC yet (access-gated); LIGHTER_RPC_URL must be provided.
+    // The placeholder only satisfies Hardhat's URL validation at config load — it is never
+    // contacted unless a task explicitly targets the lighter network.
+    lighter: {
+      type: "http",
+      ...sharedNetworkConfig,
+      url: process.env.LIGHTER_RPC_URL || "https://lighter.invalid",
     },
   },
   test: {
