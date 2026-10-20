@@ -15,7 +15,8 @@ interface IEApps {
     function getUniV4TokenIds() external view returns (uint256[] memory tokenIds);
 
     /// @notice Returns the pool's Lighter tracked markets and in-flight accounting.
-    /// @dev Lets ALighter compute Lighter NAV under staticcall (it cannot read pool storage);
-    ///  see docs/lighter/INTEGRATION.md ("NAV routing").
+    /// @dev Client/test view over the pool's Lighter slot. NAV valuation itself runs in
+    ///  EAppsLighter.getLighterBalances (pool context, direct READ_CORE reads); see
+    ///  docs/lighter/INTEGRATION.md.
     function getLighterTrackedMarkets() external view returns (LighterViewData memory viewData);
 }

@@ -6,12 +6,11 @@ import {console2} from "forge-std/console2.sol";
 
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
-import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {EAppsLighter} from "../../contracts/protocol/extensions/EAppsLighter.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
@@ -162,11 +161,10 @@ contract LighterDeploymentFixture is Test {
         // having a price feed on LighterEVM because USDC is Lighter's collateral/numeraire.
         address oracle = address(0);
 
-        EApps eApps = new EApps(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
+        EAppsLighter eApps = new EAppsLighter(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
         EOracle eOracle = new EOracle(oracle, LIGHTER_WETH);
         EUpgrade eUpgrade = new EUpgrade(factory);
         ECrosschain eCrosschain = new ECrosschain();
-        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
         EERC20 eErc20 = new EERC20();
 
         Extensions memory extensions = Extensions({
@@ -174,7 +172,6 @@ contract LighterDeploymentFixture is Test {
             eOracle: address(eOracle),
             eUpgrade: address(eUpgrade),
             eCrosschain: address(eCrosschain),
-            eNavView: address(eNavView),
             eGmxCallback: address(0),
             eErc20: address(eErc20)
         });
@@ -222,8 +219,6 @@ contract LighterDeploymentFixture is Test {
         _addOrReplaceMethod(ILighterCoreEntrypoint.createOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelAllOrders.selector, aLighter);
-        // NAV read routed from EApps/ENavView through the Authority registry (see docs/lighter/INTEGRATION.md).
-        _addOrReplaceMethod(IALighter.getLighterBalances.selector, aLighter);
         _addOrReplaceMethod(IALighter.trackMarket.selector, aLighter);
         _addOrReplaceMethod(IALighter.untrackMarket.selector, aLighter);
 

@@ -25,8 +25,8 @@ still fit.
 4. **Never merge with zero headroom.** If any contract reaches the limit, the change must
    be refactored (move logic to a library already compiled in, split the contract, or
    reduce bytecode) before merging.
-5. **Flag tight contracts.** `SmartPool`, `ENavView`, and `EApps` have the least
-   headroom. If a PR reduces their headroom by more than ~500 bytes, call it out in the
+5. **Flag tight contracts.** `SmartPool` has the least headroom.
+   If a PR reduces its headroom by more than ~500 bytes, call it out in the
    PR description so the shrink can be planned deliberately rather than discovered at
    deploy time.
 
@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-10-19 (Lighter integration: NAV loop routes through `ALighter` so `LighterLib` no longer inlines into `EApps`/`ENavView`; `NavView.getAppTokenBalances` flattened+deduped in a single pass to keep `ENavView` under the limit — its headroom dropped from 121 to 101 bytes, flag for future PRs).
+Limit: 24576 bytes per contract. Last measured: 2026-10-20 (per-chain `EApps` split: base `EApps` now 6 676 bytes (was 24 078) with GMX/Hyperliquid/Lighter branches moved to `EAppsArbitrum`/`EAppsHyperliquid`/`EAppsLighter`; `ENavView` removed entirely; NAV reads moved from `ALighter` into `EAppsLighter`, shrinking the adapter 10 324 → 8 358).
 
 ### Implementation and factory
 
@@ -58,31 +58,33 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-19 (Lighter integration:
 
 ### Extensions (stored in ExtensionsMap — a size change forces a salt bump)
 
-| Contract     | Size (bytes) | Headroom | % of limit |
-| ------------ | -----------: | -------: | ---------: |
-| ENavView     |        24475 |      101 |     99.59% |
-| EApps        |        24078 |      498 |     98.05% |
-| EGmxCallback |         6227 |    18349 |     25.34% |
-| ECrosschain  |         5175 |    19401 |     21.06% |
-| EOracle      |         4653 |    19923 |     18.93% |
-| EUpgrade     |          697 |    23879 |      2.84% |
-| EERC20       |          421 |    24155 |      1.71% |
+| Contract         | Size (bytes) | Headroom | % of limit |
+| ---------------- | -----------: | -------: | ---------: |
+| EAppsArbitrum    |        20620 |     3956 |     83.90% |
+| EAppsLighter     |        10966 |    13610 |     44.62% |
+| EAppsHyperliquid |        10130 |    14446 |     41.22% |
+| EApps            |         6676 |    17900 |     27.16% |
+| EGmxCallback     |         6227 |    18349 |     25.34% |
+| ECrosschain      |         5175 |    19401 |     21.06% |
+| EOracle          |         4653 |    19923 |     18.93% |
+| EUpgrade         |          697 |    23879 |      2.84% |
+| EERC20           |          421 |    24155 |      1.71% |
 
 ### Deps
 
 | Contract      | Size (bytes) | Headroom | % of limit |
 | ------------- | -----------: | -------: | ---------: |
 | Authority     |         3408 |    21168 |     13.87% |
-| ExtensionsMap |         1524 |    23052 |      6.20% |
+| ExtensionsMap |         1406 |    23170 |      5.72% |
 
 ### Adapters (stored in Authority — no salt bump needed on change)
 
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
-| AGmxV2          |        17828 |     6748 |     72.54% |
-| ALighter        |        10324 |    14252 |     42.01% |
+| AGmxV2          |        17768 |     6808 |     72.30% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
+| ALighter        |         8358 |    16218 |     34.01% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |

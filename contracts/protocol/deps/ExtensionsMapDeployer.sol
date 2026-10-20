@@ -7,7 +7,6 @@ import {DeploymentParams, Extensions} from "../types/DeploymentParams.sol";
 
 contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     address private transient _eApps;
-    address private transient _eNavView;
     address private transient _eOracle;
     address private transient _eUpgrade;
     address private transient _eCrosschain;
@@ -21,7 +20,6 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
     /// @inheritdoc IExtensionsMapDeployer
     function deployExtensionsMap(DeploymentParams memory params, bytes32 salt) external override returns (address) {
         _eApps = params.extensions.eApps;
-        _eNavView = params.extensions.eNavView;
         _eOracle = params.extensions.eOracle;
         _eUpgrade = params.extensions.eUpgrade;
         _eCrosschain = params.extensions.eCrosschain;
@@ -57,7 +55,6 @@ contract ExtensionsMapDeployer is IExtensionsMapDeployer {
             DeploymentParams({
                 extensions: Extensions({
                     eApps: _eApps,
-                    eNavView: _eNavView,
                     eOracle: _eOracle,
                     eUpgrade: _eUpgrade,
                     eCrosschain: _eCrosschain,

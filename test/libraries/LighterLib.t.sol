@@ -7,11 +7,12 @@ import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
+import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 
 /// @notice Exposes LighterLib market-tracking internals for unit testing.
 contract LighterLibMarketHarness {
-    function trackMarket(uint16 marketId, uint8 sizeDecimals, uint8 priceDecimals) external {
-        LighterLib.trackMarket(marketId, sizeDecimals, priceDecimals);
+    function trackMarket(uint16 marketId) external {
+        LighterLib.trackMarket(marketId);
     }
 
     function untrackMarket(uint16 marketId) external {
@@ -66,9 +67,10 @@ contract LighterLibTest is Test {
 
     function _track(uint16 marketId) internal {
         // Perps carry quoteAssetId == 0 on Core (docs + live devnet verification): marketType == 0
-        // is the USDC-settlement guarantee, so tracking must succeed with quoteAssetId 0.
+        // is the USDC-settlement guarantee, so tracking must succeed with quoteAssetId 0. The
+        // decimal scales come from the LighterConstants table (markets 0-3), never from calldata.
         _mockMarketInfo(marketId, 0, 0);
-        harness.trackMarket(marketId, 2, 4);
+        harness.trackMarket(marketId);
     }
 
     function testSwapRemoveMiddleKeepsOrderAndIndices() public {
@@ -143,7 +145,7 @@ contract LighterLibTest is Test {
 
         _mockMarketInfo(1, 0, 0);
         vm.expectRevert(LighterLib.MarketAlreadyTracked.selector);
-        harness.trackMarket(1, 2, 4);
+        harness.trackMarket(1);
     }
 
     function testUntrackUnknownReverts() public {
@@ -151,35 +153,18 @@ contract LighterLibTest is Test {
         harness.untrackMarket(9);
     }
 
-    function testCapRevertsAboveMaxTrackedMarkets() public {
-        for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
-            _track(uint16(100 + i));
-        }
-        assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
-
-        // All 32 slots are full: the 33rd valid market reverts.
-        _mockMarketInfo(200, 0, 0);
-        vm.expectRevert(LighterLib.MaxTrackedMarketsReached.selector);
-        harness.trackMarket(200, 2, 4);
-
-        // The failed attempt must not have corrupted the registry.
-        assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
-    }
-
-    function testInvalidDecimalsRevert() public {
-        _mockMarketInfo(1, 0, 0);
-
-        vm.expectRevert(LighterLib.InvalidMarketDecimals.selector);
-        harness.trackMarket(1, 19, 4);
-
-        vm.expectRevert(LighterLib.InvalidMarketDecimals.selector);
-        harness.trackMarket(1, 2, 17);
+    /// @notice Markets absent from the LighterConstants release-time decimals table can never be
+    ///  tracked: the decimal scales are protocol constants, so an unknown id reverts before any
+    ///  Core read.
+    function testUnknownMarketReverts() public {
+        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(9)));
+        harness.trackMarket(9);
     }
 
     function testNonPerpMarketReverts() public {
         _mockMarketInfo(1, 1, LighterConstants.USDC_ASSET_INDEX);
         vm.expectRevert(LighterLib.InvalidMarket.selector);
-        harness.trackMarket(1, 2, 4);
+        harness.trackMarket(1);
     }
 
     /// @notice Perps are USDC-settled by protocol design; Core reports quoteAssetId == 0 for

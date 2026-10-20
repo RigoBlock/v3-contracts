@@ -10,8 +10,9 @@ import {LighterRouteType} from "../../contracts/protocol/extensions/adapters/int
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
-import {Applications, LighterData, LighterSlot, LighterViewData, TrackedMarket} from "../../contracts/protocol/types/Applications.sol";
+import {Applications, LighterData} from "../../contracts/protocol/types/Applications.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
+import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
@@ -153,31 +154,12 @@ contract MockCoreEntrypoint {
 }
 
 /// @notice Exposes LighterLib internal functions for unit testing.
-/// @dev getLighterBalances mirrors EApps.getLighterTrackedMarkets: the lib's NAV function takes
-///  the pool's Lighter storage as calldata (in production because ALighter runs under staticcall).
+/// @dev getLighterBalances reads the Lighter slot from the executing contract's own storage:
+///  called directly on the harness it values the harness's storage; delegatecalled through the
+///  PoolHarness (after _useLibHarness) it values the pool's storage.
 contract LighterLibHarness {
     function getLighterBalances(address account) external view returns (AppTokenBalance[] memory) {
-        return LighterLib.getLighterBalances(account, _viewData());
-    }
-
-    /// @notice Builds the LighterViewData exactly like EApps.getLighterTrackedMarkets does.
-    function _viewData() internal view returns (LighterViewData memory viewData) {
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        uint16[] storage markets = slot.trackedMarkets;
-        uint256 length = markets.length;
-        viewData.marketIds = new uint16[](length);
-        viewData.sizeDecimals = new uint8[](length);
-        viewData.priceDecimals = new uint8[](length);
-        for (uint256 i; i < length; ++i) {
-            uint16 marketId = markets[i];
-            viewData.marketIds[i] = marketId;
-            TrackedMarket memory market = slot.markets[marketId];
-            viewData.sizeDecimals[i] = market.sizeDecimals;
-            viewData.priceDecimals[i] = market.priceDecimals;
-        }
-        viewData.inFlightAmount = slot.data.inFlightAmount;
-        viewData.lastActionTimestamp = slot.data.lastActionTimestamp;
-        viewData.lastReqId = slot.data.lastReqId;
+        return LighterLib.getLighterBalances(account);
     }
 
     function assertNavUnlocked() external view {
@@ -188,8 +170,8 @@ contract LighterLibHarness {
         LighterLib.recordAction(amount, reqId);
     }
 
-    function trackMarket(uint16 marketId, uint8 sizeDecimals, uint8 priceDecimals) external {
-        LighterLib.trackMarket(marketId, sizeDecimals, priceDecimals);
+    function trackMarket(uint16 marketId) external {
+        LighterLib.trackMarket(marketId);
     }
 
     function isTrackedMarket(uint16 marketId) external view returns (bool) {
@@ -386,10 +368,11 @@ contract ALighterUnit is Test {
     }
 
     /// @notice Tracks a market on the pool via the adapter with a valid mocked Core market info.
-    /// @dev Perps carry quoteAssetId == 0 on Core (docs + live devnet verification).
+    /// @dev Perps carry quoteAssetId == 0 on Core (docs + live devnet verification). The decimal
+    ///  scales come from the LighterConstants table, never from calldata.
     function _trackMarket(uint16 marketId) private {
         _mockMarketInfo(marketId, _marketInfo(0, 0, 500_0000));
-        IALighter(address(pool)).trackMarket(marketId, 2, 4);
+        IALighter(address(pool)).trackMarket(marketId);
     }
 
     // =========================================================================
@@ -549,22 +532,22 @@ contract ALighterUnit is Test {
     function testCreateOrderRevertsForUntrackedMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
         vm.expectRevert(LighterLib.MarketNotTracked.selector);
-        IALighter(address(pool)).createOrder(0, 5, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
+        IALighter(address(pool)).createOrder(0, 0, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
     }
 
     function testCreateOrderForwardsToEntrypoint() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _trackMarket(5);
+        _trackMarket(0);
 
         vm.expectEmit(true, false, false, true, address(pool));
         emit IALighter.OrderSent(1);
 
-        uint64 reqId = IALighter(address(pool)).createOrder(0, 5, 42, 1, 2, 0, 100, 500_0000, true, false, 0);
+        uint64 reqId = IALighter(address(pool)).createOrder(0, 0, 42, 1, 2, 0, 100, 500_0000, true, false, 0);
         assertEq(reqId, 1);
 
         MockCoreEntrypoint entrypoint = MockCoreEntrypoint(_entrypoint);
         assertEq(entrypoint.lastAccountIndex(), 7);
-        assertEq(entrypoint.lastMarketIndex(), 5);
+        assertEq(entrypoint.lastMarketIndex(), 0);
         assertEq(entrypoint.lastClientOrderIndex(), 42);
         assertEq(entrypoint.lastOrderType(), 1);
         assertEq(entrypoint.lastTimeInForce(), 2);
@@ -611,104 +594,85 @@ contract ALighterUnit is Test {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
 
         vm.expectEmit(true, false, false, true, address(pool));
-        emit IALighter.MarketTracked(5);
+        emit IALighter.MarketTracked(0);
 
-        _trackMarket(5);
+        _trackMarket(0);
 
         _useLibHarness();
-        assertTrue(LighterLibHarness(address(pool)).isTrackedMarket(5));
+        assertTrue(LighterLibHarness(address(pool)).isTrackedMarket(0));
     }
 
     function testTrackMarketRevertsOnDuplicate() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _trackMarket(5);
+        _trackMarket(0);
 
-        _mockMarketInfo(5, _marketInfo(0, 0, 500_0000));
+        _mockMarketInfo(0, _marketInfo(0, 0, 500_0000));
         vm.expectRevert(LighterLib.MarketAlreadyTracked.selector);
-        IALighter(address(pool)).trackMarket(5, 2, 4);
+        IALighter(address(pool)).trackMarket(0);
     }
 
-    function testTrackMarketRevertsForInvalidDecimals() public {
+    function testTrackMarketRevertsForUnknownMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _mockMarketInfo(5, _marketInfo(0, 0, 500_0000));
-
-        vm.expectRevert(LighterLib.InvalidMarketDecimals.selector);
-        IALighter(address(pool)).trackMarket(5, 19, 4);
-
-        vm.expectRevert(LighterLib.InvalidMarketDecimals.selector);
-        IALighter(address(pool)).trackMarket(5, 2, 17);
+        // The decimal scales are protocol constants from the LighterConstants release-time table:
+        // markets outside the table can never be tracked.
+        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(5)));
+        IALighter(address(pool)).trackMarket(5);
     }
 
     function testTrackMarketRevertsForNonPerpMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _mockMarketInfo(5, _marketInfo(1, LighterConstants.USDC_ASSET_INDEX, 500_0000));
+        _mockMarketInfo(1, _marketInfo(1, LighterConstants.USDC_ASSET_INDEX, 500_0000));
 
         vm.expectRevert(IALighter.InvalidMarket.selector);
-        IALighter(address(pool)).trackMarket(5, 2, 4);
+        IALighter(address(pool)).trackMarket(1);
     }
 
     /// @notice Perps are USDC-settled by protocol design; Core reports quoteAssetId == 0 for
     ///  perpetuals (docs + live devnet verification), and that layout must track successfully.
     function testTrackMarketAcceptsZeroQuoteAssetId() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _trackMarket(5);
+        _trackMarket(0);
 
         _useLibHarness();
-        assertTrue(LighterLibHarness(address(pool)).isTrackedMarket(5));
-    }
-
-    function testTrackMarketRevertsAboveCap() public {
-        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-
-        for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
-            _trackMarket(uint16(100 + i));
-        }
-        _useLibHarness();
-        assertEq(LighterLibHarness(address(pool)).trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
-
-        _useAdapter();
-        _mockMarketInfo(200, _marketInfo(0, 0, 500_0000));
-        vm.expectRevert(LighterLib.MaxTrackedMarketsReached.selector);
-        IALighter(address(pool)).trackMarket(200, 2, 4);
+        assertTrue(LighterLibHarness(address(pool)).isTrackedMarket(0));
     }
 
     function testUntrackMarketRevertsWithOpenPosition() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _trackMarket(5);
+        _trackMarket(0);
 
-        _mockPosition(address(pool), 5, _position(100_00, 50_0000, 0, 0));
+        _mockPosition(address(pool), 0, _position(100_00, 50_0000, 0, 0));
         vm.expectRevert(IALighter.PositionNotClosed.selector);
-        IALighter(address(pool)).untrackMarket(5);
+        IALighter(address(pool)).untrackMarket(0);
     }
 
     function testUntrackMarketSwapRemoveKeepsRemainingTracked() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _trackMarket(5);
-        _trackMarket(6);
-        _trackMarket(7);
+        _trackMarket(0);
+        _trackMarket(1);
+        _trackMarket(2);
 
         // Untracking the first of three tracked markets exercises the swap-remove path.
-        _mockPosition(address(pool), 5, _position(0, 0, 0, 0));
+        _mockPosition(address(pool), 0, _position(0, 0, 0, 0));
         vm.expectEmit(true, false, false, true, address(pool));
-        emit IALighter.MarketUntracked(5);
-        IALighter(address(pool)).untrackMarket(5);
+        emit IALighter.MarketUntracked(0);
+        IALighter(address(pool)).untrackMarket(0);
 
         _useLibHarness();
         LighterLibHarness harness = LighterLibHarness(address(pool));
         uint16[] memory markets = harness.trackedMarkets();
         assertEq(markets.length, 2);
-        assertEq(markets[0], 7);
-        assertEq(markets[1], 6);
-        assertTrue(harness.isTrackedMarket(6));
-        assertTrue(harness.isTrackedMarket(7));
-        assertFalse(harness.isTrackedMarket(5));
+        assertEq(markets[0], 2);
+        assertEq(markets[1], 1);
+        assertTrue(harness.isTrackedMarket(1));
+        assertTrue(harness.isTrackedMarket(2));
+        assertFalse(harness.isTrackedMarket(0));
     }
 
     function testUntrackMarketRevertsForUnknownMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        // The adapter checks the position size before the tracked check, so the position read
-        // must succeed (zero size) for the MarketNotTracked revert to be reached.
-        _mockPosition(address(pool), 9, _position(0, 0, 0, 0));
+        // The position read tolerates absence (zeroed struct), so the untrack path reaches the
+        // tracked-market check directly and reverts.
         vm.expectRevert(LighterLib.MarketNotTracked.selector);
         IALighter(address(pool)).untrackMarket(9);
     }
@@ -727,24 +691,25 @@ contract ALighterUnit is Test {
     }
 
     function testGetLighterBalancesLongProfit() public {
-        _mockMarketInfo(5, _marketInfo(0, 0, 51_0000));
-        libHarness.trackMarket(5, 2, 4);
+        // Market 0 (ETH-PERP): size_decimals 4, price_decimals 2 (LighterConstants table).
+        _mockMarketInfo(0, _marketInfo(0, 0, 51_00));
+        libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(1_000_000e6));
         // 100 base units long; entry notional 100 * 50.0 = 5000 USDC = 5e9 (Core USDC base units).
-        _mockPosition(address(libHarness), 5, _position(100_00, 5_000_000_000, 0, 0));
+        _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 0, 0));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
-        // markValue = 100_00 * 51_0000 * 1e6 / 10^(2+4) = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
+        // markValue = 100_0000 * 51_00 * 1e6 / 10^(4+2) = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, int256(1_000_000e6) + 100e6);
     }
 
     function testGetLighterBalancesShortLoss() public {
-        _mockMarketInfo(5, _marketInfo(0, 0, 51_0000));
-        libHarness.trackMarket(5, 2, 4);
+        _mockMarketInfo(0, _marketInfo(0, 0, 51_00));
+        libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(1_000_000e6));
         // A short (negative position) loses when the mark price rises above the entry notional.
-        _mockPosition(address(libHarness), 5, _position(-100_00, 5_000_000_000, 0, 0));
+        _mockPosition(address(libHarness), 0, _position(-100_0000, 5_000_000_000, 0, 0));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
         assertEq(balances.length, 1);
@@ -753,10 +718,10 @@ contract ALighterUnit is Test {
 
     function testGetLighterBalancesIsolatedMargin() public {
         // Mark equals entry: zero unrealized PnL; only the isolated margin is added.
-        _mockMarketInfo(5, _marketInfo(0, 0, 50_0000));
-        libHarness.trackMarket(5, 2, 4);
+        _mockMarketInfo(0, _marketInfo(0, 0, 50_00));
+        libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(100e6));
-        _mockPosition(address(libHarness), 5, _position(100_00, 5_000_000_000, 1, 500e12));
+        _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 1, 500e12));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
         // allocatedMargin is 12-decimal USDC: 500e12 / 1e6 = 500e6.
@@ -819,14 +784,17 @@ contract ALighterUnit is Test {
         assertEq(balances[0].amount, 1, "In-flight must expire with the settlement window");
     }
 
-    function testInFlightReadFailureRevertsNav() public {
+    /// @notice A failed tx-status read never freezes NAV: the in-flight adjustment is simply dropped
+    ///  (found=false), matching the post-settlement-window behavior.
+    function testInFlightReadFailureDropsAdjustment() public {
         _mockAccountInfo(address(libHarness), _accountInfo(0));
 
         libHarness.recordAction(100e6, 1);
-        // No status mock: the READ_CORE wildcard misses and the raw precompile address has no
-        // code in unit tests, so the read returns empty data and the lib reverts (fail-closed).
-        vm.expectRevert(LighterLib.LighterReadFailed.selector);
-        libHarness.getLighterBalances(address(libHarness));
+        // The devnet build signals "not found" by reverting the read; the lib tolerates it.
+        vm.mockCallRevert(_readCore, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, uint64(1)), "");
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        assertEq(balances.length, 1);
+        assertEq(balances[0].amount, 1, "Failed status read must drop the in-flight adjustment");
     }
 
     function testAssertNavUnlockedSettlementWindow() public {
@@ -851,13 +819,13 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.0");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.6.0");
     }
 
     function testDirectCallToAdapterReverts() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
         vm.expectRevert(IALighter.DirectCallNotAllowed.selector);
-        adapter.trackMarket(5, 2, 4);
+        adapter.trackMarket(0);
     }
 }
 

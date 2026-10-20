@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+error UnknownMarket(uint16 marketId);
+
 /// @title LighterConstants
 /// @notice Predeploy addresses and protocol constants for the LighterEVM integration.
 /// @dev The `0x6600...` predeploy layout and the EVM chain ID are stable protocol properties.
@@ -39,4 +41,20 @@ library LighterConstants {
     /// @dev Bounds the NAV read loop: each tracked market costs ~2 READ_CORE calls (~40-50k gas),
     ///  so 32 markets stay well within the 4.25M LighterEVM block gas target. See docs/lighter/INTEGRATION.md.
     uint256 internal constant MAX_TRACKED_MARKETS = 32;
+
+    /// @notice Returns the (sizeDecimals, priceDecimals) scale of a whitelisted perp market.
+    /// @dev These scales are NOT readable on-chain (READ_CORE market info does not expose them;
+    ///  the Lighter docs direct integrators to the Core `orderBookDetails` API). They are
+    ///  protocol-level per-market constants, so a wrong value would distort pool NAV for every
+    ///  token holder — therefore they can never be caller input and must come from this table.
+    ///  Values fetched 2026-10-20 from `GET /api/v1/orderBookDetails?market_id=N` on Lighter
+    ///  mainnet (devnet exposes no public Core API; devnet markets 0-3 mirror mainnet configs).
+    ///  Add new markets here at release time. See docs/lighter/INTEGRATION.md ("Market decimals").
+    function marketDecimals(uint16 marketId) internal pure returns (uint8 sizeDecimals, uint8 priceDecimals) {
+        if (marketId == 0) return (4, 2); // ETH-PERP
+        if (marketId == 1) return (5, 1); // BTC-PERP
+        if (marketId == 2) return (3, 3); // SOL-PERP
+        if (marketId == 3) return (0, 6); // DOGE-PERP
+        revert UnknownMarket(marketId);
+    }
 }

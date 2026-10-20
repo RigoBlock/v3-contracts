@@ -26,7 +26,6 @@ describe("ExtensionsMapDeployer", async () => {
         eOracle: user1.address,
         eUpgrade: user1.address,
         eCrosschain: user1.address,
-        eNavView: user1.address,
         eGmxCallback: user1.address,
         eErc20: user1.address,
       };
@@ -58,7 +57,6 @@ describe("ExtensionsMapDeployer", async () => {
         eOracle: user1.address,
         eUpgrade: user1.address,
         eCrosschain: user1.address,
-        eNavView: user1.address,
         eGmxCallback: user1.address,
         eErc20: user1.address,
       };

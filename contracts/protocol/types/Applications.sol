@@ -42,10 +42,10 @@ struct LighterData {
     uint64 lastReqId;
 }
 
-/// @notice Decimal scaling of a tracked Lighter perp market, supplied by the pool operator from
-///  LighterCore's `orderBookDetails` API at track time (the READ_CORE market info does not expose
-///  them). `position * markPrice / 10^(sizeDecimals + priceDecimals)` yields quote whole units;
-///  the NAV formula is documented in LighterLib._positionValueUsdc.
+/// @notice Decimal scaling of a tracked Lighter perp market. Values are copied from the
+///  LighterConstants.marketDecimals release-time table at track time (the READ_CORE market info
+///  does not expose them): `position * markPrice / 10^(sizeDecimals + priceDecimals)` yields
+///  quote whole units; the NAV formula is documented in LighterLib._positionValueUsdc.
 struct TrackedMarket {
     uint8 sizeDecimals;
     uint8 priceDecimals;
@@ -63,10 +63,10 @@ struct LighterSlot {
     mapping(uint16 marketId => TrackedMarket market) markets;
 }
 
-/// @notice Pool-storage view of the Lighter slot, returned by EApps.getLighterTrackedMarkets so the
-///  NAV computation can run on ALighter (staticcalled by the pool fallback): the adapter cannot
-///  read pool storage, so the EApps branch passes its own storage contents as calldata. See
-///  docs/lighter/INTEGRATION.md ("NAV routing").
+/// @notice Pool-storage view of the Lighter slot, returned by EApps.getLighterTrackedMarkets as a
+///  client/test view. The decimal scales are release-time protocol constants copied from
+///  LighterConstants.marketDecimals at track time (never caller input). See
+///  docs/lighter/INTEGRATION.md.
 struct LighterViewData {
     uint16[] marketIds;
     uint8[] sizeDecimals;

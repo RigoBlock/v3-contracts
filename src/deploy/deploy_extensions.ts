@@ -121,27 +121,23 @@ export default deployScript(
       { deterministic: true, strictBytecodeMatch: true },
     );
 
+    // EApps subclasses per chain: GMX positions on Arbitrum, Hyperliquid on HyperEVM,
+    // Lighter on LighterEVM; base EApps everywhere else.
+    const eAppsArtifact =
+      chainId === 42161
+        ? "EAppsArbitrum"
+        : chainId === 999
+          ? "EAppsHyperliquid"
+          : chainId === 19529
+            ? "EAppsLighter"
+            : "EApps";
+
     const eApps = await env.deploy(
-      "EApps",
+      eAppsArtifact,
       {
         account: deployer,
-        artifact: await readArtifact("EApps"),
+        artifact: await readArtifact(eAppsArtifact),
         args: [[config.stakingProxy, config.univ4Posm]],
-      },
-      { deterministic: true, strictBytecodeMatch: true },
-    );
-
-    const navViewParams = {
-      grgStakingProxy: config.stakingProxy,
-      univ4Posm: config.univ4Posm,
-    };
-
-    const eNavView = await env.deploy(
-      "ENavView",
-      {
-        account: deployer,
-        artifact: await readArtifact("ENavView"),
-        args: [navViewParams],
       },
       { deterministic: true, strictBytecodeMatch: true },
     );
@@ -187,7 +183,6 @@ export default deployScript(
       eOracle: eOracle.address,
       eUpgrade: eUpgrade.address,
       eCrosschain: eCrosschain.address,
-      eNavView: eNavView.address,
       eGmxCallback: eGmxCallback,
       eErc20: eErc20.address,
     };

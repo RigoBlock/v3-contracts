@@ -22,7 +22,7 @@ Quick reference guide for AI agents working with Rigoblock v3-contracts codebase
 9. **Compilation**: Fix all warnings in new code (legacy warnings acceptable)
 10. **Named Mapping Variables**: All new mappings must use named key/value parameters — `mapping(KeyType name => ValueType name)` — as required by Solidity ≥0.8.18 style.
 11. **ALWAYS RUN TESTS**: After ANY modification to .sol files or test files, IMMEDIATELY run tests to verify they pass
-12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` and `ENavView` have <300 bytes of headroom — flag any PR that shrinks it further.
+12. **CODE SIZE**: After ANY change that can alter deployed bytecode (including library edits — libraries compile into every importer), measure the affected contracts' deployed size with the production settings (optimizer 200 runs, no viaIR) via `npx hardhat codesize --skipcompile true`, and update the table in `docs/CODE_SIZE.md` in the same PR. Never merge a contract at or above the 24576-byte limit. `SmartPool` has <300 bytes of headroom — flag any PR that shrinks it further.
 13. **NEVER push directly to `development` (or any default branch).** Commits reach `development` ONLY via a pull request, so CI (tests, security checks, coverage) always runs. This has accidentally happened twice — see "Branch creation and push safety" below.
 
 ## Branch creation and push safety (CRITICAL)
@@ -102,9 +102,9 @@ User → Pool Proxy (delegatecall)→ Implementation
 - **When to bump**: Bump the salt whenever a new ExtensionsMap must be deployed. This happens in two cases:
   1. The ExtensionsMap contract code itself changes (new selectors, new routing logic).
   2. The bytecode of **any contract stored in the ExtensionsMap** changes — which includes not only editing an extension's source, but also editing **any library or shared contract compiled into an extension** (libraries are compiled into the bytecode of every contract that imports them). Examples:
-     - `HyperliquidLib` change → `EApps`, `ENavView`, `EOracle` all change → new extension addresses → **bump salt**.
-     - `GmxLib` change → `EApps`, `EGmxCallback` change → **bump salt**.
-     - `NavView` change → `ENavView` changes → **bump salt**.
+     - `HyperliquidLib` change → `EAppsHyperliquid` changes → new extension addresses → **bump salt** (other chains unaffected).
+     - `GmxLib` change → `EAppsArbitrum`, `EGmxCallback` change → **bump salt** (other chains unaffected).
+     - `LighterLib` change → `EAppsLighter` changes → **bump salt** (other chains unaffected).
      - `MixinConstants` / other implementation-only libraries → implementation only → no salt bump (see "When NOT to bump").
 
      **Decision rule when you change a library**: grep for every contract that imports it. If any importer is an extension (anything whose address is stored in the ExtensionsMap), the salt MUST be bumped. Never assume "I only touched a library" means extensions are unchanged.
@@ -738,7 +738,7 @@ When making changes:
 
 24. **NAMED MAPPING VARIABLES** — All new or modified mappings must use named key and value parameters (Solidity ≥0.8.18 feature). Write `mapping(bytes4 selector => address[] addresses)` not `mapping(bytes4 => address[])`. Both key and value must be named; for nested mappings name all levels: `mapping(address owner => mapping(bytes4 selector => uint256 position))`. This applies to struct fields, state variables, and library-internal structs. Do NOT retrofit old legacy contracts not being modified in the current PR.
 
-25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) and `ENavView` (24299) have under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
+25. **DEPLOYED CODE SIZE MUST BE TRACKED IN EVERY PR** — The EVM limit is 24576 bytes per contract, and `SmartPool` (24321) has under 300 bytes of headroom with production settings. After any change that can alter deployed bytecode — including library edits, since libraries compile into every importer's bytecode — measure with the production profile (`SOLIDITY_SETTINGS='{"optimizer":{"enabled":true,"runs":200}}' npx hardhat compile && npx hardhat codesize --skipcompile true`) and update the table in `docs/CODE_SIZE.md` in the same PR. Never trust Foundry's size output (it uses `optimizer_runs = 1_000_000` and produces different bytecode). Never merge a contract at or above the limit.
 
 26. **SKIPPING `forge clean` AFTER BRANCH OR SUBMODULE SWITCHES** — Foundry's incremental cache can serve artifacts with mismatched CBOR metadata tails across compilation units, causing spurious test failures (observed: AIntentsRealFork escrow CREATE2 assertion failing with an unchanged Escrow.sol — executable bytecode identical, only the metadata tail differed). Always run `forge clean` before `forge build`/`forge test` after switching branches or updating git submodules. CI is unaffected (clean runners).
 

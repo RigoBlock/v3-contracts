@@ -6,12 +6,11 @@ import {console2} from "forge-std/console2.sol";
 
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
 import {ExtensionsMapDeployer} from "../../contracts/protocol/deps/ExtensionsMapDeployer.sol";
-import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {EAppsHyperliquid} from "../../contracts/protocol/extensions/EAppsHyperliquid.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperliquid.sol";
 import {ICoreWriter} from "hyper-evm-lib/interfaces/ICoreWriter.sol";
 import {ICoreDepositWallet} from "hyper-evm-lib/interfaces/ICoreDepositWallet.sol";
@@ -143,11 +142,12 @@ contract HyperliquidDeploymentFixture is Test {
         // having a price feed on HyperEVM because USDC is Hyperliquid's collateral/numeraire.
         address oracle = address(0);
 
-        EApps eApps = new EApps(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
+        EAppsHyperliquid eApps = new EAppsHyperliquid(
+            EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm})
+        );
         EOracle eOracle = new EOracle(oracle, HYPER_WHYPE);
         EUpgrade eUpgrade = new EUpgrade(factory);
         ECrosschain eCrosschain = new ECrosschain();
-        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: grgStakingProxy, univ4Posm: univ4Posm}));
         EERC20 eErc20 = new EERC20();
 
         Extensions memory extensions = Extensions({
@@ -155,7 +155,6 @@ contract HyperliquidDeploymentFixture is Test {
             eOracle: address(eOracle),
             eUpgrade: address(eUpgrade),
             eCrosschain: address(eCrosschain),
-            eNavView: address(eNavView),
             eGmxCallback: address(0),
             eErc20: address(eErc20)
         });
