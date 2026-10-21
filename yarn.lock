@@ -395,10 +395,15 @@
     wrap-ansi "^8.1.0"
     wrap-ansi-cjs "npm:wrap-ansi@^7.0.0"
 
-"@noble/ciphers@^1.3.0":
+"@noble/ciphers@1.3.0", "@noble/ciphers@^1.3.0":
   version "1.3.0"
   resolved "https://registry.yarnpkg.com/@noble/ciphers/-/ciphers-1.3.0.tgz#f64b8ff886c240e644e5573c097f86e5b43676dc"
   integrity sha512-2I0gnIVPtfnMw9ee9h1dJG7tp81+8Ob3OJb3Mv37rx5L40/b0i7djjCVvGOVqc9AEIQyvyu1i6ypKdFw8R8gQw==
+
+"@noble/ciphers@2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@noble/ciphers/-/ciphers-2.2.0.tgz#84fb45ac9332925d643b80f89ceb0ea2f21dba95"
+  integrity sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==
 
 "@noble/curves@1.2.0":
   version "1.2.0"
@@ -414,6 +419,13 @@
   dependencies:
     "@noble/hashes" "1.4.0"
 
+"@noble/curves@1.9.0":
+  version "1.9.0"
+  resolved "https://registry.yarnpkg.com/@noble/curves/-/curves-1.9.0.tgz#13e0ca8be4a0ce66c113693a94514e5599f40cfc"
+  integrity sha512-7YDlXiNMdO1YZeH6t/kvopHHbIZzlxrCV9WLqCY6QhcXOoXiNCMDqJIglZ9Yjx5+w7Dz30TITFrlTjnRg7sKEg==
+  dependencies:
+    "@noble/hashes" "1.8.0"
+
 "@noble/curves@1.9.1":
   version "1.9.1"
   resolved "https://registry.yarnpkg.com/@noble/curves/-/curves-1.9.1.tgz#9654a0bc6c13420ae252ddcf975eaf0f58f0a35c"
@@ -421,12 +433,12 @@
   dependencies:
     "@noble/hashes" "1.8.0"
 
-"@noble/curves@~1.8.1":
-  version "1.8.2"
-  resolved "https://registry.yarnpkg.com/@noble/curves/-/curves-1.8.2.tgz#8f24c037795e22b90ae29e222a856294c1d9ffc7"
-  integrity sha512-vnI7V6lFNe0tLAuJMu+2sX+FcL14TaCWy1qiczg1VwRmPrpQCdq5ESXQMqUc2tluRNf6irBXrWbl1mGN8uaU/g==
+"@noble/curves@2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@noble/curves/-/curves-2.2.0.tgz#981be3aadc3bbfbcdb245e78cc97aa6f759246c2"
+  integrity sha512-T/BoHgFXirb0ENSPBquzX0rcjXeM6Lo892a2jlYJkqk83LqZx0l1Of7DzlKJ6jkpvMrkHSnAcgb5JegL8SeIkQ==
   dependencies:
-    "@noble/hashes" "1.7.2"
+    "@noble/hashes" "2.2.0"
 
 "@noble/curves@~1.9.0":
   version "1.9.7"
@@ -445,15 +457,15 @@
   resolved "https://registry.yarnpkg.com/@noble/hashes/-/hashes-1.4.0.tgz#45814aa329f30e4fe0ba49426f49dfccdd066426"
   integrity sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==
 
-"@noble/hashes@1.7.2", "@noble/hashes@~1.7.1":
-  version "1.7.2"
-  resolved "https://registry.yarnpkg.com/@noble/hashes/-/hashes-1.7.2.tgz#d53c65a21658fb02f3303e7ee3ba89d6754c64b4"
-  integrity sha512-biZ0NUSxyjLLqo6KxEJ1b+C2NAx0wtDoFvCaXHGgUkeHzf3Xc1xKumFKREuT7f7DARNZ/slvYUwFG6B0f2b6hQ==
-
 "@noble/hashes@1.8.0", "@noble/hashes@^1.8.0", "@noble/hashes@~1.8.0":
   version "1.8.0"
   resolved "https://registry.yarnpkg.com/@noble/hashes/-/hashes-1.8.0.tgz#cee43d801fcef9644b11b8194857695acd5f815a"
   integrity sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==
+
+"@noble/hashes@2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@noble/hashes/-/hashes-2.2.0.tgz#22da1d16a469954fce877055d559900a6c73b63b"
+  integrity sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -476,60 +488,60 @@
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
 
-"@nomicfoundation/edr-darwin-arm64@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-darwin-arm64/-/edr-darwin-arm64-0.19.0.tgz#4b82d5429824d16e7c70886fa0835d24d060f684"
-  integrity sha512-Yo2MkZoM85zkasUPJDj8l8QezPdrMzqQUJhp78TUQDq8FQXhdJTZ39k3Jax5OQ3hqjMhMkrGbctn9w9h6mEusg==
+"@nomicfoundation/edr-darwin-arm64@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-darwin-arm64/-/edr-darwin-arm64-0.23.0.tgz#34b9192141b9bbf24c802f0df022925da65df077"
+  integrity sha512-XB0Wpvj21Cn0FCwMyafKRTSUGLLBCOSunURvTZpOloptS5gTd8ERUOz8bth0ZqToWNjjqfF4HYuekJX/gCrdKw==
 
-"@nomicfoundation/edr-darwin-x64@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-darwin-x64/-/edr-darwin-x64-0.19.0.tgz#c784460be666c07b94a4f445359ac0c5eb61dcfd"
-  integrity sha512-RC7RVX1iATg9SlJTnKD57A8jRBIBiUKmAdi8maBN4zhmK5Z7aAeiwdQX6VjPOum3c2Mdpp2Q7JfooJxxF6bCvw==
+"@nomicfoundation/edr-darwin-x64@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-darwin-x64/-/edr-darwin-x64-0.23.0.tgz#a545a807284914a1c250e211d47222479050c8d4"
+  integrity sha512-SlKLi1rrp4hxHMJ+lZCv9jho4Mb9uD1Y65hXg2CHGP3MiA/ITxLp4FmbIwmng6HOtQVrl2bBHJ1QQIlfhb5ICA==
 
-"@nomicfoundation/edr-linux-arm64-gnu@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-arm64-gnu/-/edr-linux-arm64-gnu-0.19.0.tgz#b3b5d680e95d412e219243cda94df44e6ae33c86"
-  integrity sha512-vhEKPUomGwM0Lsjpwd5q/Jc6yE2hpspJBCRYFkCghzCmwgZHtoYn/2nd1nOLsTt7jqMlvAKJSaLCrhz1HCTCTA==
+"@nomicfoundation/edr-linux-arm64-gnu@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-arm64-gnu/-/edr-linux-arm64-gnu-0.23.0.tgz#4487162fb96c5c4f58f79b850707d0f4d6366632"
+  integrity sha512-1zaY7l0ZFvGpIM67AgiA9p2CBCSuz77VMO07N9UU+yP9EQk7xGA/y7A1PdmelVmxoFAfNJukZfdda53I+FfbvQ==
 
-"@nomicfoundation/edr-linux-arm64-musl@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-arm64-musl/-/edr-linux-arm64-musl-0.19.0.tgz#63fd848ef3619e99423fd71c7ef7e69d1a8685af"
-  integrity sha512-mlkpVUolkSpMIriZyiJeTbgx/m4Ngm9lQtah2BG92H+dgtwMIMze6Q6OQfZG6oi6wMrhDgu8WEyAy3XgIwlcRg==
+"@nomicfoundation/edr-linux-arm64-musl@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-arm64-musl/-/edr-linux-arm64-musl-0.23.0.tgz#3d06d51dce8ecefcf887ab37f8721d47e526336b"
+  integrity sha512-MVyvWuuN93Le7Y4SuAhzhJJaHkP1cfdzIl/rIWR/iXwRc4TOaVY//wHJjW+a3vX7lOxPaKOawTL5N784KUHbKQ==
 
-"@nomicfoundation/edr-linux-x64-gnu@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-x64-gnu/-/edr-linux-x64-gnu-0.19.0.tgz#cb3d7534245399da48d7cabcf879ccb2c8e90af9"
-  integrity sha512-d0Z+WVbX5mm6s9ozc5TXrCRjQykdN81tGI+eaM4hQcD/S5VSY9rwKuCXyLJ/GkgeI5S8HEHsyVdXEsDJznPyhA==
+"@nomicfoundation/edr-linux-x64-gnu@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-x64-gnu/-/edr-linux-x64-gnu-0.23.0.tgz#cc2e81bce3219c61fb07c70d44d11b957693ce0a"
+  integrity sha512-SABJqlOsEC/aLxxc6crBse5g09Ee1YtYfDGGGR7wEb36ZXMRpC+YQXWz5y8JnD8C0Xm6wkO40J/tQamaFvfWEA==
 
-"@nomicfoundation/edr-linux-x64-musl@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-x64-musl/-/edr-linux-x64-musl-0.19.0.tgz#30e64543d6b7edc17091738ed75a63c1b7af3c67"
-  integrity sha512-UIrlNqYj9lbUXpBy++WwHeC0xZqyFw9TXy06/8+0PLffI7Si4kiTKfXqdITGQhP6Vf/JuJ8y+jos8oy6bL8jFQ==
+"@nomicfoundation/edr-linux-x64-musl@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-linux-x64-musl/-/edr-linux-x64-musl-0.23.0.tgz#20a24592aa08e65a842d765b60cab811fe008c44"
+  integrity sha512-TIgZjPrHhS+L1+CPv99QrGBpRXrazC3Iox3f6XvNEd2aZX1L9a6BLVG1XmS+3OyMb+Qd+vjMIhB3qi7HawbfUA==
 
-"@nomicfoundation/edr-win32-x64-msvc@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-win32-x64-msvc/-/edr-win32-x64-msvc-0.19.0.tgz#f2a852e07bb6a9b3750647e5c07efe49e2e64370"
-  integrity sha512-pIyEJBiS8l09Yndz+aE/JmkD39FCqtyiRO+wlx6tX426o4290acRfJ0r7GwTBmqqZD5G4pLOOB0uLIMRyDrY+g==
+"@nomicfoundation/edr-win32-x64-msvc@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr-win32-x64-msvc/-/edr-win32-x64-msvc-0.23.0.tgz#63fc875797cdb4cd08992b32f05bf4c0bafa2452"
+  integrity sha512-vMEZMPk+GbvLHfbS3lCVr+ufJvKhOwtKM0UuZxjnAllBaiojh+v7LRoTc/RN50puzz3WpbyHuvgwqDkEIIj8Lg==
 
-"@nomicfoundation/edr@0.19.0":
-  version "0.19.0"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr/-/edr-0.19.0.tgz#221f3f6b804c9a3537ba0cd6e47bcbaffc3284f2"
-  integrity sha512-wzuyAylm4XWIahFjy1pFDQfHny4Xsx73T98d8KJAkGG/Rpgp0M36rqS4lzjbGQ1tXDrWEBG0WRr0v1jrQhQ0xg==
+"@nomicfoundation/edr@0.23.0":
+  version "0.23.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/edr/-/edr-0.23.0.tgz#3337ae5514c9de10653de11f1276517b0da0a678"
+  integrity sha512-fgFHg55qJPsT7EKtL3OEkcSprplXRbzGOegCtQwaHERpHihWf0Wlyhsdj1S4FIW48rkxklTit3kWTZDUpOmyNw==
   optionalDependencies:
-    "@nomicfoundation/edr-darwin-arm64" "0.19.0"
-    "@nomicfoundation/edr-darwin-x64" "0.19.0"
-    "@nomicfoundation/edr-linux-arm64-gnu" "0.19.0"
-    "@nomicfoundation/edr-linux-arm64-musl" "0.19.0"
-    "@nomicfoundation/edr-linux-x64-gnu" "0.19.0"
-    "@nomicfoundation/edr-linux-x64-musl" "0.19.0"
-    "@nomicfoundation/edr-win32-x64-msvc" "0.19.0"
+    "@nomicfoundation/edr-darwin-arm64" "0.23.0"
+    "@nomicfoundation/edr-darwin-x64" "0.23.0"
+    "@nomicfoundation/edr-linux-arm64-gnu" "0.23.0"
+    "@nomicfoundation/edr-linux-arm64-musl" "0.23.0"
+    "@nomicfoundation/edr-linux-x64-gnu" "0.23.0"
+    "@nomicfoundation/edr-linux-x64-musl" "0.23.0"
+    "@nomicfoundation/edr-win32-x64-msvc" "0.23.0"
 
-"@nomicfoundation/hardhat-errors@^3.0.13", "@nomicfoundation/hardhat-errors@^3.0.15", "@nomicfoundation/hardhat-errors@^3.0.16", "@nomicfoundation/hardhat-errors@^3.0.17":
-  version "3.0.21"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-errors/-/hardhat-errors-3.0.21.tgz#0cd4bda2d680dc732040d3975bef2e6ee328a8d1"
-  integrity sha512-jXgqgxmI1D7vYcWRQnb6HsRDssxE87a4xJ48FQAdkZUPclB0aVISx6IoVG1Kttx2jJ7tNuo9GasJxpOv7stqyg==
+"@nomicfoundation/hardhat-errors@^3.0.13", "@nomicfoundation/hardhat-errors@^3.0.15", "@nomicfoundation/hardhat-errors@^3.0.16", "@nomicfoundation/hardhat-errors@^3.0.17", "@nomicfoundation/hardhat-errors@^3.1.3":
+  version "3.1.3"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-errors/-/hardhat-errors-3.1.3.tgz#808ee68e369ef7121cd039d41690f3a777c992de"
+  integrity sha512-3zch0aPvGIb2PvQS/9DgfBd/oXRwRAt4YaGKe+N4dEuxjsJp2L+3o2rroenEqUIH/4pUmCy48C8umATytbGfew==
   dependencies:
-    "@nomicfoundation/hardhat-utils" "^4.1.5"
+    "@nomicfoundation/hardhat-utils" "^5.0.0"
 
 "@nomicfoundation/hardhat-ethers-chai-matchers@^3.0.11":
   version "3.0.11"
@@ -608,7 +620,7 @@
     rfdc "^1.3.1"
     undici "^6.16.1"
 
-"@nomicfoundation/hardhat-utils@^4.1.2", "@nomicfoundation/hardhat-utils@^4.1.4", "@nomicfoundation/hardhat-utils@^4.1.5", "@nomicfoundation/hardhat-utils@^4.1.6":
+"@nomicfoundation/hardhat-utils@^4.1.2", "@nomicfoundation/hardhat-utils@^4.1.4", "@nomicfoundation/hardhat-utils@^4.1.5":
   version "4.1.9"
   resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-utils/-/hardhat-utils-4.1.9.tgz#760583d3d12bbe69721fe819dbde8796e7de266a"
   integrity sha512-vUyHQ2H1VfknTUxO3Vat7z0y9WkDUF69pLrrLZN2K1/+TKJN+TVzEMeXW/2GXJzIhm2uc2qZXOYwQUh+SU9PbQ==
@@ -620,6 +632,20 @@
     json-stream-stringify "^3.1.7"
     rfdc "^1.3.1"
     undici "^6.28.0"
+
+"@nomicfoundation/hardhat-utils@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-utils/-/hardhat-utils-5.0.0.tgz#cc7319e20eb3bdd46737042213eb1ae087549d36"
+  integrity sha512-/QAYZRoNUrZhSPu2YoTzGz8i1Pn2MJ3m3eUugLzw7/gQYDTNEh1YgK5Oe1TWHG1Hf3WppLubwS8kMaqn08Fqgg==
+  dependencies:
+    "@streamparser/json-node" "^0.0.26"
+    env-paths "^4.0.0"
+    ethereum-cryptography "^3.0.0"
+    fast-equals "^6.0.0"
+    json-stream-stringify "^3.1.7"
+    micro-eth-signer "^0.19.0"
+    rfdc "^1.3.1"
+    undici "^7.29.0"
 
 "@nomicfoundation/hardhat-vendored@^3.0.4":
   version "3.0.4"
@@ -825,12 +851,22 @@
     named-logs "^0.4.1"
     viem "^2.55.13"
 
-"@rocketh/deploy@^0.19.21":
-  version "0.19.21"
-  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.19.21.tgz#95efea36dc11a22946736570550bff67c038a3bf"
-  integrity sha512-2GS0F0PbL3XqrBqM3fOtfWccTpbELHtxUUgIe+NNGJgiBZJNBDVYuYG9MzUgP6f+PT6kh1R8VDCUqMZaA1u2fA==
+"@rocketh/core@0.23.1":
+  version "0.23.1"
+  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.23.1.tgz#2068172204739728a6ea222b2124ec17da1e69ea"
+  integrity sha512-PBJX4iD68RGrnuHkoBNM3BxABY4V4AitHk/7KgfFocA97b7uQwsXKo/2Bm3klv2NKu5VEoob6OOZsx6tpaKTOQ==
   dependencies:
-    "@rocketh/core" "0.21.0"
+    abitype "^1.3.0"
+    eip-1193 "^0.6.5"
+    named-logs "^0.4.1"
+    viem "^2.55.13"
+
+"@rocketh/deploy@^0.20.1":
+  version "0.20.1"
+  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.20.1.tgz#9980325bc3f6d83b21f4b365d3e368b92928922b"
+  integrity sha512-i2u0Sf3Q6i3bjHMWyxn+onHMjsoGsXB1T1bzHWs51LTCyKBjEhQ9tHmj9t3g1aqGbGwSjL9vNYjNIX/BhEzMWw==
+  dependencies:
+    "@rocketh/core" "0.23.1"
     abitype "^1.3.0"
     eip-1193 "^0.6.5"
     named-logs "^0.4.1"
@@ -892,6 +928,11 @@
   version "1.2.6"
   resolved "https://registry.yarnpkg.com/@scure/base/-/base-1.2.6.tgz#ca917184b8231394dd8847509c67a0be522e59f6"
   integrity sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg==
+
+"@scure/base@~2.2.0":
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/@scure/base/-/base-2.2.0.tgz#1311378ed247df6d58f8eb8941921965e97e5747"
+  integrity sha512-b8XEupJibegiXV+tDUseI8oLQc8ei3d/4Jkb2RpbHh3MfE054ov3uIz2dhFkB3FI8iwYkEh0gGCApkrYggkPNg==
 
 "@scure/bip32@1.4.0":
   version "1.4.0"
@@ -963,10 +1004,22 @@
   dependencies:
     "@streamparser/json" "^0.0.22"
 
+"@streamparser/json-node@^0.0.26":
+  version "0.0.26"
+  resolved "https://registry.yarnpkg.com/@streamparser/json-node/-/json-node-0.0.26.tgz#3dbb40a4677695f439556348412336dd9eb4475b"
+  integrity sha512-9OxH3oyILbxiHxNfhvfVpyWgaiLDxreWLk6t6xdSZxJlzKciXReMN6w446+lu+cgdpJxJlwNoyfBLPtTrCUJgA==
+  dependencies:
+    "@streamparser/json" "^0.0.26"
+
 "@streamparser/json@^0.0.22":
   version "0.0.22"
   resolved "https://registry.yarnpkg.com/@streamparser/json/-/json-0.0.22.tgz#8ddcbcc8c3ca77aeadf80af47f54a64c8739a037"
   integrity sha512-b6gTSBjJ8G8SuO3Gbbj+zXbVx8NSs1EbpbMKpzGLWMdkR+98McH9bEjSz3+0mPJf68c5nxa3CrJHp5EQNXM6zQ==
+
+"@streamparser/json@^0.0.26":
+  version "0.0.26"
+  resolved "https://registry.yarnpkg.com/@streamparser/json/-/json-0.0.26.tgz#b78d7da6c3ad426e075b0669feabcfeac91ce57b"
+  integrity sha512-46597LNFI+MFdUnzX2QJWwmdTRdq0XVD+vVNJTtGVzIrnCuhG9pFo1OAzbNBqci8UJgk/X5KJZ6LcV+y7PTuDQ==
 
 "@szmarczak/http-timer@^5.0.1":
   version "5.0.1"
@@ -2478,6 +2531,17 @@ ethereum-cryptography@^2.2.1:
     "@scure/bip32" "1.4.0"
     "@scure/bip39" "1.3.0"
 
+ethereum-cryptography@^3.0.0:
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/ethereum-cryptography/-/ethereum-cryptography-3.2.0.tgz#42a04b57834bf536e552b50a70b9ee5057c71dc6"
+  integrity sha512-Urr5YVsalH+Jo0sYkTkv1MyI9bLYZwW8BENZCeE1QYaTHETEYx0Nv/SVsWkSqpYrzweg6d8KMY1wTjH/1m/BIg==
+  dependencies:
+    "@noble/ciphers" "1.3.0"
+    "@noble/curves" "1.9.0"
+    "@noble/hashes" "1.8.0"
+    "@scure/bip32" "1.7.0"
+    "@scure/bip39" "1.6.0"
+
 ethers@^6.0.0, ethers@^6.14.0:
   version "6.17.0"
   resolved "https://registry.yarnpkg.com/ethers/-/ethers-6.17.0.tgz#ad85ee1fc45fe2d95cb1e21c4e3ff9f7f1b093cc"
@@ -2592,9 +2656,9 @@ flatted@^3.1.0:
   integrity sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA==
 
 follow-redirects@^1.12.1:
-  version "1.16.0"
-  resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.16.0.tgz#28474a159d3b9d11ef62050a14ed60e4df6d61bc"
-  integrity sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw==
+  version "1.16.1"
+  resolved "https://registry.yarnpkg.com/follow-redirects/-/follow-redirects-1.16.1.tgz#6e0efa40a727fb369b98dab15883ec34787d675e"
+  integrity sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==
 
 for-each@^0.3.3:
   version "0.3.3"
@@ -2939,13 +3003,13 @@ hardhat-deploy@^2.0.26:
     zod "^3.25.76"
 
 hardhat@^3.16.0:
-  version "3.16.0"
-  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-3.16.0.tgz#01b4f1d180474fd9a25543cbd922a00730190bcb"
-  integrity sha512-LWFFR3rYl8AIhwpYVjK2L5y0Z0CqdQFQ8AZWe8gqf1t7KGH+E/EguoIX7rcB4KfyKoWK6ooj+7Jgba4vlQ1feQ==
+  version "3.20.0"
+  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-3.20.0.tgz#71a2dc546fc691dc9da990241db1c147ab68ce48"
+  integrity sha512-zB9s0z0TS0UDPrb4oaRuYufZNfQ9RgOE67x89iVZl7QAYUnEBdPHv63ZWrx3bA/vVigdzgEYREs4jEU/cMsrrQ==
   dependencies:
-    "@nomicfoundation/edr" "0.19.0"
-    "@nomicfoundation/hardhat-errors" "^3.0.17"
-    "@nomicfoundation/hardhat-utils" "^4.1.6"
+    "@nomicfoundation/edr" "0.23.0"
+    "@nomicfoundation/hardhat-errors" "^3.1.3"
+    "@nomicfoundation/hardhat-utils" "^5.0.0"
     "@nomicfoundation/hardhat-vendored" "^3.0.4"
     "@nomicfoundation/hardhat-zod-utils" "^3.0.5"
     "@nomicfoundation/solidity-analyzer" "^0.1.1"
@@ -2953,8 +3017,8 @@ hardhat@^3.16.0:
     adm-zip "^0.6.0"
     chokidar "^5.0.0"
     enquirer "^2.3.0"
-    ethereum-cryptography "^2.2.1"
-    micro-eth-signer "^0.14.0"
+    ethereum-cryptography "^3.0.0"
+    micro-eth-signer "^0.19.0"
     p-map "^7.0.6"
     resolve.exports "^2.0.3"
     semver "^7.8.5"
@@ -3760,21 +3824,22 @@ merge2@^1.3.0, merge2@^1.4.1:
   resolved "https://registry.yarnpkg.com/merge2/-/merge2-1.4.1.tgz#4368892f885e907455a6fd7dc55c0c9d404990ae"
   integrity sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==
 
-micro-eth-signer@^0.14.0:
-  version "0.14.0"
-  resolved "https://registry.yarnpkg.com/micro-eth-signer/-/micro-eth-signer-0.14.0.tgz#8aa1fe997d98d6bdf42f2071cef7eb01a66ecb22"
-  integrity sha512-5PLLzHiVYPWClEvZIXXFu5yutzpadb73rnQCpUqIHu3No3coFuWQNfE5tkBQJ7djuLYl6aRLaS0MgWJYGoqiBw==
+micro-eth-signer@^0.19.0:
+  version "0.19.0"
+  resolved "https://registry.yarnpkg.com/micro-eth-signer/-/micro-eth-signer-0.19.0.tgz#6bfc5dd80e96cf72562223637bf27d57836cc7d6"
+  integrity sha512-vgij8q88ZMcTvWDnOy76htaneQqagvU7FYjvtxUCeQJT2iTjYCHMzw46ArybKJNZICQ8W8qUFhI9CXWCePd9uQ==
   dependencies:
-    "@noble/curves" "~1.8.1"
-    "@noble/hashes" "~1.7.1"
-    micro-packed "~0.7.2"
+    "@noble/ciphers" "2.2.0"
+    "@noble/curves" "2.2.0"
+    "@noble/hashes" "2.2.0"
+    micro-packed "0.9.0"
 
-micro-packed@~0.7.2:
-  version "0.7.3"
-  resolved "https://registry.yarnpkg.com/micro-packed/-/micro-packed-0.7.3.tgz#59e96b139dffeda22705c7a041476f24cabb12b6"
-  integrity sha512-2Milxs+WNC00TRlem41oRswvw31146GiSaoCT7s3Xi2gMUglW5QBeqlQaZeHr5tJx9nm3i57LNXPqxOOaWtTYg==
+micro-packed@0.9.0:
+  version "0.9.0"
+  resolved "https://registry.yarnpkg.com/micro-packed/-/micro-packed-0.9.0.tgz#59202d4c848b79b14769f066c33982fe4fcf1ac3"
+  integrity sha512-gFdaWTxEXOwtSOcpxulO4AuXVtp3HWIRmB8eq8+3m1Zku0ubgva0UGpi03YhcvsTJasHngG9gTIUK5kHNKdesg==
   dependencies:
-    "@scure/base" "~1.2.5"
+    "@scure/base" "~2.2.0"
 
 micromatch@^4.0.2:
   version "4.0.8"
@@ -4505,12 +4570,7 @@ semver@^6.3.1:
   resolved "https://registry.yarnpkg.com/semver/-/semver-6.3.1.tgz#556d2ef8689146e46dcea4bfdd095f3434dffcb4"
   integrity sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==
 
-semver@^7.2.1, semver@^7.3.5, semver@^7.3.7, semver@^7.5.2, semver@^7.6.3:
-  version "7.7.1"
-  resolved "https://registry.yarnpkg.com/semver/-/semver-7.7.1.tgz#abd5098d82b18c6c81f6074ff2647fd3e7220c9f"
-  integrity sha512-hlq8tAfn0m/61p4BVRcPzIGr6LKiMwo4VM6dGi6pt4qcRkmNzTcWq6eCEjEh+qXjkMDvPlOFFSGwQjoEa6gyMA==
-
-semver@^7.5.3, semver@^7.8.5:
+semver@^7.2.1, semver@^7.3.5, semver@^7.3.7, semver@^7.5.2, semver@^7.5.3, semver@^7.6.3, semver@^7.8.5:
   version "7.8.5"
   resolved "https://registry.yarnpkg.com/semver/-/semver-7.8.5.tgz#39b646037dd50c14fb451e7e4cac58ed8b863f69"
   integrity sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==
@@ -5155,6 +5215,11 @@ undici@^6.16.1, undici@^6.28.0:
   version "6.28.1"
   resolved "https://registry.yarnpkg.com/undici/-/undici-6.28.1.tgz#aa9d2c44aef3840bef80216f2a50f337543a3fbd"
   integrity sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==
+
+undici@^7.29.0:
+  version "7.30.1"
+  resolved "https://registry.yarnpkg.com/undici/-/undici-7.30.1.tgz#360b3de104b94abc52729aa1a4a07e027aa71f73"
+  integrity sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==
 
 universalify@^2.0.0:
   version "2.0.1"
