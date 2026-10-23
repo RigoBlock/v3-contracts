@@ -35,7 +35,6 @@ function getFallbackPriceFeed(address token) pure returns (Feed) {
         if (token == 0x8F6cCb99d4Fd0B4095915147b5ae3bbDb8075394) packed = 0xfeac1a3936514746e70170c0f539e70b23d36f1922;
         if (token == 0x95c317066CF214b2E6588B2685D949384504F51e) packed = 0x47c38c695639ae97a00f57d6d9f5ece1debb033c22;
         if (token == 0x9759C297fb6C91e252c7292cECa30a509558E5De) packed = 0xa0c8611b0cfb31bc8ade3189ae2b982c90d9302f22;
-        if (token == 0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964) packed = 0x17d8d87df3e279c737568ab0c5cc3ff750ab763e22;
         if (token == 0x9c060B2fA953b5f69879a8B7B81f62BFfEF360be) packed = 0x0c997958cce7a0403aea7e34d14bbada897b5bb318;
         if (token == 0x9c74772b713a1B032aEB173E28683D937E51921c) packed = 0x82ba56a2fadf9c14f17d08bc51bda0bdb83a893422;
     } else if (nibble < 13) {

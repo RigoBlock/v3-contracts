@@ -121,27 +121,23 @@ export default deployScript(
       { deterministic: true, strictBytecodeMatch: true },
     );
 
+    // EApps subclasses per chain: GMX positions on Arbitrum, Hyperliquid on HyperEVM,
+    // Lighter on LighterEVM; base EApps everywhere else.
+    const eAppsArtifact =
+      chainId === 42161
+        ? "EAppsArbitrum"
+        : chainId === 999
+          ? "EAppsHyperliquid"
+          : chainId === 19529
+            ? "EAppsLighter"
+            : "EApps";
+
     const eApps = await env.deploy(
-      "EApps",
+      eAppsArtifact,
       {
         account: deployer,
-        artifact: await readArtifact("EApps"),
+        artifact: await readArtifact(eAppsArtifact),
         args: [[config.stakingProxy, config.univ4Posm]],
-      },
-      { deterministic: true, strictBytecodeMatch: true },
-    );
-
-    const navViewParams = {
-      grgStakingProxy: config.stakingProxy,
-      univ4Posm: config.univ4Posm,
-    };
-
-    const eNavView = await env.deploy(
-      "ENavView",
-      {
-        account: deployer,
-        artifact: await readArtifact("ENavView"),
-        args: [navViewParams],
       },
       { deterministic: true, strictBytecodeMatch: true },
     );
@@ -187,7 +183,6 @@ export default deployScript(
       eOracle: eOracle.address,
       eUpgrade: eUpgrade.address,
       eCrosschain: eCrosschain.address,
-      eNavView: eNavView.address,
       eGmxCallback: eGmxCallback,
       eErc20: eErc20.address,
     };
@@ -322,7 +317,8 @@ export default deployScript(
     }
 
     // HyperEVM has no Uniswap V4 / 0x deployments; only Hyperliquid + Across apply.
-    if (chainId !== 999) {
+    // LighterEVM likewise has no Uniswap V4 / 0x deployments yet; only Lighter + Across apply.
+    if (chainId !== 999 && chainId !== 19529) {
       await env.deploy(
         "AUniswap",
         {
@@ -367,10 +363,23 @@ export default deployScript(
       );
     }
 
-    // AGovernance wraps the deterministic governance proxy. Skipped on HyperEVM,
+    // ALighter is LighterEVM-only.
+    if (chainId === 19529) {
+      await env.deploy(
+        "ALighter",
+        {
+          account: deployer,
+          artifact: await readArtifact("ALighter"),
+          args: [],
+        },
+        { deterministic: true, strictBytecodeMatch: true },
+      );
+    }
+
+    // AGovernance wraps the deterministic governance proxy. Skipped on HyperEVM and LighterEVM,
     // where the governance proxy has not been created yet, so there is no address
     // to point the adapter at.
-    if (chainId !== 999) {
+    if (chainId !== 999 && chainId !== 19529) {
       await env.deploy(
         "AGovernance",
         {

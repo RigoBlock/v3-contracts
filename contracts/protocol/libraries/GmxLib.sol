@@ -23,7 +23,7 @@ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 
 /// @title GmxLib
 /// @notice NAV-only GMX v2 helpers. Keeps the adapter surface out of the NAV
-///  code path so `ENavView` / `EApps` stay as small as possible.
+///  code path so the `EApps` family stays as small as possible.
 library GmxLib {
     using SafeCast for uint256;
 

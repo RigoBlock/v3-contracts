@@ -7,7 +7,6 @@ import {Constants} from "../../contracts/test/Constants.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {AIntents} from "../../contracts/protocol/extensions/adapters/AIntents.sol";
@@ -37,7 +36,6 @@ contract RealDeploymentFixture is Test {
         EApps eApps;
         EOracle eOracle;
         EUpgrade eUpgrade;
-        ENavView eNavView;
         AIntents aIntentsAdapter;
         ExtensionsMap extensionsMap;
         ExtensionsMapDeployer extensionsMapDeployer;
@@ -157,9 +155,6 @@ contract RealDeploymentFixture is Test {
         );
         deployment.eOracle = new EOracle(config.oracle, config.wrappedNative);
         deployment.eUpgrade = new EUpgrade(Constants.FACTORY);
-        deployment.eNavView = new ENavView(
-            EAppsParams({grgStakingProxy: config.grgStakingProxy, univ4Posm: config.uniV4Posm})
-        );
         deployment.eCrosschain = new ECrosschain();
         EERC20 eErc20 = new EERC20();
         console2.log("Deployed extensions successfully");
@@ -168,7 +163,6 @@ contract RealDeploymentFixture is Test {
             eApps: address(deployment.eApps),
             eOracle: address(deployment.eOracle),
             eUpgrade: address(deployment.eUpgrade),
-            eNavView: address(deployment.eNavView),
             eCrosschain: address(deployment.eCrosschain),
             eGmxCallback: address(0),
             eErc20: address(eErc20)

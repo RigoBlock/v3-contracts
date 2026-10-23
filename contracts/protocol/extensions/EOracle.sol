@@ -11,6 +11,7 @@ import {IEOracle} from "./adapters/interfaces/IEOracle.sol";
 import {IOracle} from "../interfaces/IOracle.sol";
 import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
+import {LighterConstants} from "../types/LighterConstants.sol";
 
 contract EOracle is IEOracle {
     using TickMath for int24;
@@ -105,6 +106,10 @@ contract EOracle is IEOracle {
         if (block.chainid == HyperliquidLib.HYPEREVM_CHAIN_ID) {
             return token == HLConstants.usdc();
         }
+        // Same carve-out on LighterEVM: no oracle deployment yet, USDC-only perps collateral.
+        if (block.chainid == LighterConstants.LIGHTEREVM_CHAIN_ID) {
+            return token == LighterConstants.USDC;
+        }
         if (token == _ZERO_ADDRESS || token == _wrappedNative) {
             return true;
         }
@@ -127,7 +132,12 @@ contract EOracle is IEOracle {
             // get twap from oracle
             uint32[] memory secondsAgos = _getSecondsAgos(state.cardinality);
             (int48[] memory tickCumulatives, ) = _oracle.observe(key, secondsAgos);
-            return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0])));
+            int56 delta = int56(tickCumulatives[1] - tickCumulatives[0]);
+            int56 window = int56(int32(secondsAgos[0]));
+            int56 twapTick = delta / window;
+            // Always round to negative infinity, matching Uniswap's OracleLibrary.consult
+            if (twapTick < 0 && (delta % window) != 0) twapTick--;
+            return int24(twapTick);
         }
     }
 

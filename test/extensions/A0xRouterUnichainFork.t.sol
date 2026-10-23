@@ -15,7 +15,6 @@ import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
 
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
@@ -321,14 +320,12 @@ contract A0xRouterUnichainForkTest is Test {
         EApps eApps = new EApps(EAppsParams({grgStakingProxy: address(0), univ4Posm: address(0)}));
         EOracle eOracle = new EOracle(Constants.UNI_ORACLE, Constants.UNI_WETH);
         EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(EAppsParams({grgStakingProxy: address(0), univ4Posm: address(0)}));
         ECrosschain eCrosschain = new ECrosschain();
 
         Extensions memory extensions = Extensions({
             eApps: address(eApps),
             eOracle: address(eOracle),
             eUpgrade: address(eUpgrade),
-            eNavView: address(eNavView),
             eCrosschain: address(eCrosschain),
             eGmxCallback: address(0),
             eErc20: address(new EERC20())

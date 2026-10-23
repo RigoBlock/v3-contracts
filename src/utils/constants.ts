@@ -1,7 +1,7 @@
 export const AddressOne = "0x0000000000000000000000000000000000000001";
 
 // Note: when upgrading extensions, must update the salt manually (will allow to deploy to the same address on all chains)
-export const extensionsMapSalt = "extensionsMapSalt19";
+export const extensionsMapSalt = "extensionsMapSalt25";
 
 // 0x Protocol addresses (same on all supported chains)
 export const zeroExAllowanceHolder =
@@ -156,5 +156,19 @@ export const chainConfig: { [chainId: number]: ChainConfig } = {
     tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
     acrossSpokePool: "0x35E63eA3eb0fb7A3bc543C71FB66412e1F6B0E04",
     wormhole: "0x7C0faFc4384551f063e05aee704ab943b8B53aB3",
+  },
+  // LighterEVM devnet (Chain ID: 19529). No Uniswap V4 / 0x / Across / Wormhole / oracle
+  // deployments yet: USDC-only perps with no on-chain price feed, mirroring HyperEVM.
+  // weth is the canonical WETH9 predeploy; USDC is Lighter's protocol-linked token (devnet).
+  19529: {
+    rigoToken: "0x0000000000000000000000000000000000000000",
+    oracle: "0x0000000000000000000000000000000000000000",
+    stakingProxy: "0x0000000000000000000000000000000000000000",
+    weth: "0x660000000000000000000000000000000000000c",
+    univ4Posm: "0x0000000000000000000000000000000000000000",
+    universalRouter: "0x0000000000000000000000000000000000000000",
+    tokenJar: "0xA0F9C380ad1E1be09046319fd907335B2B452B37",
+    acrossSpokePool: "0x0000000000000000000000000000000000000000",
+    wormhole: "0x0000000000000000000000000000000000000000",
   },
 };
