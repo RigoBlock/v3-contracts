@@ -132,7 +132,12 @@ contract EOracle is IEOracle {
             // get twap from oracle
             uint32[] memory secondsAgos = _getSecondsAgos(state.cardinality);
             (int48[] memory tickCumulatives, ) = _oracle.observe(key, secondsAgos);
-            return int24((tickCumulatives[1] - tickCumulatives[0]) / int56(int32(secondsAgos[0])));
+            int56 delta = int56(tickCumulatives[1] - tickCumulatives[0]);
+            int56 window = int56(int32(secondsAgos[0]));
+            int56 twapTick = delta / window;
+            // Always round to negative infinity, matching Uniswap's OracleLibrary.consult
+            if (twapTick < 0 && (delta % window) != 0) twapTick--;
+            return int24(twapTick);
         }
     }
 

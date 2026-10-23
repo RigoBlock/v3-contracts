@@ -79,6 +79,11 @@ contract MockOracle {
         });
     }
 
+    /// @notice Test helper to overwrite a single observation (enables fractional mean-tick setups).
+    function setObservation(PoolKey calldata poolKey, uint256 index, Observation calldata observation) external {
+        observations[poolKey.toId()][index] = observation;
+    }
+
     function observe(
         PoolKey calldata key,
         uint32[] calldata secondsAgos

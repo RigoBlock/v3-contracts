@@ -24,7 +24,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.6.3";
+    string private constant _REQUIRED_VERSION = "4.6.4";
 
     address private immutable _adapter;
 

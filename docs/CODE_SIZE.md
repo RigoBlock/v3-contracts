@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-10-23, third pass (v4.6.3: purge-in-place — the NAV loop itself untracks dead markets since `getAppTokenBalances` is non-view; the at-cap sweep was deleted; `Position.position` renamed `size`. `ALighter` 7 290 → 6 196, `EAppsLighter` 10 403 → 10 863; `SmartPool` and `ExtensionsMap` unchanged).
+Limit: 24576 bytes per contract. Last measured: 2026-10-23, fourth pass (v4.6.4: EOracle TWAP rounds toward negative infinity per Uniswap OracleLibrary.consult — issue #967. `EOracle` 4 653 → 4 802; `SmartPool`, `ALighter`, `EAppsLighter`, `ExtensionsMap` unchanged).
 
 ### Implementation and factory
 
@@ -66,7 +66,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-23, third pass (v4.6.3: 
 | EApps            |         6676 |    17900 |     27.16% |
 | EGmxCallback     |         6227 |    18349 |     25.34% |
 | ECrosschain      |         5175 |    19401 |     21.06% |
-| EOracle          |         4653 |    19923 |     18.93% |
+| EOracle          |         4802 |    19774 |     19.54% |
 | EUpgrade         |          697 |    23879 |      2.84% |
 | EERC20           |          421 |    24155 |      1.71% |
 

@@ -664,15 +664,16 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.6.3` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.6.3"`; the
-  `pool.VERSION()` test assertion tracks it in the same PR. (4.6.0/4.6.1/4.6.2 were all deployed
-  to the devnet; per the version-bump rules a deployed train bumps normally. 4.6.1 = ENavView
+- `VERSION` is `4.6.4` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.6.4"`; the
+  `pool.VERSION()` test assertion tracks it in the same PR. (4.6.0–4.6.3 were all deployed to
+  the devnet; per the version-bump rules a deployed train bumps normally. 4.6.1 = ENavView
   removal + per-chain EApps split + deterministic-read `LighterLib`; 4.6.2 = view/method
-  removals; 4.6.3 = this section's NAV-loop purge redesign.)
-- `extensionsMapSalt` is `extensionsMapSalt24` (extension bytecode changed every round:
+  removals; 4.6.3 = NAV-loop purge redesign; 4.6.4 = EOracle TWAP rounding fix, issue #967.)
+- `extensionsMapSalt` is `extensionsMapSalt25` (extension bytecode changed every round:
   4.6.1 changed `EAppsLighter`; 4.6.2 changed `ExtensionsMap` itself — `IEAppsLighter` selector
-  removed — and `LighterLib`; 4.6.3 changed `LighterLib` again → new ExtensionsMap → new
-  implementation each time).
+  removed — and `LighterLib`; 4.6.3 changed `LighterLib` again; 4.6.4 changed `EOracle`
+  (extension) and `ALighter` (`_REQUIRED_VERSION`) → new ExtensionsMap → new implementation each
+  time).
 - Chain 19 529 added to `PRODUCTION_CHAIN_IDS` in `rocketh/config.ts` with the Safe singleton
   factory (preinstalled on LighterEVM → deterministic-address parity holds).
 - `src/utils/constants.ts` chainConfig: WETH9 predeploy as wrapped native; zero
@@ -819,6 +820,43 @@ No extension/adapter storage (Rigoblock hard rule).
   more owner `upgradeImplementation()` to pick up 4.6.3 (its 4.6.1 implementation keeps working;
   the live NAV-exactness test passes against it on any of these versions — the NAV shape is
   unchanged).
+- **Devnet rewire executed after the 4.6.4 redeploy (2026-10-23, deployer key `0x080f…1fA6`).**
+  Motivation: EOracle TWAP rounding fix (issue
+  [#967](https://github.com/RigoBlock/v3-contracts/issues/967) — `getTwap` now rounds the mean
+  tick toward negative infinity like Uniswap's `OracleLibrary.consult`) plus a hardening pass on
+  the live NAV-exactness test. Redeployed (salt25 ExtensionsMap at
+  `0x968C6fc2d5D0c4ACb5b7F33B988Fe9c163c9fECD`, `VERSION = "4.6.4"`): EOracle
+  `0x2276ef1244e03Fb8768025F2B2ebE309464F522a` (deploy tx
+  `0x540b21211f22b561fdb6c17259d094c299c18c19da41ef72f7f3c0dd38bc32c2`), ExtensionsMap deploy
+  tx `0xa3be5861c12032f3943bff0d294d3097b8cdf1875d8666c547f55c83e17082cc`, SmartPool
+  `0xd31ac5B09F9cF8fe69080bb2B0C9b0D0a6B2cd55` (deploy tx
+  `0xc8f4179c716ca84af0ff7266d8197531942c09202f4a94d71029907fa6453ca5`), ALighter
+  `0xd2c7090F36B263C3B2E4E5aA24fCe3Cc45C448F0` (deploy tx
+  `0x52d5b49e86419ded6820b0dbc3e9315939db1bd1b77f1e9d8913b4d0fff3b9c4`; redeployed only
+  because `_REQUIRED_VERSION` is compiled into its bytecode). Authority: the five selectors of
+  the 4.6.3 adapter `0x58c9A4E006fe5013CD613fD6790b8cCf498586fB` were removed and re-added
+  against the new adapter (`setAdapter` =
+  `0x0269eb80437785ca7ad18f88ce7ec79f9b4e1a20f6948b662d16e66f3817893d`; remove/add txs
+  `0x4c3a4ab3…`/`0xdc703e26…`, `0xdf040e2b…`/`0x69ddd059…`, `0xc41c791a…`/`0x604284c1…`,
+  `0xf111d4ed…`/`0x351130bb…`, `0x7a63bcfd…`/`0x033550b3…`),
+  `factory.setImplementation(0xd31ac5B09F9cF8fe69080bb2B0C9b0D0a6B2cd55)` =
+  `0x637fec9592f5356a7416ad823e9df839e0ca9fb776e4442a2cc4bbf1cd2ac695` (verified via
+  `factory.implementation()`). Verified on-chain: all five selectors resolve to the new ALighter;
+  smoke pool `0x1896095137d709a9f19534d3f273e39a1e662b2a` upgraded (tx
+  `0x4fae1aeaa242c12227397781b3bbc151facf421e41097a6a89449b4839dea2f6`) and answers
+  `VERSION()` = `"4.6.4"`. Live-test note: the devnet produces blocks fast enough that the
+  NAV-exactness reads can straddle every attempt, and pinned-block `eth_call` is rejected for
+  READ_CORE ("live Core only serves blocks on the chain tip", verified directly). The test
+  therefore brackets the pool's valuation read with mark-price reads before and after and
+  passes as soon as the pool's NAV matches the recomputation at either observed price set;
+  if no attempt matches, it falls back to an observed-skew bound — per tracked market,
+  `(deltaTicks + 2) * |size| * 1e6 / 10^(sizeDecimals+priceDecimals) + 1`, where `deltaTicks`
+  is the raw mark-price movement actually observed between the attempt's two brackets (a
+  previous one-tick bound proved too tight: the devnet moved the mark 24 ticks within a
+  single attempt, diff 1920 vs bound 122). The funded pool
+  `0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8` needs one more owner
+  `upgradeImplementation()` to pick up 4.6.4.
+
 - Explorer verification: disabled on the devnet by the Lighter/axiom team (known issue, to be
   enabled at a later stage). Hardhat 3's verify plugin (v3.1.0+) has native Blockscout support and
   does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin syntax — see
