@@ -7,7 +7,6 @@ import {TransientStorage} from "../libraries/TransientStorage.sol";
 import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
-import {IEAppsLighter} from "./adapters/interfaces/IEAppsLighter.sol";
 
 /// @title EAppsLighter - LighterEVM application view extension.
 /// @notice EApps base plus the Lighter perps branch. Kept separate from the base contract so
@@ -16,14 +15,9 @@ import {IEAppsLighter} from "./adapters/interfaces/IEAppsLighter.sol";
 /// @notice Owns the Lighter NAV valuation: ALighter handles Core writes, this extension reads
 ///  Core state through READ_CORE and values the pool's account over its tracked markets.
 ///  See docs/lighter/INTEGRATION.md.
-contract EAppsLighter is EApps, IEAppsLighter {
+contract EAppsLighter is EApps {
     /// @param params Chain-specific addresses bundled into a single struct.
     constructor(EAppsParams memory params) EApps(params) {}
-
-    /// @inheritdoc IEAppsLighter
-    function getLighterBalances() external view override returns (AppTokenBalance[] memory balances) {
-        return LighterLib.getLighterBalances(address(this));
-    }
 
     /// @dev Adds the Lighter branch; every other application is handled by the base.
     ///  Same settlement-lock semantics as Hyperliquid, adapted to LighterEVM's block-pinned

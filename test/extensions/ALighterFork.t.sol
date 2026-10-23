@@ -7,16 +7,16 @@ import {LighterDeploymentFixture} from "../fixtures/LighterDeploymentFixture.sol
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
+import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
-import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
-import {Applications} from "../../contracts/protocol/types/Applications.sol";
-import {ExternalApp, AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
+import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @title ALighterForkTest
 /// @notice Fork tests for the Lighter adapter against real LighterEVM predeploys.
@@ -54,32 +54,28 @@ contract ALighterForkTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     function _mockAccountInfo(int128 collateral) internal {
-        // Every read except 0x0000 returns abi.encode(bool found, bytes data) per the Lighter docs.
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0001), pool, false),
             abi.encode(
-                true,
-                abi.encode(
-                    LighterTypes.AccountInfo({
-                        accountType: 0,
-                        accountIndex: 1,
-                        masterAccountIndex: 1,
-                        l1Address: address(0),
-                        evmAddress: pool,
-                        collateralBaseAmount: collateral
-                    })
-                )
+                LighterTypes.AccountInfo({
+                    accountType: 0,
+                    accountIndex: 1,
+                    masterAccountIndex: 1,
+                    l1Address: address(0),
+                    evmAddress: pool,
+                    collateralBaseAmount: collateral
+                })
             )
         );
     }
 
     function _mockNoAccount() internal {
-        // Per the docs a nonexistent account still succeeds with found = false.
-        vm.mockCall(
+        // Per the Lighter docs the account-info read fails when the account does not exist.
+        vm.mockCallRevert(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0001), pool, false),
-            abi.encode(false, bytes(""))
+            ""
         );
     }
 
@@ -87,12 +83,11 @@ contract ALighterForkTest is Test {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0009), pool),
-            abi.encode(true, abi.encode(accountIndex))
+            abi.encode(accountIndex)
         );
     }
 
     /// @notice Mocks the transaction-status read (0x0000): 0 pending, 1 successful, 2 failed.
-    /// @dev 0x0000 is the only read without the (bool found, bytes) envelope.
     function _mockTxStatus(uint64 reqId, uint8 status) internal {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
@@ -106,22 +101,19 @@ contract ALighterForkTest is Test {
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0005), marketId),
             abi.encode(
-                true,
-                abi.encode(
-                    LighterTypes.MarketInfo({
-                        marketType: 0,
-                        baseAssetId: 0,
-                        // Perpetuals carry quoteAssetId == 0 on Core (docs + live devnet verification).
-                        quoteAssetId: 0,
-                        takerFee: 0,
-                        makerFee: 0,
-                        minBaseAmount: 0,
-                        minQuoteAmount: 0,
-                        liquidationFee: 0,
-                        indexPrice: markPrice,
-                        markPrice: markPrice
-                    })
-                )
+                LighterTypes.MarketInfo({
+                    marketType: 0,
+                    baseAssetId: 0,
+                    // Perpetuals carry quoteAssetId == 0 on Core (docs + live devnet verification).
+                    quoteAssetId: 0,
+                    takerFee: 0,
+                    makerFee: 0,
+                    minBaseAmount: 0,
+                    minQuoteAmount: 0,
+                    liquidationFee: 0,
+                    indexPrice: markPrice,
+                    markPrice: markPrice
+                })
             )
         );
     }
@@ -130,7 +122,7 @@ contract ALighterForkTest is Test {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0007), pool, false, marketId),
-            abi.encode(true, abi.encode(position))
+            abi.encode(position)
         );
     }
 
@@ -214,75 +206,42 @@ contract ALighterForkTest is Test {
         IALighter(pool).sendToEvm(0, 3, pool, LighterRouteType.Perps, 100e6);
     }
 
-    /// @notice Only tracked markets can be traded: every traded market is NAV-valued.
+    /// @notice createOrder auto-tracks the traded market: no separate tracking step is needed.
     /// @dev The final createOrder hits the real Core entrypoint predeploy; order parameters may need
     ///  adjustment once devnet RPC access allows validating them against the live predeploy.
-    function testFork_CreateOrderRequiresTrackedMarket() public withLighterFork {
+    function testFork_CreateOrderAutoTracksMarket() public withLighterFork {
         _mockMarketInfo(MARKET_ID, 100_00);
         _mockEvmAccountIndex(1);
-        // createOrder requires an activated Core account (checked after the tracked-market gate).
+        // createOrder requires an activated Core account (checked after the market gates).
         _mockAccountInfo(0);
 
         vm.startPrank(poolOwner);
-        vm.expectRevert(LighterLib.MarketNotTracked.selector);
-        IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
 
         // Spot markets are rejected outright.
         vm.expectRevert(IALighter.InvalidMarket.selector);
         IALighter(pool).createOrder(0, 2048, 1, 0, 0, 0, 1, 100_00, true, false, 0);
 
-        IALighter(pool).trackMarket(MARKET_ID);
+        // Markets outside the LighterConstants decimals table can never be traded.
+        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(5)));
+        IALighter(pool).createOrder(0, 5, 1, 0, 0, 0, 1, 100_00, true, false, 0);
+
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
-    }
 
-    /// @notice Untracking requires a closed position.
-    function testFork_UntrackRequiresClosedPosition() public withLighterFork {
-        _mockMarketInfo(MARKET_ID, 100_00);
-        _mockEvmAccountIndex(1);
-
-        vm.startPrank(poolOwner);
-        IALighter(pool).trackMarket(MARKET_ID);
-
-        _mockPosition(
-            MARKET_ID,
-            LighterTypes.Position({
-                lastFundingRatePrefixSum: 0,
-                position: 1_00,
-                entryQuote: 100_0000,
-                initialMarginFraction: 0,
-                totalOrderCount: 0,
-                totalPositionTiedOrderCount: 0,
-                marginMode: 0,
-                allocatedMargin: 0
-            })
-        );
-        vm.expectRevert(IALighter.PositionNotClosed.selector);
-        IALighter(pool).untrackMarket(MARKET_ID);
-
-        _mockPosition(
-            MARKET_ID,
-            LighterTypes.Position({
-                lastFundingRatePrefixSum: 0,
-                position: 0,
-                entryQuote: 0,
-                initialMarginFraction: 0,
-                totalOrderCount: 0,
-                totalPositionTiedOrderCount: 0,
-                marginMode: 0,
-                allocatedMargin: 0
-            })
-        );
-        IALighter(pool).untrackMarket(MARKET_ID);
-        vm.stopPrank();
+        // The traded market is tracked for NAV valuation without any explicit tracking call.
+        LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
+        assertEq(viewData.marketIds.length, 1, "Traded market should be auto-tracked");
+        assertEq(viewData.marketIds[0], MARKET_ID);
     }
 
     /// @notice NAV valuation reads collateral plus tracked positions from (mocked) Core state.
     function testFork_NavWithTrackedPosition() public withLighterFork {
         _mockMarketInfo(MARKET_ID, 101_00);
         _mockEvmAccountIndex(1);
-        vm.prank(poolOwner);
-        IALighter(pool).trackMarket(MARKET_ID);
+        _mockAccountInfo(0);
+        vm.startPrank(poolOwner);
+        IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
+        vm.stopPrank();
 
         // 10 base units long (size_decimals 4 => raw amount 100_000), entry notional
         // 10 * 100.0 = 1_000 USDC in Core USDC base units, mark 101.0 (price_decimals 2):
@@ -292,7 +251,7 @@ contract ALighterForkTest is Test {
             MARKET_ID,
             LighterTypes.Position({
                 lastFundingRatePrefixSum: 0,
-                position: 100_000,
+                size: 100_000,
                 entryQuote: 1_000e6,
                 initialMarginFraction: 0,
                 totalOrderCount: 0,
@@ -307,12 +266,6 @@ contract ALighterForkTest is Test {
         assertEq(lighterApp.balances.length, 1, "Lighter app should report one balance");
         assertEq(lighterApp.balances[0].token, usdc, "Balance token should be USDC");
         assertEq(lighterApp.balances[0].amount, 1_010e6, "Balance should be collateral plus position PnL");
-
-        // The EAppsLighter view exposes the same valuation directly.
-        AppTokenBalance[] memory viewBalances = IEAppsLighter(pool).getLighterBalances();
-        assertEq(viewBalances.length, 1, "Lighter view should report one balance");
-        assertEq(viewBalances[0].token, usdc, "View balance token should be USDC");
-        assertEq(viewBalances[0].amount, 1_010e6, "View balance should equal the EApps valuation");
     }
 
     /// @notice Minting is settlement-locked after a deposit and works again after the window.

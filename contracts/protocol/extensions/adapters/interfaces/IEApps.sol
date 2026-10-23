@@ -16,7 +16,7 @@ interface IEApps {
 
     /// @notice Returns the pool's Lighter tracked markets and in-flight accounting.
     /// @dev Client/test view over the pool's Lighter slot. NAV valuation itself runs in
-    ///  EAppsLighter.getLighterBalances (pool context, direct READ_CORE reads); see
-    ///  docs/lighter/INTEGRATION.md.
+    ///  EAppsLighter's internal LIGHTER_PERPS branch (pool context, direct READ_CORE reads);
+    ///  see docs/lighter/INTEGRATION.md.
     function getLighterTrackedMarkets() external view returns (LighterViewData memory viewData);
 }

@@ -71,8 +71,8 @@ Pool proxy ──► MixinFallback ──► ALighter (adapter, Authority-routed
 - The deposit activates the `LIGHTER_PERPS` application bit (append-only `Applications` enum),
   which makes the pool's NAV include Lighter balances via the `LIGHTER_PERPS` branch of
   `EAppsLighter` (the chain-19529 deployment of the `EApps` family).
-- **Separation of concerns:** `ALighter` owns Core *writes* (deposits, withdrawals, orders,
-  cancels, market tracking); `EAppsLighter` owns Core *reads* and NAV valuation. Both run in
+- **Separation of concerns:** `ALighter` owns Core _writes_ (deposits, withdrawals, orders,
+  cancels, market tracking); `EAppsLighter` owns Core _reads_ and NAV valuation. Both run in
   pool context, so both read the same pool-storage Lighter slot (`StorageLib.lighterSlot()`).
   No Authority round-trip is involved in NAV.
 
@@ -91,30 +91,33 @@ stable (see "Devnet vs stable addresses").
 
 READ_CORE calls are `abi.encodePacked(uint16 selector, args)`, ~20 k gas each, and **reads are
 pinned to the parent Core block snapshot — a Core write is never visible in the same EVM block that
-made it**. READ_CORE is a _client-side_ precompile: it has no on-chain code (`eth_getCode` returns
-empty) and the node intercepts calls to it, which is why Foundry forks cannot execute it and the
-fork tests mock its return data.
+made it**. `eth_call`s that perform READ_CORE only succeed with the `latest` block tag (per the
+docs; historical-block support is planned). READ_CORE is a _client-side_ precompile: it has no
+on-chain code (`eth_getCode` returns empty) and the node intercepts calls to it, which is why
+Foundry forks cannot execute it and the fork tests mock its return data.
 
-**Return convention — dual-format tolerance (docs vs live devnet).** The authoritative "Reading
-Core from EVM" docs specify that every read except tx status (`0x0000`) returns
-`abi.encode(bool found, bytes data)`, with the object payload inside `data`; a read of a
-nonexistent account/asset/market **still succeeds** with `found = false`, and only an unsupported
-selector, malformed input, or < 20 k gas forwarded fails the call. **The devnet build observed on
-2026-10-20 diverges**: selectors `0x0001`–`0x0009` return the **raw `abi.encode` payload without
-the envelope**, and a query for a nonexistent account/market **fails the call outright**
-(JSON-RPC `-32003`, consuming all forwarded gas). Only tx status (`0x0000`) matches the docs
-(envelope `abi.encode(uint8 status, bytes data)`).
+**Return convention — docs and devnet now agree.** An earlier docs revision specified a
+`(bool found, bytes data)` envelope for every read except tx status, with `found = false` for
+nonexistent accounts/markets; the devnet build at the time diverged (raw payloads, hard failure on
+absence) and the read layer carried a dual-format tolerance. **The current public docs
+(docs.lighter.xyz/evm/interop/reading-core-from-evm, updated 2026-10-21) and the current devnet
+build agree exactly**, and the tolerance was removed on 2026-10-23. Verified live against the
+devnet on 2026-10-23 (pool `0x7Bcea…6CB8`, funded, with an open position):
 
-`LighterLib` therefore tolerates both formats (open question 7): a return payload whose length
-exactly matches the documented word count of the target struct is decoded raw; otherwise the
-`(bool, bytes)` envelope is decoded and `found` enforced. Absence is signalled by **either**
-`found = false` **or** a failed call, and NAV-path reads degrade to "not found" instead of
-reverting (see "NAV computation" below). `LighterTypes` holds the payload structs exactly as the
-docs specify them.
+- Successful reads return the **raw `abi.encode` payload** (word counts in the table below).
+- **Absence is a hard call failure** (`staticcall` returns false / JSON-RPC `-32003
+"READ_CORE query failed"`) for: nonexistent account (0x0001, 0x0007, 0x0009), nonexistent
+  asset (0x0002–0x0004), nonexistent market (0x0005, 0x0007 — and spot marketIds on 0x0007).
+- **Existing perp market with no position returns a zeroed 8-word tuple** (not a failure);
+  a spot marketId on 0x0007 likewise returns a zeroed tuple ("spot markets have no positions").
+- **Tx status (0x0000) never fails on an unknown reqId**: it returns `(uint8 status = 0,
+empty data)` — "pending or never issued" — which is why the in-flight read is a plain
+  staticcall. This is the one read whose return shape differs from the others
+  (`abi.encode(uint8, bytes)`, no `found` flag anywhere).
 
-| Selector | Query             | Input encoding                   | Payload in `data` (when `found`)                                                                                                                                                                                             |
+| Selector | Query             | Input encoding                   | Payload (raw `abi.encode` tuple; call fails when the account/asset/market does not exist)                                                                                                                                    |
 | -------- | ----------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `0x0000` | tx status         | `uint64 reqId`                   | **No envelope** — `abi.encode(uint8 status, bytes data)` directly: `0` pending, `1` success, `2` failed; transfer responses carry the accepted amount in `data` (output live-verified on the 2026-10-19 devnet)              |
+| `0x0000` | tx status         | `uint64 reqId`                   | `abi.encode(uint8 status, bytes data)` directly (this read never fails on unknown reqIds): `0` pending, `1` success, `2` failed; transfer responses carry the accepted amount in `data`                                      |
 | `0x0001` | account info      | `address, bool`                  | `(uint8 accountType, uint48 accountIndex, uint48 masterAccountIndex, address l1Address, address evmAddress, int128 collateralBaseAmount)` — shared USDC margin, 6-dec; **excludes isolated margin**                          |
 | `0x0002` | decimals          | `uint32 assetIndex`              | `uint8` decimals (USDC → 6)                                                                                                                                                                                                  |
 | `0x0003` | L1 token          | `uint32 assetIndex`              | L1 token address                                                                                                                                                                                                             |
@@ -125,19 +128,11 @@ docs specify them.
 | `0x0008` | L1 account index  | `address l1Address`              | (unused)                                                                                                                                                                                                                     |
 | `0x0009` | EVM account index | `address accountAddress`         | `uint48` Core account index for an EVM address                                                                                                                                                                               |
 
-Selector names and input lengths were verified live on the 2026-10-19 devnet build by probing with
-malformed calldata (the node responds with `PrecompileErrorWithContext("<query name>")`); the
-payload layouts above are taken from the docs, which the code now follows exactly. Selectors ≥
-`0x000a` revert "Unknown query type". Selectors the adapter itself uses: `0x0000` (tx status,
+Selector names, input lengths and payload layouts were verified live on the devnet (2026-10-19
+and 2026-10-23) by probing with malformed calldata (the node responds with
+`PrecompileErrorWithContext("<query name>")`) and match the current docs exactly. Selectors ≥
+`0x000a` revert "Unknown query type". Selectors the integration itself uses: `0x0000` (tx status,
 in-flight accounting), `0x0001`, `0x0005`, `0x0007`, `0x0009`.
-
-> **`0x0009` verification (2026-10-20).** The docs specify the input as
-> `abi.encodePacked(uint16(0x0009), accountAddress)` — 22 bytes — and `LighterLib.readEvmAccountIndex`
-> sends exactly that. An early devnet build rejected that shape ("Invalid input length for account
-> index"), but the current build **accepts it and returns the raw `uint48` account index**, failing
-> the call only when the account does not exist (which `_requireAccountIndex` surfaces as
-> `AccountNotActivated`). Resolved in our code by the dual-format read layer; no action needed
-> from the Lighter team beyond keeping the documented encoding stable.
 
 ## Deposit flow (no spot step, no account activation)
 
@@ -171,9 +166,8 @@ refunds. **Open question 4 for the Lighter team: refund retry policy.**
    rejected), `evmRecipient == pool` (the pool is forced as recipient, making the arrival
    NAV-neutral), `baseAmount > 0`.
 3. The Core account index is resolved from READ_CORE `0x0009`; if the pool has no Core account yet,
-   it reverts `AccountNotActivated`. Per the docs, reads of a nonexistent account still succeed
-   with `found = false` (the first devnet build failed the call outright instead, which
-   `coreAccountExists` also tolerates). Core-side write failures are asynchronous — the EVM
+   the read fails (per the docs, reads of a nonexistent account fail outright) and the adapter
+   reverts `AccountNotActivated`. Core-side write failures are asynchronous — the EVM
    transaction succeeds and the failure only surfaces as `status == 2` on the `reqId` (e.g. error
    `6506` "no pre-existing Core master account"). The adapter therefore pre-checks `0x0009`/`0x0001`
    and reverts early, and treats a failed `reqId` as "no adjustment" rather than a revert.
@@ -192,69 +186,115 @@ amount, price, isAsk, reduceOnly, triggerPrice)` is forwarded verbatim to the Co
 (adapter interface mirrors the predeploy signature per Rigoblock rule 21; the pool's own account
 index is substituted for the caller-supplied one).
 
-Two hard guards run before forwarding:
+One hard guard runs before forwarding: `marketIndex < FIRST_SPOT_MARKET_ID (2048)` — perps only
+(perp IDs are 0–254).
 
-- `marketIndex < FIRST_SPOT_MARKET_ID (2048)` — perps only (perp IDs are 0–254).
-- `LighterLib.isTrackedMarket(marketIndex)` — reverts `MarketNotTracked` otherwise.
+**Tracking and untracking are fully automatic — no owner-facing methods** (both `trackMarket` and
+`untrackMarket` were removed as public methods on 2026-10-23; the adapter exposes only the five
+Core-write methods, and `ExtensionsMap` lost the `getLighterBalances` selector):
 
-**Every market the pool can trade must be tracked first** via `trackMarket(marketId)` (pool-owner
-gated by `MixinFallback`):
-
-- reverts `UnknownMarket(marketId)` when the market is not in the `LighterConstants.marketDecimals`
-  release-time table (see "Market decimal scales" below);
-- validates on Core that the market is a perp (`marketType == 0`). **Perps carry
-  `quoteAssetId == 0`** (verified live: perp market 0 returns `quoteAssetId = 0` while spot
-  market 2048 returns `quoteAssetId = 3` for USDC) — so `marketType == 0` is itself the
-  USDC-settlement guarantee by protocol design (Core position `entryQuote`/`allocatedMargin`
-  and account `collateralBaseAmount` are all USDC-denominated), and no quote-asset check
-  applies;
-- records the market's decimal scales from the constants table into pool storage (copied at
-  track time so NAV reads never hit the table);
-- enforces the cap of `MAX_TRACKED_MARKETS = 32`. (Unreachable while the constants table lists
-  only the four devnet markets — it is future-proofing for when the table grows.)
-
-`untrackMarket` removes a market but only when the pool's position size on it is zero
-(`PositionNotClosed` otherwise), and uses swap-remove on the tracked array.
+- `createOrder` auto-tracks the market on first trade (no-op if already tracked). Validation:
+  the market must be in the `LighterConstants.marketDecimals` release-time table (else
+  `UnknownMarket(marketId)` — see "Market decimal scales" below), and the on-Core market-info
+  read must report `marketType == 0`. **Perps carry `quoteAssetId == 0`** (verified live: perp
+  market 0 returns `quoteAssetId = 0` while spot market 2048 returns `quoteAssetId = 3` for USDC)
+  — so `marketType == 0` is itself the USDC-settlement guarantee by protocol design (Core
+  position `entryQuote`/`allocatedMargin` and account `collateralBaseAmount` are all
+  USDC-denominated), and no quote-asset check applies. The cap is `MAX_TRACKED_MARKETS = 32`
+  (unreachable while the table lists four markets; future-proofing).
+- **At-cap behavior:** `trackMarket` is O(1) (a `marketIndex` mapping lookup — never an array
+  scan). When `createOrder` tries to track a new market while the list is full it reverts
+  `MaxTrackedMarketsReached`; no sweep happens there. Stale entries are pruned by the NAV loop
+  instead (below), so the owner only needs any NAV-evaluating transaction (`updateUnitaryValue`,
+  mint/burn, `purgeInactiveTokensAndApps` — or even an `eth_call` read, whose prunes simply do
+  not persist) to clear dead entries before trading a 33rd market.
+- **Purge inside NAV (not a separate sweep):** `IEApps.getAppTokenBalances` is **not view**, so
+  the NAV loop itself prunes: iterating the tracked markets backwards over the live storage
+  array, any market with **no open position and no open orders** (`size == 0 &&
+  totalOrderCount == 0 && totalPositionTiedOrderCount == 0` in the 0x0007 tuple) is untracked
+  on the spot (swap-pop), and a market holding any state survives. One pass does valuation and
+  cleanup; there is no `_sweepUntrackableMarkets` pass to pay for separately. Off-chain `eth_call`
+  reads re-execute the (reverted) prunes each call — harmless and gas-free to the caller. (GMX
+  comparison: GMX needs no tracked-market list because positions are enumerable from GMX's own
+  DataStore; its `purgeInactiveTokensAndApps` is an owner action that drops apps with empty
+  balances — see "App purge" below for how the Lighter branch makes that reachable.)
 
 This design makes **untracked-position NAV risk structurally impossible for all EVM-initiated
-flows**: the NAV loop only iterates tracked markets, and `createOrder` cannot touch an untracked
-market. The residual risk vector is API-key trading (off-chain), which is why phase 1 excludes
-`changePubKey` — see [API_KEYS.md](API_KEYS.md).
+flows**: the only way to trade a market through the pool is `createOrder`, which tracks it, and
+the NAV loop only iterates tracked markets. The residual risk vector is API-key trading
+(off-chain), which is why phase 1 excludes `changePubKey` — see [API_KEYS.md](API_KEYS.md).
 
 `cancelOrder` / `cancelAllOrders` are forwarded unchanged (no NAV tracking impact).
+
+**App-active vs tracked-markets visibility.** `getLighterTrackedMarkets` reads pool storage
+unconditionally — it does not depend on the `LIGHTER_PERPS` application bit. So if the app bit
+is ever cleared (e.g. by the owner calling `purgeInactiveTokensAndApps` on an empty Lighter
+balance), clients can still read the tracked-market list, and any later `createOrder` keeps
+working against it (the deposit flow re-activates the bit). This mirrors GMX, where the
+tracked-markets storage likewise outlives the active-app bitmap.
+
+The view lives in the **base `EApps`**, not `EAppsLighter`, deliberately: `ExtensionsMap` routes
+the selector on every chain from shared map code (with the `type(IEApps).interfaceId` assert),
+so the base answers it — returning empty arrays off-Lighter — instead of every other chain's
+extension reverting on a routed selector. It returns each market together with its stored
+`sizeDecimals`/`priceDecimals` (plus the in-flight bookkeeping fields) because those scales
+are pool storage that any client decoding raw Core positions needs; a constants-table lookup
+would work too, but the storage values are the ground truth the NAV loop itself uses.
 
 ### Market decimal scales: release-time constants, never caller input
 
 Lighter stores order sizes and prices as integers on per-market scales. `size_decimals` (0–18)
 converts a Core amount to base-asset units (sizeDecimals 3 → amount `1500` = 1.5 base);
-`price_decimals` (0–16) does the same for prices. READ_CORE does not expose them — the Lighter
-docs direct integrators to the off-chain `orderBookDetails` Core API — and they are per-market
-(can change per market, must never be reused across markets).
+`price_decimals` (0–16) does the same for prices (priceDecimals 2 → price `239976` = $2,399.76).
+**Why two different scales**: they answer two different precision needs per asset. The size scale
+sets the lot size of the base asset (ETH slices of 0.0001, BTC of 0.00001 — high-value assets
+need fine slicing; DOGE at ~$0.08 needs none, whole coins); the price scale sets the tick
+precision of the USDC quote (DOGE moves sub-cent, so 6 decimals; BTC is fine at 0.1 USDC ticks).
+DOGE's `(0, 6)` is thus not an anomaly: `sizeDecimals = 0` means DOGE amounts are whole-coin
+integers, and `priceDecimals = 6` gives micro-dollar price resolution. The NAV formula only ever
+uses the **sum** `10^(sizeDecimals + priceDecimals)`, which converts `position × markPrice` into
+1e6 USDC in one step.
 
-Because NAV divides by `10^(sizeDecimals + priceDecimals)`, a wrong scale distorts pool NAV for
-**every** token holder. An early iteration of this integration took the decimals as
+READ_CORE does not expose the scales — the Lighter docs direct integrators to the off-chain
+`orderBookDetails` Core API — and they are per-market (never reusable across markets). Because
+NAV divides by `10^(sizeDecimals + priceDecimals)`, a wrong scale distorts pool NAV for **every**
+token holder. An early iteration of this integration took the decimals as
 `trackMarket(uint16, uint8, uint8)` owner inputs with only a range check — a typo or malicious
 owner could misvalue every position by orders of magnitude. That design was rejected as
 unacceptable. The current design:
 
-- `trackMarket(uint16 marketId)` only. The scales come from the immutable
-  `LighterConstants.marketDecimals` table, populated at release time from
-  `GET /api/v1/orderBookDetails?market_id=N`:
+- the scales come from the immutable `LighterConstants.marketDecimals` table, populated at
+  release time from `GET /api/v1/orderBookDetails?market_id=N`:
 
-  | Market | Symbol   | sizeDecimals | priceDecimals | Source                                   |
-  | ------ | -------- | ------------ | ------------- | ---------------------------------------- |
-  | 0      | ETH-PERP | 4            | 2             | orderBookDetails, fetched 2026-10-20     |
-  | 1      | BTC-PERP | 5            | 1             | orderBookDetails, fetched 2026-10-20     |
-  | 2      | SOL-PERP | 3            | 3             | orderBookDetails, fetched 2026-10-20     |
-  | 3      | DOGE-PERP| 0            | 6             | orderBookDetails, fetched 2026-10-20     |
+  | Market | Symbol    | sizeDecimals | priceDecimals | Source                               |
+  | ------ | --------- | ------------ | ------------- | ------------------------------------ |
+  | 0      | ETH-PERP  | 4            | 2             | orderBookDetails, fetched 2026-10-20 |
+  | 1      | BTC-PERP  | 5            | 1             | orderBookDetails, fetched 2026-10-20 |
+  | 2      | SOL-PERP  | 3            | 3             | orderBookDetails, fetched 2026-10-20 |
+  | 3      | DOGE-PERP | 0            | 6             | orderBookDetails, fetched 2026-10-20 |
 
   (Devnet exposes no public Core API; the values were fetched from Lighter mainnet, whose
-  market configs mirror the devnet markets 0–3 — the client's observed ETH price scale of 1e2
-  independently confirms market 0's `priceDecimals = 2`. Re-verify against the devnet Core API
-  when one is available; see open question 6.)
+  market configs mirror the devnet markets 0–3.)
+
+- **On-chain consistency check (2026-10-23).** The table was cross-validated against live
+  devnet READ_CORE market-info reads: each market's `indexPrice`/`markPrice` magnitude is
+  realistic only under the table's `priceDecimals` (ETH `240040` → $2,400.40; BTC `816608` →
+  $81,660.8; SOL `1667088` → $1,667.088; DOGE `80006` → $0.080006), and a live ETH-PERP
+  position revalues to a NAV consistent with the observed price move (pool `0x7Bcea…6CB8`,
+  `updateUnitaryValue` txs `0xfd01e437…4ace7` / `0x521a248f…7265`). The ETH row is therefore
+  not "accidentally correct": the same check bounds every other row. (Prices are devnet values.)
 - Any `marketId` absent from the table reverts `UnknownMarket(marketId)`. Adding a market is a
   code change shipping with the next adapter deployment — the same trust model as the
   whitelisted-selector set.
+
+**What we need from Lighter (open question 6).** Every new Lighter perp market requires a
+Rigoblock release (constants table + redeploy) before any pool can trade it — the scales are the
+one market datum READ_CORE does not return, even though it already returns the market's prices
+and minimums. Either of two additions to READ_CORE would remove this entirely: (a) include
+`size_decimals`/`price_decimals` in the market-info read (`0x0005`), or (b) an aggregated perps
+account-equity read (the Hyperliquid `accountMarginSummary.accountValue` equivalent), which would
+additionally remove the 32-market cap and the tracked-markets bookkeeping. Until then the table
+stays, with values re-verified at every release.
 
 ## NAV computation
 
@@ -307,9 +347,11 @@ design); the entry value needs no conversion at all. Longs subtract `+entryQuote
   tracked position against the devnet mark price.
 - The in-flight amount is applied only while the transfer's `reqId` is in the expected
   pending/success state and within the 16 s window (see below).
-- If the total is exactly zero: the pool reports a dust value of 1 while it has a Core account
-  or a recent action (so the app stays valued and the branch stays active), and an empty
-  balance list otherwise.
+- If the total is exactly zero: with an open position the pool reports a dust value of 1 (a
+  zero-PnL open position must keep the app valued — otherwise `purgeInactiveTokensAndApps`
+  could drop the app bit and orphan the position from NAV); with nothing held (no collateral,
+  no open position, no in-flight amount) the branch reports an **empty balance list**, which is
+  what makes the Lighter app purgeable at all (see "App purge" below).
 
 **Trust assumption (vs Hyperliquid).** Position value uses **Core's own mark price**, which the
 Core operator influences by design (mark pricing, backrunning, liquidations). This is a stronger
@@ -317,6 +359,33 @@ trust assumption than Hyperliquid's authoritative `accountValue`, and is the mai
 32-market cap exists: NAV cost scales linearly with tracked markets (see below), and every extra
 market is another mark-price surface. Documented for the audit; accepted for phase 1 because
 LighterCore is itself the counterparty oracle for these positions.
+
+**Mark-price availability.** Every perp market that exists in Core carries a mark price — the
+market-info read (`0x0005`) returns `markPrice`/`indexPrice` as mandatory fields (they are `0`
+only for spot markets, which the adapter rejects). This differs from the GMX episode where some
+markets lacked Chainlink streams and feed addresses had to be hardcoded: Lighter's mark price is
+not a per-market external dependency but Core-internal state that exists by construction with
+the market. The residual risk is a market being delisted (read starts failing), which degrades
+that position to zero-PnL rather than reverting NAV; the NAV loop then drops the stale entry on
+its next pass.
+
+**Worked example (live devnet reads, 2026-10-23, pool `0x7Bcea…6CB8`).** Short 0.008 ETH-PERP
+(`position = -80` on sizeDecimals 4), entry notional `entryQuote = 320_000_000` ($320.00, i.e.
+$40,000/ETH at entry), Core mark price `239976` ($2,399.76 on priceDecimals 2):
+
+```
+markValue = -80 × 239976 × 1e6 / 10^(4+2) = -19_198_080  ($-19.19808)
+pnl       = markValue − (−entryQuote) = -19_198_080 + 320_000_000 = +300_801_920  ($+300.80)
+NAV       = collateralBaseAmount + pnl  (+ isolated margin if marginMode == 1)
+```
+
+Cross-margin mode here, so no margin add-back. (Devnet mark prices move a lot between reads —
+the position above entered at ~$40,000/ETH while the read-time mark was $2,399.76 — so the
+example demonstrates the formula on real read values, not a point-in-time NAV reconciliation.
+The pool's two `updateUnitaryValue` txs (`0xfd01e437…4ace7`, `0x521a248f…7265`) moved unitary
+value off the 1 USDC seed by small amounts in line with mark-to-market PnL at their respective
+times — on-chain confirmation that the end-to-end NAV path (auto-tracked market, mark price,
+decimal scales) revalues live positions on every update.)
 
 Funding payments are captured implicitly: `lastFundingRatePrefixSum` is in the position struct but
 Rigoblock's NAV formula deliberately uses only `entryQuote` vs `markPrice` — the mark price
@@ -340,8 +409,12 @@ reads itself. No Authority round-trip, no adapter hop:
 3. `LighterLib` reads the pool's tracked markets and in-flight accounting from
    `StorageLib.lighterSlot()` and computes the NAV from READ_CORE.
 
-A standalone view `getLighterBalances()` (no args, `IEAppsLighter`) is mapped by `ExtensionsMap`
-to `EAppsLighter` for clients and tests; it returns exactly what the NAV branch computes.
+A standalone `getLighterBalances()` view existed in the first iteration (mapped by
+`ExtensionsMap` via `IEAppsLighter`); it was removed on 2026-10-23 — it duplicated the NAV
+branch exactly, was unused off-chain, and every mapped selector costs `ExtensionsMap` size.
+Clients read the same valuation through `getAppTokenBalances(packedApplications)` (an
+`eth_call` works fine on it despite the non-view signature: it makes no state writes in the
+Lighter branch).
 
 Security properties: write-mode access is unchanged (deposits/orders go through the
 owner-gated delegatecall path); the settlement lock is asserted fail-closed in the branch before
@@ -351,19 +424,56 @@ bytecode, not upgradeable via Authority. This was the main motivation for the EA
 
 **Never-revert NAV reads (the pool-freeze fix).** A NAV revert does not just fail one read —
 `updateUnitaryValue` is on the critical path of mint/burn, so a reverting Lighter branch freezes
-the *entire pool* for every token holder. That happened on the devnet on 2026-10-20 (post-mortem
-below). The read layer therefore degrades instead of reverting:
+the _entire pool_ for every token holder. That happened on the devnet on 2026-10-20 (post-mortem
+below). The NAV path therefore degrades instead of reverting, matching the policy GmxLib has
+always used for GMX reads:
 
 - missing Core account → the branch contributes an empty balance list;
 - missing/unreadable position on a tracked market → that market contributes 0;
-- unreadable market info (mark price) → the position is valued flat at its entry notional
-  (zero PnL) plus isolated margin;
-- unreadable tx status → no in-flight adjustment (matches post-window behavior).
+- unreadable market info (mark price, e.g. a delisted market) → the position is valued flat at
+  its entry notional (zero PnL) plus isolated margin;
+- the tx-status read cannot fail per the docs (unknown reqIds return status 0), so the in-flight
+  adjustment is exact whenever it applies.
+
+The only remaining try/catch-style tolerance is therefore _absence handling per the documented
+failure semantics_, not format tolerance: with the docs and the devnet now in agreement, every
+read has a deterministic success shape (see the selector table).
 
 Valuation degradation is one-directional-conservative in the only window where it can trigger:
 while a transfer is within its 16 s settlement window, `assertNavUnlocked` already blocks
 `updateUnitaryValue` for everyone except the exempt self-call, so the degraded reads only run
 when NAV is allowed to settle anyway.
+
+### App purge: tracked markets do not block it
+
+`purgeInactiveTokensAndApps` (owner action on the implementation) drops an application bit only
+when that app reports an **empty balance list** from `getAppTokenBalances(packedApps)`. Two
+questions follow for Lighter:
+
+- **Do tracked markets have to be removed before purging? No.** The tracked-market list is pool
+  storage, not an application: `getAppTokenBalances` only evaluates the apps set in the packed
+  active-application bitmap, so once the bit is dropped the tracked list is inert — it is read
+  again only if a later deposit re-activates the bit (the same outlives-the-bit behavior as
+  GMX's tracked-token storage). Purge requires only that the branch can report empty: no Core
+  collateral, no open position/orders, no in-flight amount. Stale tracked entries are cleaned by
+  the NAV loop itself on its next pass, so no owner-facing untrack method is needed.
+- **Can the owner accidentally purge while a position or orders are open? No.** Any surviving
+  tracked market (one with a position or open orders — precisely the entries the NAV loop does
+  not prune) makes the branch report dust = 1 (non-empty) even when the mark-to-market total is
+  exactly zero, so the purge condition `balances.length == 0` cannot be met with live state. The
+  owner must close positions and orders and drain collateral first — the same trust model as
+  GMX, where `purgeInactiveTokensAndApps` likewise relies on the app honestly reporting empty.
+- **Negative account value.** A negative total (losses beyond collateral — `collateralBaseAmount`
+  and the PnL sum are signed) is **returned as-is**, exactly like `HyperliquidLib` does with a
+  negative HyperCore `accountValue`: the liability stays in pool NAV, the balance list is
+  non-empty, and the app bit cannot be dropped while the pool owes money — depositors exiting at
+  that NAV correctly absorb the loss, and the pool cannot be purged into hiding it. No clamping
+  to zero or dust: that would overstate NAV and make the loss someone else's problem. Unit tests
+  cover the negative path (`testGetLighterBalancesNegativeTotalReturnedAsIs`).
+
+The first iteration's `dust = 1 whenever the Core account exists` made the Lighter app
+**unpurgeable** (the account exists forever once created); the empty-when-nothing-held rule
+above is the fix, and the zero-PnL dust exception keeps the purge path safe.
 
 **Post-mortem: the 2026-10-20 devnet pool freeze.** After a pool's first successful Core
 deposit, `updateUnitaryValue()` reverted with no revert data and the pool bricked completely —
@@ -376,9 +486,10 @@ strictness bugs (the deployed build predates the dual-format layer):
    signals absence by failing), and the NAV path reverted instead of treating it as "no
    position".
 
-Fix: the dual-format read layer plus the never-revert degradation rules above. The frozen pool
+Fix: the deterministic read layer (docs and devnet now agree on shapes and failure semantics)
+plus the never-revert degradation rules above. The frozen pool
 (`0x07816c51…C9Be`, operator test pool) stays frozen **unless its owner calls
-`upgradeImplementation()`** — the rewire below points the factory at the 4.6.0 implementation,
+`upgradeImplementation()`** — the rewire below points the factory at the 4.6.x implementation,
 and any pool whose owner upgrades gets the fixed read layer; until then it remains on the old
 implementation (pool implementation adoption is owner-opt-in by design).
 
@@ -390,14 +501,15 @@ single-chain fix stops forcing version bumps and redeploys on every chain:
 - **`EApps`** (base, every chain): `GRG_STAKING` + `UNIV4_LIQUIDITY` branches.
 - **`EAppsArbitrum`** (chain 42161): adds `GMX_V2_POSITIONS`.
 - **`EAppsHyperliquid`** (chain 999): adds `HYPERLIQUID`.
-- **`EAppsLighter`** (chain 19529): adds `LIGHTER_PERPS` + `getLighterBalances()`.
+- **`EAppsLighter`** (chain 19529): adds the `LIGHTER_PERPS` branch (settlement lock + NAV
+  valuation, via `LighterLib` compiled into the extension).
 
 `_handleApplication` is `internal virtual` in the base; subclasses handle their application and
 `super`-call the base. All four share the same `EAppsParams` constructor and the same
 `ExtensionsMap` selector routing (the map routes the union of selectors; a chain whose `eApps`
-does not implement a selector simply does not answer it — e.g. `getLighterBalances` is only
-meaningful on 19529). The deploy script picks the artifact by `chainId`
-(`src/deploy/deploy_extensions.ts`).
+does not implement a selector simply does not answer it — e.g. `getLighterTrackedMarkets` is
+only meaningful where `LighterLib` is compiled in). The deploy script picks the artifact by
+`chainId` (`src/deploy/deploy_extensions.ts`).
 
 **`ENavView` was removed entirely** (extension, interface, `NavView` library, `NavData` type,
 ExtensionsMap wiring, deploy steps, tests): it duplicated the NAV aggregation for a DefiLlama
@@ -497,10 +609,9 @@ Two consequences, mirrored from Hyperliquid:
 2. **Settlement lock.** `assertNavUnlocked()` (asserted in the `LIGHTER_PERPS` branch of
    `EAppsLighter`, fail-closed) blocks NAV-dependent state changes — mint, burn, and other locked
    flows — for `_SETTLEMENT_WINDOW = 16` seconds after any recorded Core write, same-block
-   exempt. This covers refund/delivery lag beyond the in-flight window. If the tx-status read
-   itself fails, the in-flight adjustment is dropped rather than applied (see "Never-revert NAV
-   reads" above) — within the window NAV writes are lock-guarded anyway, so this matches the
-   post-window "assumed settled" behavior.
+   exempt. This covers refund/delivery lag beyond the in-flight window. The tx-status read is a
+   hard read: per the docs it cannot fail for a well-formed query (unknown reqIds return status
+   `0`), so no failure tolerance is needed there.
 
 The 16 s window is a starting value: **Open question 3 for the Lighter team —
 what is the actual Core→EVM state-observation lag in EVM blocks?** On HyperEVM the window was tuned
@@ -508,14 +619,14 @@ against measured lag; on LighterEVM we cannot measure without sustained RPC acce
 
 ## EVM differences relevant to the integration
 
-| Topic                                | LighterEVM behavior                                                              | Integration impact                                                                                                                                                                             |
-| ------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| EIP-2718 deposit txs                 | No user-facing deposit transaction type                                          | Nothing to handle in the adapter                                                                                                                                                               |
-| Type `0x7E` txs                      | Exogenous txs from Core system address `0x7fff…ffff` deliver withdrawals/refunds | Pool's USDC arrives asynchronously; no code path needed                                                                                                                                        |
-| Precompiles                          | `0x6600…` range incl. READ_CORE                                                  | Standard `staticcall`; no special casing                                                                                                                                                       |
-| CREATE2 / DELEGATECALL / EXTCODEHASH | No documented deviations                                                         | Proxy + adapter patterns unaffected                                                                                                                                                            |
-| `block.number` / timestamps          | 1 s blocks                                                                       | Settlement window uses `block.timestamp`                                                                                                                                                       |
-| Account activation                   | **None required** (vs Hyperliquid's builder requirement)                         | First deposit auto-creates the Core account; a nonexistent account reads as `found = false` per the docs (the first devnet build failed the call instead — `coreAccountExists` tolerates both) |
+| Topic                                | LighterEVM behavior                                                              | Integration impact                                                                                                                                        |
+| ------------------------------------ | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| EIP-2718 deposit txs                 | No user-facing deposit transaction type                                          | Nothing to handle in the adapter                                                                                                                          |
+| Type `0x7E` txs                      | Exogenous txs from Core system address `0x7fff…ffff` deliver withdrawals/refunds | Pool's USDC arrives asynchronously; no code path needed                                                                                                   |
+| Precompiles                          | `0x6600…` range incl. READ_CORE                                                  | Standard `staticcall`; no special casing                                                                                                                  |
+| CREATE2 / DELEGATECALL / EXTCODEHASH | No documented deviations                                                         | Proxy + adapter patterns unaffected                                                                                                                       |
+| `block.number` / timestamps          | 1 s blocks                                                                       | Settlement window uses `block.timestamp`                                                                                                                  |
+| Account activation                   | **None required** (vs Hyperliquid's builder requirement)                         | First deposit auto-creates the Core account; reads of a nonexistent account fail outright per the docs (which `coreAccountExists` treats as "no account") |
 
 ## Storage layout
 
@@ -553,11 +664,15 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` bumped to `4.6.0` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.6.0"`;
-  the `pool.VERSION()` test assertion updated in the same PR.
-- `extensionsMapSalt` bumped to `extensionsMapSalt21` (extension bytecode changed: `ENavView`
-  removed, `EApps` split into the per-chain family, `ExtensionsMap` routes a new selector →
-  new ExtensionsMap → new implementation).
+- `VERSION` is `4.6.3` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.6.3"`; the
+  `pool.VERSION()` test assertion tracks it in the same PR. (4.6.0/4.6.1/4.6.2 were all deployed
+  to the devnet; per the version-bump rules a deployed train bumps normally. 4.6.1 = ENavView
+  removal + per-chain EApps split + deterministic-read `LighterLib`; 4.6.2 = view/method
+  removals; 4.6.3 = this section's NAV-loop purge redesign.)
+- `extensionsMapSalt` is `extensionsMapSalt24` (extension bytecode changed every round:
+  4.6.1 changed `EAppsLighter`; 4.6.2 changed `ExtensionsMap` itself — `IEAppsLighter` selector
+  removed — and `LighterLib`; 4.6.3 changed `LighterLib` again → new ExtensionsMap → new
+  implementation each time).
 - Chain 19 529 added to `PRODUCTION_CHAIN_IDS` in `rocketh/config.ts` with the Safe singleton
   factory (preinstalled on LighterEVM → deterministic-address parity holds).
 - `src/utils/constants.ts` chainConfig: WETH9 predeploy as wrapped native; zero
@@ -568,11 +683,13 @@ No extension/adapter storage (Rigoblock hard rule).
   deployed there) and deploys `ALighter`; the `EApps` artifact is selected per chain
   (42161→`EAppsArbitrum`, 999→`EAppsHyperliquid`, 19529→`EAppsLighter`, else base `EApps`).
   Selector registration in Authority is governance-driven (no `addMethod` in the deploy
-  scripts): before pools can use the adapter on 19529, governance must register the seven
+  scripts): before pools can use the adapter on 19529, governance must register the five
   adapter selectors — `sendToCore`, `sendToEvm`, `createOrder`, `cancelOrder`,
-  `cancelAllOrders`, `trackMarket`, `untrackMarket`. NAV needs no Authority mapping: the
-  `LIGHTER_PERPS` branch and the `getLighterBalances` view route through the immutable
-  `ExtensionsMap` to `EAppsLighter`.
+  `cancelAllOrders`. (The former `trackMarket`/`untrackMarket` selectors were removed when
+  tracking became automatic and untracking moved into the NAV loop (purge-in-place); the former
+  `getLighterBalances` view needed no Authority mapping anyway and is gone from
+  `ExtensionsMap` too — see "Trading flow".) NAV needs no Authority mapping: the
+  `LIGHTER_PERPS` branch routes through the immutable `ExtensionsMap` to `EAppsLighter`.
 - **Devnet manual wiring (2026-10-19, executed from the deployer key `0x080f…1fA6`).** The
   deploy scripts leave factory/Authority wiring to governance, and `setImplementation` is
   commented out in `deploy_extensions.ts`, so it was done manually after deployment:
@@ -621,7 +738,89 @@ No extension/adapter storage (Rigoblock hard rule).
   `env -u SOLIDITY_SETTINGS npx hardhat deploy --tags extensions --network lighterevm-devnet --skip-prompts`
   (the wrapper task does not forward `--skip-prompts`, and `--network lighter` is invalid — the
   network name is `lighterevm-devnet`; `lighter` is only the `foundry.toml` fork alias).
-- Explorer verification: Hardhat 3's verify plugin (v3.1.0+) has native Blockscout support and
+- **Devnet rewire executed after the 4.6.1 redeploy (2026-10-23, deployer key `0x080f…1fA6`).**
+  Redeployed contracts (salt22 ExtensionsMap at `0x895B1082865E34194be6aF6119E31B7df58C090B`,
+  `VERSION = "4.6.1"`): EOracle `0x488c965E5717371846eCcDe12D43059Da3050272`, EAppsLighter
+  `0xBFA25521ab4C04F85aceE22B89Cc33FCD34F20E0` (deploy tx
+  `0x35f1513c6569c0f308660b8cd3cf060292b86757b8feec7f1f74ef8f26673af3`), SmartPool
+  `0x3a865A15660F0FABE7D551715e610CF2675B6406`, ALighter
+  `0x9AB852ab02F0AaC804dCC7942Bf2e5A28Db9acAF` (deploy tx
+  `0x614e18634476fdf77aaecd57e316c706296a6a4541a54d62dbc8ac751f6ee2a5`). The 4.6.0 adapter
+  `0x9F9596248500098c3ec044dD5905584F593185D1` had seven selectors registered; all seven were
+  removed and six re-added against the new adapter (`0xeed67f2c`/`0x60f502da`/`0x8a7da422`/
+  `0x736fd6b3`/`0xa4b6f756`/`0xe0ad5442` = untrackMarket). The auto-track change makes the
+  former `trackMarket(uint16)` selector `0xee814ef0` obsolete: it resolves to zero and stays
+  unregistered. `authority.setAdapter(new ALighter, true)` =
+  `0xc6c2849382cc3ebc01c6d0a4f5c3902eeb193997a1cf70edf4f84544c121e996`;
+  `factory.setImplementation(0x3a865A15660F0FABE7D551715e610CF2675B6406)` =
+  `0xd38933d2268a981043770e5728413e48c2dd28dfb33346f0dfd449c76995e57a` (verified via
+  `factory.implementation()`); smoke pool `0x1896095137d709a9f19534d3f273e39a1e662b2a` upgraded
+  via `upgradeImplementation()` (`0x6a3f398e7df72b585fa1667bfdf5166ed818b47a1d1efd5a26529192291e187f`)
+  and answers `VERSION()` = `"4.6.1"`; ExtensionsMap-routed `getLighterBalances()` returns empty
+  without reverting (no Core account on the smoke pool). The funded pool `0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8`
+  is operator-owned and keeps its current implementation until its owner upgrades (adoption is
+  owner-opt-in; its 4.6.0 implementation already carries the working read layer).
+- **Devnet rewire executed after the 4.6.2 redeploy (2026-10-23, deployer key `0x080f…1fA6`).**
+  Motivation: `getLighterBalances()` view and public `untrackMarket` removed (internal at-cap
+  sweep instead), `ExtensionsMap` dropped the `IEAppsLighter` selector, READ_CORE reads decode
+  the spec'd tuples directly (length checks removed), and the branch now reports empty when
+  nothing is held so `purgeInactiveTokensAndApps` can drop the app. Redeployed (salt23
+  ExtensionsMap at `0xc6588cfE51b9A748D75431932552a51b730e043E`, `VERSION = "4.6.2"`):
+  EAppsLighter `0x29Def00CFd1A91EF04E221a79aBCdb668BB17688` (deploy tx
+  `0x23e6a16dce7baa06d6cf41eed36dc3e1ad2bb0e4577d5a98ee7d4ed26ac31b4c`),
+  ExtensionsMapDeployer `0x5f9D83b8669c6a2850EFd99949F7DF1031f3ee45` (deploy tx
+  `0xfece9b38cff3eba0c58c0494cbb15c17a5f840b5111641a1dcb28a3adcd5876a`), ExtensionsMap
+  deploy tx `0xce7b0770b8fd66d5239d2bf1f869399e5116648062eea417e03491527096ecd5`, SmartPool
+  `0xB53318dc2C73A54cEc69Bf75637aF3C6fF2cCe79` (deploy tx
+  `0x5c365cec5b3f7b65544f804b282145845f41dc37c7e56fe112b1924369966427`), ALighter
+  `0x2C0d3bf602DF3dc74a6100e88bFbD08C210856E9` (deploy tx
+  `0x7fe50c80737849455c9e0faf5dc6f7e84840d5110eea867d6177d3cd9e314fd0`). Authority: all six
+  selectors of the 4.6.1 adapter `0x9AB852ab02F0AaC804dCC7942Bf2e5A28Db9acAF` removed
+  (`0xeed67f2c`/`0x60f502da`/`0x8a7da422`/`0x736fd6b3`/`0xa4b6f756` txs
+  `0x945562a7…`/`0x6c794a6d…`/`0x9637e48c…`/`0xeb15b5f0…`/`0x8ae936e7…`, untrack `0xe0ad5442`
+  tx `0x9a8becbd…6929`), the five surviving writes re-added against the new adapter (txs
+  `0x9af6ed18…`/`0x3ac8dfb9…`/`0x21dd72c5…`/`0xe129ea8c…`/`0xc734f1af…`), `setAdapter(new, true)`
+  = `0x3ed11735ad269d06a7164046e3fe0665f377177b169de9ac1a9360957e9fc751`,
+  `factory.setImplementation(0xB53318dc2C73A54cEc69Bf75637aF3C6fF2cCe79)` =
+  `0x31796df15666a8f4702ce8434f524405c96522a134693a784473f487cf095a3e` (verified via
+  `factory.implementation()`). Verified on-chain: all five selectors resolve to the new ALighter;
+  both removed selectors (`0xe0ad5442`, and the long-obsolete `0xee814ef0`) resolve to zero; the
+  removed `getLighterBalances()` view selector `0x58a5a2a4` reverts `PoolMethodNotAllowed` on the
+  upgraded smoke pool `0x1896095137d709a9f19534d3f273e39a1e662b2a` (upgraded via
+  `upgradeImplementation()`, tx `0x85d140a6da31e7a65373630755e75f5ac5d40f0cdcaaecfde61cd09aaac7c682`),
+  which answers `VERSION()` = `"4.6.2"`; `getLighterTrackedMarkets()` still answers. The funded
+  pool `0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8` sits on 4.6.1 (owner-upgraded) and works
+  there — the owner must run one more `upgradeImplementation()` to pick up 4.6.2 (the live
+  NAV-exactness test in `ALighterLive.t.sol` passes against it on either version, since the
+  NAV branch is unchanged in shape).
+- **Devnet rewire executed after the 4.6.3 redeploy (2026-10-23, deployer key `0x080f…1fA6`).**
+  Motivation: purge-in-place redesign — the NAV loop itself untracks dead markets (allowed
+  because `getAppTokenBalances` is non-view), the at-cap sweep was deleted, negative account
+  values are returned as-is (Hyperliquid parity), `Position.position` renamed `size`.
+  Redeployed (salt24 ExtensionsMap at `0xfA61b80d39F9f030deabC3EeDaAd93A54d7Ddf13`,
+  `VERSION = "4.6.3"`): EAppsLighter `0x66718b5dD15f07851F8A7dfb029AD5BaAB5A0D34` (deploy tx
+  `0x4d4156caed3370e3c8509aab1ed9d324cad499de49c04577076915a8039acc98`), ExtensionsMap deploy
+  tx `0x24a577495beafffbe545b69797930014badcfb9fee62ebee73ad8f180cfad8d1`, SmartPool
+  `0xD058F019A526aeE8a3C8b5aEBb6a055d8DC94876` (deploy tx
+  `0x1697b82672022063daea0c6e54f74aa537cf6ffbb8e1312cda5795a8bec24c52`), ALighter
+  `0x58c9A4E006fe5013CD613fD6790b8cCf498586fB` (deploy tx
+  `0x75ac8e57785e681d6bde63e445cdce636a47eeeff4bb93f2e44d25e5864146ac`). Authority: the five
+  selectors of the 4.6.2 adapter `0x2C0d3bf602DF3dc74a6100e88bFbD08C210856E9` were removed and
+  re-added against the new adapter (`setAdapter` =
+  `0xc3a12524fe1c93974c89c07ac10155d006a2fb7bb796f957f3634e657cd13d92`; remove/add txs
+  `0xcb83c51d…`/`0x9feaad4a…`, `0x4b132529…`/`0xe8404d78…`, `0xe0f7b1a8…`/`0x132f2e81…`,
+  `0x084b36fa…`/`0x7d450260…`, `0x8df1e08b…`/`0x6327d099…`),
+  `factory.setImplementation(0xD058F019A526aeE8a3C8b5aEBb6a055d8DC94876)` =
+  `0x73ff9a74b49b665dc2a0bdb8db59dbeeb57cbea279cf281a681f0636ae6bb560` (verified via
+  `factory.implementation()`). Verified on-chain: all five selectors resolve to the new ALighter;
+  smoke pool `0x1896095137d709a9f19534d3f273e39a1e662b2a` upgraded (tx
+  `0x0842cc3bc81b2eb83e404760d361c7813862b06f8f350a74cdc1f929f2f1929c`) and answers
+  `VERSION()` = `"4.6.3"`. The funded pool `0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8` needs one
+  more owner `upgradeImplementation()` to pick up 4.6.3 (its 4.6.1 implementation keeps working;
+  the live NAV-exactness test passes against it on any of these versions — the NAV shape is
+  unchanged).
+- Explorer verification: disabled on the devnet by the Lighter/axiom team (known issue, to be
+  enabled at a later stage). Hardhat 3's verify plugin (v3.1.0+) has native Blockscout support and
   does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin syntax — see
   Blockscout's hardhat verification guide). The HH3 equivalent is a `chainDescriptors` entry in
   `hardhat.config.ts`, declared for chainId 19529 from the private env URLs
@@ -629,59 +828,52 @@ No extension/adapter storage (Rigoblock hard rule).
   repo). Verify with the provider-scoped subcommand, which leaves the Etherscan/Sourcify config
   untouched:
   `npx hardhat verify blockscout --network lighterevm-devnet <address> [constructorArgs...]`.
-  `scripts/verify-lighter-devnet.sh` batch-verifies every artifact in a deployments dir
-  (`deployments/lighter` by default), decoding constructor args from each `argsData`.
-  `SOLIDITY_SETTINGS` is unset for every call because the value committed in `.env` is a JS
+  `SOLIDITY_SETTINGS` must be unset for every call because the value committed in `.env` is a JS
   literal, not JSON, and crashes hardhat's config loader.
-- **Verification status (2026-10-19): blocked explorer-side.** Both explorer APIs accept
-  verification jobs but never process them: the Etherscan-emulation
-  `?action=verifysourcecode` returns a guid and then `checkverifystatus` →
-  `Fail - Unable to verify`, and the native Blockscout v2 endpoint
-  `POST /api/v2/smart-contracts/{address}/verification/via/standard-input` (multipart,
-  `compiler_version` / plain `contract_name` / `autodetect_constructor_args` / `files[0]`)
-  returns `{"message":"Smart-contract verification started"}` after which
-  `GET /api/v2/addresses/{address}` keeps reporting `is_verified: false` indefinitely.
-  Reproduced with the exact UI parameter semantics and with a trivial solc 0.8.24
-  single-file probe, so the failure is not our input. The v2 API is the right interface
-  once axiom fixes the backend; curl example for one contract:
-  `curl -X POST "$LIGHTER_DEVNET_BROWSER_URL/api/v2/smart-contracts/<address>/verification/via/standard-input" -F compiler_version=v0.8.37+commit.f401782d -F contract_name=<Name> -F autodetect_constructor_args=true -F "files[0]=@<Name>.json"`.
-  Reported for the Lighter/axiom team: the verifier worker appears unprovisioned on the
-  devnet.
-  Local correctness evidence while blocked: for 12 of 15 contracts the deployment
-  artifact's `deployedBytecode` is byte-identical to `build/artifacts` (metadata included).
-  `Authority`, `PoolRegistry`, and `RigoblockPoolProxyFactory` (all pinned-solc-0.8.17)
-  have byte-identical _executable_ code but their on-chain metadata CBOR tail is the
-  pre-Hardhat-3 canonical tail, which the current build's standard-json does not reproduce.
-  The exact input can be recovered from mainnet Etherscan instead — same deterministic
-  address, verified there with the historical standard-json: verified locally for
-  `Authority` (its Etherscan standard-json recompiles to the Lighter deployment
-  byte-for-byte with the cached `solc 0.8.17+commit.8df45f5f`), pending for the other two.
 
 ## Testing
 
 | Suite          | File                                                                                | Status                                                                                      |
 | -------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Unit (offline) | `test/extensions/ALighterUnit.t.sol`, `test/libraries/LighterLib.t.sol`             | 58 tests, run in CI                                                                         |
-| Fork (devnet)  | `test/extensions/ALighterFork.t.sol` + `test/fixtures/LighterDeploymentFixture.sol` | **11 tests pass** at `LIGHTER_BLOCK = 842_000`; auto-skips while `LIGHTER_RPC_URL` is unset |
+| Unit (offline) | `test/extensions/ALighterUnit.t.sol`, `test/libraries/LighterLib.t.sol`             | 52 tests, run in CI                                                                         |
+| Fork (devnet)  | `test/extensions/ALighterFork.t.sol` + `test/fixtures/LighterDeploymentFixture.sol` | **10 tests pass** at `LIGHTER_BLOCK = 842_000`; auto-skips while `LIGHTER_RPC_URL` is unset |
+| Live (devnet)  | `test/extensions/ALighterLive.t.sol`                                                | **2 tests** against the live devnet RPC (no fork, no mocks); auto-skips without `LIGHTER_RPC_URL` |
+
+The live suite exists because READ_CORE (`0x6600…0000`) is a **native precompile with no code**
+(verified via `eth_getCode` = `0x`) — Foundry's EVM cannot execute it even when forking — so it
+calls the devnet RPC directly through the `vm.rpc` cheatcode instead of forking:
+
+- `testLive_ReadCoreFormats` locks every response shape the integration relies on (0x0000/0x0001/
+  0x0002/0x0004/0x0005/0x0007/0x0009) by decoding real precompile returns with the exact tuple
+  types and asserting semantic invariants (USDC decimals 6, USDC token address, perp
+  `marketType == 0`, account index consistency between 0x0001 and 0x0009, unknown-reqId status 0).
+- `testLive_NavExactness` independently recomputes the NAV of the funded tester pool
+  `0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8` from live precompile reads and asserts **bit-exact
+  equality** with the pool's on-chain `getAppTokenBalances` result (verified live: 30 802 160 ==
+  30 802 160, 6-dec USDC). Because the devnet mark price moves every block and the RPC serves
+  `latest` only (no pinned-block `eth_call`), an attempt can straddle a block boundary and read
+  two mark prices (one tick = 80 units for the pool's 0.008-size ETH short); the test therefore
+  retries up to 5 times with fully fresh reads and requires exact equality on at least one
+  attempt — a pass proves the pool's NAV path agrees with an independent recomputation at a
+  single Core snapshot. It also skips transiently inside the 16 s settlement window after a
+  deposit/withdrawal.
 
 The fork fixture mirrors `HyperliquidDeploymentFixture`: it uses live Authority/Registry/Factory
 from `Constants` when present, else deploys local infrastructure, and registers the adapter
 selectors (with the whitelister self-grant needed on live infrastructure). Foundry's EVM cannot
-execute the client-side READ_CORE precompile when forking, so precompile returns are mocked
-with `vm.mockCall` (a wildcard revert in the fixture + per-test mocks). The mocks follow the
-same convention the library tolerates on-chain: return the **raw `abi.encode` payload** for a
-successful read, or **revert** (`vm.mockCallRevert`) to signal absence — both are valid;
-enveloped `abi.encode(bool, bytes)` returns are accepted too (the dual-format read layer). The
-`EvmInteropManager` (`0x6600…0001`) `sendToCore` return is likewise mocked with an
-exact-calldata matcher — this asserts the adapter builds the correct calldata (a wrong encoding
-misses the mock and hits the wildcard revert) while keeping the suite independent of the
-devnet's predeploy code, which can disappear without notice (the first devnet build was wiped
-wholesale mid-integration; a later build may serve state again at the same spec addresses).
+execute the client-side READ_CORE precompile when forking, so fork-suite precompile returns are
+mocked with `vm.mockCall` (a wildcard revert in the fixture + per-test mocks). The mocks follow
+the on-chain convention exactly: a successful read returns the **raw `abi.encode` payload**, and
+**reverting** (`vm.mockCallRevert`) signals a nonexistent account/market — the documented
+failure semantics. The `EvmInteropManager` (`0x6600…0001`) `sendToCore` return is likewise
+mocked with an exact-calldata matcher — this asserts the adapter builds the correct calldata (a
+wrong encoding misses the mock and hits the wildcard revert) while keeping the suite independent
+of the devnet's predeploy code, which can disappear without notice (the first devnet build was
+wiped wholesale mid-integration; a later build may serve state again at the same spec addresses).
 
 The fork suite validates chain wiring, storage effects, flow guards, NAV valuation (via the
-`EAppsLighter` branch and the pool-routed `getLighterBalances()` view), the settlement lock,
-and adapter calldata construction. It does **not** validate live READ_CORE returns — that
-requires a stable devnet and is listed in the open questions.
+`EAppsLighter` branch of `getAppTokenBalances`), the NAV-loop purge, the settlement lock, and
+adapter calldata construction. Live precompile behavior is covered by the live suite above.
 
 **Devnet-reset hazard.** Predeploy code is chain state: when Lighter resets/redeploys the
 devnet, every predeploy address has no code until Lighter redeploys it, even at pinned blocks
@@ -698,7 +890,14 @@ errors, check `eth_getCode` on `0x6600…0001` at the pin and bump `LIGHTER_BLOC
 - [x] USDC-only: asset index, quote asset, and route enforced on every entrypoint
 - [x] Pool forced as deposit recipient / withdrawal recipient (no third-party egress)
 - [x] Per-call approve with reset-to-1 (Pattern 2, USDT-safe via `safeApprove`)
-- [x] Tracked-markets gate makes untracked positions impossible via EVM flows
+- [x] createOrder auto-tracks its market (O(1) mapping check); untracking is internal-only in
+      the NAV loop (no position AND no open orders required); untracked positions impossible
+      via EVM flows
+- [x] App purge reachable: branch reports empty when nothing is held, dust = 1 while any market
+      with position/orders survives (zero-PnL position cannot be orphaned by
+      `purgeInactiveTokensAndApps`)
+- [x] Negative account value returned as-is (Hyperliquid parity): liability stays in NAV,
+      non-empty list, app unpurgeable while negative
 - [x] Settlement lock fail-closed in `EApps`; views unguarded
 - [x] Reentrancy guard (transient) on all external-facing adapter methods
 - [x] Custom errors throughout
@@ -724,19 +923,20 @@ network launches, and the `LighterConstants` values carry a devnet-only comment 
 5. **Address stability**: will devnet USDC (asset index 3) and predeploys keep the same addresses
    on public testnet/mainnet?
 6. **Per-market metadata on-chain**: can `size_decimals`/`price_decimals` be added to the READ_CORE
-   market info (selector `0x0005`)? Rigoblock now hardcodes them in the release-time
+   market info (selector `0x0005`)? Rigoblock hardcodes them in the release-time
    `LighterConstants.marketDecimals` table (never caller input), so this is no longer an
    operator-error surface — but every new market requires a Rigoblock release to be tradeable.
-   Exposing the scales on-chain would remove the table and the `UnknownMarket` gate entirely.
-   Please also confirm the table values against the devnet's `orderBookDetails` once a Core API
-   is reachable there (values were sourced from mainnet; see "Market decimal scales").
-7. **READ_CORE response format**: the current devnet build returns raw `abi.encode` payloads
-   **without** the documented `(bool found, bytes)` envelope for selectors `0x0001`–`0x0009`,
-   and **fails the call outright** for nonexistent accounts/markets instead of returning
-   `found = false`. The Rigoblock read layer tolerates both (length-detected), so nothing is
-   blocked — but please confirm which format is canonical going forward (envelope per docs, or
-   raw), so the tolerance code can eventually be dropped. Also: the funding model (is funding
-   settled through collateral or mark price?).
+   Exposing the scales on-chain would remove the table and the `UnknownMarket` gate entirely;
+   an aggregated perps account-equity read would remove both and the 32-market cap (open
+   question 2). Please also confirm the table values against the devnet's `orderBookDetails`
+   once a Core API is reachable there (values were sourced from mainnet; see "Market decimal
+   scales").
+7. **Funding model**: is funding settled through the collateral balance or the mark price (or
+   neither — accrual via `lastFundingRatePrefixSum`)? Rigoblock's NAV reads mark price minus
+   entry notional, so funding must be visible in one of those for exact valuation. (Resolved
+   alongside the 2026-10-21 docs update: the READ_CORE response-format divergence — raw
+   payloads and hard failure on absence vs the old documented envelope — no longer exists; the
+   docs and the devnet agree, and the dual-format tolerance was removed from the read layer.)
 
 ## References
 

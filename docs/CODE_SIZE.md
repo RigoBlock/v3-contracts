@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-10-20 (per-chain `EApps` split: base `EApps` now 6 676 bytes (was 24 078) with GMX/Hyperliquid/Lighter branches moved to `EAppsArbitrum`/`EAppsHyperliquid`/`EAppsLighter`; `ENavView` removed entirely; NAV reads moved from `ALighter` into `EAppsLighter`, shrinking the adapter 10 324 → 8 358).
+Limit: 24576 bytes per contract. Last measured: 2026-10-23, third pass (v4.6.3: purge-in-place — the NAV loop itself untracks dead markets since `getAppTokenBalances` is non-view; the at-cap sweep was deleted; `Position.position` renamed `size`. `ALighter` 7 290 → 6 196, `EAppsLighter` 10 403 → 10 863; `SmartPool` and `ExtensionsMap` unchanged).
 
 ### Implementation and factory
 
@@ -61,7 +61,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-20 (per-chain `EApps` sp
 | Contract         | Size (bytes) | Headroom | % of limit |
 | ---------------- | -----------: | -------: | ---------: |
 | EAppsArbitrum    |        20620 |     3956 |     83.90% |
-| EAppsLighter     |        10966 |    13610 |     44.62% |
+| EAppsLighter     |        10863 |    13713 |     44.20% |
 | EAppsHyperliquid |        10130 |    14446 |     41.22% |
 | EApps            |         6676 |    17900 |     27.16% |
 | EGmxCallback     |         6227 |    18349 |     25.34% |
@@ -75,7 +75,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-20 (per-chain `EApps` sp
 | Contract      | Size (bytes) | Headroom | % of limit |
 | ------------- | -----------: | -------: | ---------: |
 | Authority     |         3408 |    21168 |     13.87% |
-| ExtensionsMap |         1406 |    23170 |      5.72% |
+| ExtensionsMap |         1379 |    23197 |      5.62% |
 
 ### Adapters (stored in Authority — no salt bump needed on change)
 
@@ -84,7 +84,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-10-20 (per-chain `EApps` sp
 | AGmxV2          |        17768 |     6808 |     72.30% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
-| ALighter        |         8358 |    16218 |     34.01% |
+| ALighter        |         6196 |    18380 |     25.21% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |

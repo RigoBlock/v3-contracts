@@ -6,11 +6,10 @@ pragma solidity >=0.8.0 <0.9.0;
 /// @dev Defined here — next to the Lighter predeploy interfaces — rather than inside LighterLib so
 ///  that a future lighter-contracts git submodule can replace this single file as the source of
 ///  truth. Field names, order and widths mirror Lighter's "Reading Core from EVM" docs
-///  (2026-10-19 revision). Note that these structs describe the `data` payload INSIDE the
-///  docs-specified abi.encode(bool found, bytes data) envelope returned by every read except
-///  tx status (0x0000); LighterLib unwraps the envelope before decoding. abi.decode of the
-///  32-byte-word payloads tolerates wider declared fields (trailing padding is dropped), so
-///  the uint48/uint56 widths are documentation, not consensus.
+///  (2026-10-19 revision). The devnet serves each read as the raw abi.encode tuple — no
+///  envelope — and the call FAILS for a nonexistent account/market (absence semantics live in
+///  LighterLib). abi.decode of the 32-byte-word payloads tolerates wider declared fields
+///  (trailing padding is dropped), so the uint48/uint56 widths are documentation, not consensus.
 library LighterTypes {
     /// @notice READ_CORE 0x0001 (account info). `collateralBaseAmount` is the shared USDC margin
     ///  (Core USDC base units, 1e6 per USDC; excludes isolated margin). The call fails if the
@@ -41,13 +40,13 @@ library LighterTypes {
         uint64 markPrice;
     }
 
-    /// @notice READ_CORE 0x0007 (position). `position` is the signed size on createOrder's amount
-    ///  scale (base * 10^sizeDecimals). `entryQuote` is the unsigned entry NOTIONAL VALUE in Core
-    ///  USDC base units (1e6 per USDC) — not an entry price. `allocatedMargin` uses Core's
+    /// @notice READ_CORE 0x0007 (position). `size` is the signed position size on createOrder's
+    ///  amount scale (base * 10^sizeDecimals). `entryQuote` is the unsigned entry NOTIONAL VALUE in
+    ///  Core USDC base units (1e6 per USDC) — not an entry price. `allocatedMargin` uses Core's
     ///  extended 12-decimal USDC units (1e12 per USDC).
     struct Position {
         int64 lastFundingRatePrefixSum;
-        int64 position;
+        int64 size;
         uint56 entryQuote;
         uint16 initialMarginFraction;
         uint64 totalOrderCount;

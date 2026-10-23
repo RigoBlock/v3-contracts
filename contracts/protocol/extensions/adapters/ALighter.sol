@@ -24,7 +24,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.6.0";
+    string private constant _REQUIRED_VERSION = "4.6.3";
 
     address private immutable _adapter;
 
@@ -103,8 +103,8 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ILighterCoreEntrypoint
-    /// @notice Creates a perp order on LighterCore. The market must have been tracked first:
-    ///  every market the pool can trade is valued in NAV (see docs/lighter/API_KEYS.md).
+    /// @notice Creates a perp order on LighterCore. The market is tracked automatically on first
+    ///  trade so it is always valued in NAV (see docs/lighter/API_KEYS.md for the API-key caveat).
     function createOrder(
         uint48 accountIndex,
         uint16 marketIndex,
@@ -119,7 +119,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
         uint32 triggerPrice
     ) external override nonReentrant onlyDelegateCall returns (uint64 reqId) {
         require(marketIndex < LighterConstants.FIRST_SPOT_MARKET_ID, InvalidMarket());
-        require(LighterLib.isTrackedMarket(marketIndex), LighterLib.MarketNotTracked());
+        LighterLib.trackMarket(marketIndex);
 
         reqId = ILighterCoreEntrypoint(LighterConstants.CORE_ENTRYPOINT).createOrder(
             _requireAccountIndex(),
@@ -155,23 +155,6 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     ) external override nonReentrant onlyDelegateCall returns (uint64 reqId) {
         reqId = ILighterCoreEntrypoint(LighterConstants.CORE_ENTRYPOINT).cancelAllOrders(_requireAccountIndex());
         emit OrderSent(reqId);
-    }
-
-    /// @inheritdoc IALighter
-    /// @dev Callable only by the pool owner (enforced by MixinFallback's delegatecall routing).
-    ///  The market's decimal scales come from the LighterConstants release-time table, never
-    ///  from calldata.
-    function trackMarket(uint16 marketId) external override onlyDelegateCall {
-        LighterLib.trackMarket(marketId);
-        emit MarketTracked(marketId);
-    }
-
-    /// @inheritdoc IALighter
-    /// @dev Callable only by the pool owner (enforced by MixinFallback's delegatecall routing).
-    function untrackMarket(uint16 marketId) external override onlyDelegateCall {
-        require(LighterLib.positionSize(address(this), marketId) == 0, PositionNotClosed());
-        LighterLib.untrackMarket(marketId);
-        emit MarketUntracked(marketId);
     }
 
     /// @dev Resolves the pool's own Core account index; reverts if the pool has no Core account yet

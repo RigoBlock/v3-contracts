@@ -37,8 +37,9 @@ reach, with no on-chain trace beyond the resulting Core state.
 
 Rigoblock's pool NAV is computed **on-chain** during `updateUnitaryValue`, which every mint/burn
 depends on. The Lighter NAV loop (see [INTEGRATION.md](INTEGRATION.md)) sums the shared collateral
-plus the value of **tracked markets only** — a deliberate, capped set in pool storage that the
-adapter validates (`MarketNotTracked` revert) for every EVM-initiated `createOrder`.
+plus the value of **tracked markets only** — a set that `createOrder` maintains automatically
+(every market traded through the pool is tracked on first trade, and NAV purges markets with no
+position and no orders).
 
 An API key breaks that invariant at a single point:
 
@@ -104,8 +105,12 @@ can't send EVM txs") is the only remaining gap, and it is on their side.
 If the peer cannot adapt their tooling, a future adapter version could expose `changePubKey` under
 strict rules:
 
-1. **All markets the key may trade must be tracked first** (`trackMarket`); the adapter documents
-   that untracked-market trading via key breaks NAV and is solely the operator's responsibility.
+1. **Every market the key trades must be tracked in the pool first** — today that means routing at
+   least one `createOrder` per market through the pool (auto-tracking), since the explicit
+   `trackMarket` method was removed; the adapter documents that untracked-market trading via key
+   breaks NAV and is solely the operator's responsibility. (If API-key mode ever ships, an
+   explicit tracking method would likely return for pre-tracking markets the pool itself never
+   trades.)
 2. Pool-level disclaimer surfaced in the UI/API: _"This pool trades via Lighter API keys. Only
    pre-tracked markets may be traded; positions in untracked markets are invisible to NAV and can
    be exploited by depositors/withdrawers."_
