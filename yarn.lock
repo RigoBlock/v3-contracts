@@ -408,12 +408,12 @@
     zod "^3.23.8"
 
 "@nomicfoundation/hardhat-network-helpers@^3.0.0":
-  version "3.0.11"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-network-helpers/-/hardhat-network-helpers-3.0.11.tgz#50f95468504a5006aab6d75a2935e787c0eb1748"
-  integrity sha512-3/xuORejAOGbfqBmIen+OCHu9ExK9O8pjE11ILU9NcN37zy3GDbyNCKV9keK1gSjWWVb0okAlAR/yvewfEE4TA==
+  version "3.0.12"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-network-helpers/-/hardhat-network-helpers-3.0.12.tgz#56a90f8c2075ab3530b0abd5a12cc55c056cc8eb"
+  integrity sha512-rT9Zz9ssFIJV/omKY7h0u5XqWMHzlSSwL4Fjk9r+Yj48kYgV6WpMsDcpo4f0dmI0vSDkdme3WgZOb7cO0BxteA==
   dependencies:
     "@nomicfoundation/hardhat-errors" "^3.0.16"
-    "@nomicfoundation/hardhat-utils" "^4.1.4"
+    "@nomicfoundation/hardhat-utils" "^5.0.0"
 
 "@nomicfoundation/hardhat-utils@3.0.0":
   version "3.0.0"
