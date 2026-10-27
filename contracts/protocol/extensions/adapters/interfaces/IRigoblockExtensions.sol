@@ -28,7 +28,6 @@ import {IAUniswapRouter} from "./IAUniswapRouter.sol";
 import {IECrosschain} from "./IECrosschain.sol";
 import {IEERC20} from "./IEERC20.sol";
 import {IEApps} from "./IEApps.sol";
-import {IENavView} from "./IENavView.sol";
 import {IEOracle} from "./IEOracle.sol";
 import {IEUpgrade} from "./IEUpgrade.sol";
 
@@ -45,7 +44,6 @@ interface IRigoblockExtensions is
     IECrosschain,
     IEERC20,
     IEApps,
-    IENavView,
     IEOracle,
     IEUpgrade
 {}

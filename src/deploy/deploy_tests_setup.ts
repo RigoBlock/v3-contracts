@@ -197,16 +197,6 @@ export default deployScript(
       { deterministic: true },
     );
 
-    const eNavView = await env.deploy(
-      "ENavView",
-      {
-        account: deployer,
-        artifact: await readArtifact("ENavView"),
-        args: [[stakingProxy.address, univ4Posm.address]],
-      },
-      { deterministic: true },
-    );
-
     const eCrosschain = await env.deploy(
       "ECrosschain",
       {
@@ -229,7 +219,6 @@ export default deployScript(
 
     const extensions = {
       eApps: eApps.address,
-      eNavView: eNavView.address,
       eOracle: eOracle.address,
       eUpgrade: eUpgrade.address,
       eCrosschain: eCrosschain.address,

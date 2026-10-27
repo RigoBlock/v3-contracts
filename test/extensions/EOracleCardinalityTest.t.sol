@@ -15,6 +15,7 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
+import {Observation} from "../../contracts/protocol/types/Observation.sol";
 
 /// @title EOracleCardinalityTest - Regression tests for EOracle conversion and cardinality guards.
 /// @notice A BackGeoOracle feed with only one observation cannot compute a meaningful TWAP.
@@ -90,6 +91,35 @@ contract EOracleCardinalityTest is Test, UnitTestFixture {
 
         vm.expectRevert(abi.encodeWithSelector(EnumerableSet.TokenPriceFeedDoesNotExist.selector, token));
         ISmartPoolOwnerActions(poolProxy).setAcceptableMintToken(token, true);
+    }
+
+    /// @notice Regression (issue #967): a negative mean tick with a remainder must round toward
+    ///         negative infinity (Uniswap OracleLibrary.consult), not truncate toward zero.
+    /// @dev Window = (cardinality - 1) * 1s = 2s over ticks {-2, -1}: delta = -3, mean = -1.5,
+    ///      which must floor to -2. Truncation toward zero would wrongly return -1.
+    function test_GetTwap_NegativeRemainder_RoundsTowardNegativeInfinity() public {
+        PoolKey memory key = _poolKey(token);
+        uint32 t0 = uint32(block.timestamp);
+        deployment.mockOracle.setState(key, 2, 3, 3);
+        deployment.mockOracle.setObservation(key, 0, Observation(t0, int24(-2), int48(0), uint144(0), true));
+        deployment.mockOracle.setObservation(key, 1, Observation(t0 + 1, int24(-2), int48(-2), uint144(0), true));
+        deployment.mockOracle.setObservation(key, 2, Observation(t0 + 2, int24(-1), int48(-4), uint144(0), true));
+        vm.warp(t0 + 3);
+
+        assertEq(IEOracle(extensions.eOracle).getTwap(token), int24(-2));
+    }
+
+    /// @notice Positive mean ticks are unaffected by the fix: +3/2 rounds to 1 both ways.
+    function test_GetTwap_PositiveRemainder_Unchanged() public {
+        PoolKey memory key = _poolKey(token);
+        uint32 t0 = uint32(block.timestamp);
+        deployment.mockOracle.setState(key, 2, 3, 3);
+        deployment.mockOracle.setObservation(key, 0, Observation(t0, int24(2), int48(0), uint144(0), true));
+        deployment.mockOracle.setObservation(key, 1, Observation(t0 + 1, int24(2), int48(2), uint144(0), true));
+        deployment.mockOracle.setObservation(key, 2, Observation(t0 + 2, int24(1), int48(4), uint144(0), true));
+        vm.warp(t0 + 3);
+
+        assertEq(IEOracle(extensions.eOracle).getTwap(token), int24(1));
     }
 
     /// @notice Helper to initialize a constant-TWAP oracle feed and warp forward so getTwap returns `tick`.

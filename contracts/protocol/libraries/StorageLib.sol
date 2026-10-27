@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.0;
 
-import {TokenIdsSlot, HyperliquidData} from "../types/Applications.sol";
+import {TokenIdsSlot, HyperliquidData, LighterSlot} from "../types/Applications.sol";
 import {ApplicationsSlot} from "./ApplicationsLib.sol";
 import {DelegationData} from "./DelegationLib.sol";
 import {AddressSet, EnumerableSet, Pool} from "./EnumerableSet.sol";
@@ -18,6 +18,8 @@ library StorageLib {
     bytes32 public constant TOKEN_REGISTRY_SLOT = 0x3dcde6752c7421366e48f002bbf8d6493462e0e43af349bebb99f0470a12300d;
     bytes32 public constant UNIV4_TOKEN_IDS_SLOT = 0xd87266b00c1e82928c0b0200ad56e2ee648a35d4e9b273d2ac9533471e3b5d3c;
     bytes32 public constant HYPERLIQUID_DATA_SLOT = 0x4afbc3162e1589b633acdf6b7c00223a8c67447dd0ad462eaa13272955dff2a1;
+
+    bytes32 public constant LIGHTER_DATA_SLOT = 0x758223adeb2bbec49a3cf543fa39010555d7a38962a99399622068d4b1edfc27;
 
     function pool() internal pure returns (Pool storage s) {
         assembly {
@@ -51,6 +53,13 @@ library StorageLib {
 
     function hyperliquidData() internal pure returns (HyperliquidData storage s) {
         bytes32 slot = HYPERLIQUID_DATA_SLOT;
+        assembly {
+            s.slot := slot
+        }
+    }
+
+    function lighterSlot() internal pure returns (LighterSlot storage s) {
+        bytes32 slot = LIGHTER_DATA_SLOT;
         assembly {
             s.slot := slot
         }

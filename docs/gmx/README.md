@@ -28,9 +28,7 @@ Pool Owner → SmartPool.fallback()
 | ---------------- | --------------------------------------------------------------- | -------------------------------------- |
 | `AGmxV2`         | `contracts/protocol/extensions/adapters/AGmxV2.sol`             | Adapter: order management              |
 | `IAGmxV2`        | `contracts/protocol/extensions/adapters/interfaces/IAGmxV2.sol` | Adapter interface                      |
-| `EApps`          | `contracts/protocol/extensions/EApps.sol`                       | Extension: per-call position valuation |
-| `ENavView`       | `contracts/protocol/extensions/ENavView.sol`                    | Extension: view-only NAV computation   |
-| `NavView`        | `contracts/protocol/libraries/NavView.sol`                      | Library: NAV calculation helpers       |
+| `EApps` family   | `contracts/protocol/extensions/EApps*.sol` (base, `EAppsArbitrum`, `EAppsHyperliquid`, `EAppsLighter`) | Extensions: per-call position valuation |
 | `gmx-synthetics` | `lib/gmx-synthetics/` (pinned submodule)                        | All GMX types and contract interfaces  |
 
 ## Deployed Addresses (Arbitrum One)

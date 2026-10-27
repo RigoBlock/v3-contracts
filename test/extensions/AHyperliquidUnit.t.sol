@@ -7,13 +7,9 @@ import {AHyperliquid} from "../../contracts/protocol/extensions/adapters/AHyperl
 import {IAHyperliquid} from "../../contracts/protocol/extensions/adapters/interfaces/IAHyperliquid.sol";
 import {HyperliquidLib} from "../../contracts/protocol/libraries/HyperliquidLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
-import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
-import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
-import {IStaking} from "../../contracts/staking/interfaces/IStaking.sol";
 import {HLConstants} from "hyper-evm-lib/common/HLConstants.sol";
 import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {CoreWriterLib} from "hyper-evm-lib/CoreWriterLib.sol";
-import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
@@ -92,17 +88,6 @@ contract HyperliquidLibHarness {
     /// @notice Returns the raw lastActionCompositeBlock to assert the composite packing.
     function lastActionCompositeBlock() external view returns (uint256) {
         return uint256(StorageLib.hyperliquidData().lastActionCompositeBlock);
-    }
-}
-
-/// @notice Exposes NavView internal library function for coverage testing.
-contract NavViewHarness {
-    function getAppTokenBalances(
-        address pool,
-        address grgStakingProxy,
-        address uniV4Posm
-    ) external view returns (AppTokenBalance[] memory) {
-        return NavView.getAppTokenBalances(pool, grgStakingProxy, uniV4Posm);
     }
 }
 
@@ -703,38 +688,6 @@ contract AHyperliquidUnit is Test {
         _advanceL1Block();
         _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, amountWei + _BRIDGE_GAS_RESERVE());
         IAHyperliquid(address(pool)).sendRawAction(data);
-    }
-
-    function testNavViewHyperliquidBranch() public {
-        vm.chainId(Constants.HYPEREVM_CHAIN_ID);
-
-        NavViewHarness navHarness = new NavViewHarness();
-
-        // Mock the pool to report Hyperliquid as the only active application.
-        uint256 packedApps = 1 << uint256(Applications.HYPERLIQUID);
-        vm.mockCall(
-            address(pool),
-            abi.encodeWithSelector(ISmartPoolState.getActiveApplications.selector),
-            abi.encode(packedApps)
-        );
-
-        // NavView always queries GRG_STAKING; mock a zero stake to avoid reverting on address(0).
-        address grgStakingProxy = address(0x123);
-        vm.mockCall(
-            grgStakingProxy,
-            abi.encodeWithSelector(IStaking.getTotalStake.selector, address(pool)),
-            abi.encode(uint256(0))
-        );
-
-        // Mock a non-zero HyperCore perp account value (6-dec USDC) so the Hyperliquid branch produces a balance.
-        _mockAccountMarginSummary(address(pool), 1_000_000);
-        _mockSpotBalance(address(pool), HLConstants.USDC_TOKEN_INDEX, 0);
-        _mockCoreUserExists(address(pool), true);
-
-        AppTokenBalance[] memory balances = navHarness.getAppTokenBalances(address(pool), grgStakingProxy, address(0));
-        assertEq(balances.length, 1);
-        assertEq(balances[0].token, _usdc);
-        assertEq(balances[0].amount, 1_000_000);
     }
 
     /// @notice A spot-send withdrawal request does not deflate the Hyperliquid balance: no in-flight

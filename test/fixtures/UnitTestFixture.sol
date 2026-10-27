@@ -11,7 +11,6 @@ import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
@@ -57,19 +56,21 @@ contract UnitTestFixture is Test {
 
         // TODO: it turns out implementation needs upgrade extension which needs factory, which needs implementation - recursive.
         // It was implemented so because originally we only had adapters (mapped from authority). Review deployment flow in a future major release.
-        registry = deployCode("out/PoolRegistry.sol/PoolRegistry.json", abi.encode(deployment.authority, address(this)));
-        deployment.factory = deployCode("out/RigoblockPoolProxyFactory.sol/RigoblockPoolProxyFactory.json", abi.encode(originalImplementationAddress, registry));
+        registry = deployCode(
+            "out/PoolRegistry.sol/PoolRegistry.json",
+            abi.encode(deployment.authority, address(this))
+        );
+        deployment.factory = deployCode(
+            "out/RigoblockPoolProxyFactory.sol/RigoblockPoolProxyFactory.json",
+            abi.encode(originalImplementationAddress, registry)
+        );
         IAuthority(deployment.authority).setFactory(deployment.factory, true);
 
         // Deploy ExtensionsMap with ECrosschain - needs deployed factory
         _deployExtensions();
 
         // Deploy SmartPool implementation
-        deployment.implementation = new SmartPool(
-            deployment.authority,
-            address(deployment.extensionsMap),
-            tokenJar
-        );
+        deployment.implementation = new SmartPool(deployment.authority, address(deployment.extensionsMap), tokenJar);
         console2.log("Deployed SmartPool implementation:", address(deployment.implementation));
 
         // upgrade implementation to latest
@@ -82,8 +83,11 @@ contract UnitTestFixture is Test {
     function _deployExtensions() private {
         deployment.wrappedNative = deployCode("out/WETH9.sol/WETH9.json");
         _deployStakingSuite();
-    
-        address mockUniv4Posm = deployCode("out/MockUniswapNpm.sol/MockUniswapNpm.json", abi.encode(deployment.wrappedNative));
+
+        address mockUniv4Posm = deployCode(
+            "out/MockUniswapNpm.sol/MockUniswapNpm.json",
+            abi.encode(deployment.wrappedNative)
+        );
         deployment.mockOracle = MockOracle(deployCode("out/MockOracle.sol/MockOracle.json"));
 
         // Deploy extensions - will require mockCall or, as for EOracle.getTwap, mockCall on the oracle contract (due to foundry limitation on mockCall for internal calls)
@@ -91,14 +95,12 @@ contract UnitTestFixture is Test {
         extensions.eOracle = address(new EOracle(address(deployment.mockOracle), deployment.wrappedNative));
         extensions.eUpgrade = address(new EUpgrade(deployment.factory));
         extensions.eCrosschain = address(new ECrosschain());
-        extensions.eNavView = address(new ENavView(EAppsParams({grgStakingProxy: stakingProxy, univ4Posm: mockUniv4Posm})));
         extensions.eErc20 = address(new EERC20());
 
         console2.log("Deployed EApps:", extensions.eApps);
         console2.log("Deployed EOracle:", extensions.eOracle);
         console2.log("Deployed EUpgrade:", extensions.eUpgrade);
         console2.log("Deployed ECrosschain:", extensions.eCrosschain);
-        console2.log("Deployed ENavView:", extensions.eNavView);
         console2.log("Deployed EERC20:", extensions.eErc20);
 
         ExtensionsMapDeployer deployer = new ExtensionsMapDeployer();
@@ -108,7 +110,6 @@ contract UnitTestFixture is Test {
             eOracle: address(extensions.eOracle),
             eUpgrade: address(extensions.eUpgrade),
             eCrosschain: address(extensions.eCrosschain),
-            eNavView: address(extensions.eNavView),
             eGmxCallback: address(0),
             eErc20: address(extensions.eErc20)
         });
@@ -126,12 +127,17 @@ contract UnitTestFixture is Test {
 
     // This is required to avoid having to mock many returned calls from the staking proxy made by the EApps extension
     function _deployStakingSuite() private {
-        address grg = deployCode("out/RigoToken.sol/RigoToken.json", abi.encode(address(this), address(this), address(this))); 
+        address grg = deployCode(
+            "out/RigoToken.sol/RigoToken.json",
+            abi.encode(address(this), address(this), address(this))
+        );
         address grgTransferProxy = deployCode("out/ERC20Proxy.sol/ERC20Proxy.json", abi.encode(address(this)));
-        address grgVault = deployCode("out/GrgVault.sol/GrgVault.json", abi.encode(grgTransferProxy, grg, address(this)));
+        address grgVault = deployCode(
+            "out/GrgVault.sol/GrgVault.json",
+            abi.encode(grgTransferProxy, grg, address(this))
+        );
         IERC20Proxy(grgTransferProxy).addAuthorizedAddress(grgVault);
         address staking = deployCode("out/Staking.sol/Staking.json", abi.encode(grgVault, registry, grg));
         stakingProxy = deployCode("out/StakingProxy.sol/StakingProxy.json", abi.encode(staking, address(this)));
     }
 }
-

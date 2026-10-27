@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
-import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {IGovernanceVoting} from "../../contracts/governance/interfaces/governance/IGovernanceVoting.sol";
 import {ProposedAction} from "../../contracts/governance/types/GovernanceTypes.sol";
 
@@ -15,7 +14,6 @@ import {PrecompileLib} from "hyper-evm-lib/PrecompileLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {IECrosschain} from "../../contracts/protocol/extensions/adapters/interfaces/IECrosschain.sol";
-import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
 import {DestinationMessageParams, OpType} from "../../contracts/protocol/types/Crosschain.sol";
 import {CrosschainLib} from "../../contracts/protocol/libraries/CrosschainLib.sol";
 import {VirtualStorageLib} from "../../contracts/protocol/libraries/VirtualStorageLib.sol";
@@ -27,7 +25,6 @@ import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/poo
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IERC20 as IForgeERC20} from "@forge-std/interfaces/IERC20.sol";
-import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 import {AUniswap} from "../../contracts/protocol/extensions/adapters/AUniswap.sol";
@@ -168,15 +165,12 @@ contract AHyperliquidForkTest is Test {
     ///  HyperCore balance, so balance reads stay self-consistent without waiting. From the next EVM
     ///  block on, the in-flight amount is dropped (HyperCore processes the transfer right after each
     ///  EVM block is built, so the precompile is expected to reflect the deposit by then): the EApps
-    ///  balance view is settlement-locked, while the unguarded NavView reader reports the raw
-    ///  precompile value.
+    ///  balance view is settlement-locked until the window elapses.
     /// @dev Because Foundry does not implement HyperCore read precompiles, the test explicitly supplies
     ///  both a lagging value and a caught-up value. This proves the in-flight adjustment covers the
     ///  gap within the deposit block and is dropped afterwards.
     function testFork_InFlightBalanceDuringGap() public {
         uint256 depositAmount = 10_000e6;
-
-        NavData memory navBefore = IENavView(pool).getNavDataView();
 
         vm.prank(poolOwner);
         IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
@@ -195,21 +189,16 @@ contract AHyperliquidForkTest is Test {
         assertEq(hyperliquidApp.balances[0].token, usdc, "Balance token should be USDC");
         assertEq(hyperliquidApp.balances[0].amount, int256(depositAmount), "In-flight amount should cover the deposit");
 
-        // The next EVM block (same L1 block): the EApps balance view is settlement-locked, while the
-        // unguarded NavView reader no longer adds the in-flight amount.
+        // The next EVM block (same L1 block): the EApps balance view is settlement-locked.
         vm.roll(block.number + 1);
         vm.expectRevert(HyperliquidLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
 
-        // The precompile has caught up by the next EVM block: the NavView read reports the same
-        // total value as before the deposit (no double-counted in-flight amount).
-        _mockAccountMarginSummary(int64(uint64(depositAmount)));
-        NavData memory navData = IENavView(pool).getNavDataView();
-        assertEq(navData.totalValue, navBefore.totalValue, "Total value must not change once Core has caught up");
-
-        // Warp past the settlement window and advance the L1 block: the EApps view works again.
+        // Warp past the settlement window and advance the L1 block: the EApps view works again and
+        // the caught-up precompile reports the deposit.
         vm.warp(block.timestamp + 17 seconds);
         _advanceL1Block();
+        _mockAccountMarginSummary(int64(uint64(depositAmount)));
 
         apps = IEApps(pool).getAppTokenBalances(1 << uint256(Applications.HYPERLIQUID));
         hyperliquidApp = _findHyperliquidApp(apps);
@@ -617,12 +606,13 @@ contract AHyperliquidForkTest is Test {
         vm.stopPrank();
     }
 
-    /// @notice Off-chain NAV view methods remain readable during the settlement window, but they
-    ///  report a stale NAV because HyperCore has not yet caught up. On-chain NAV writes still revert.
-    function testFork_NavViewReadsStaleNavDuringSettlementWindow() public {
+    /// @notice During the settlement window the stored NAV is stale: HyperCore has not yet caught up,
+    ///  while on-chain NAV writes (updateUnitaryValue) still succeed because they are exempt from the
+    ///  lock. After the window elapses and HyperCore reflects the deposit, the settled NAV matches the
+    ///  pre-deposit value.
+    function testFork_StoredNavStaleDuringSettlementWindow() public {
         // Capture the pre-deposit NAV.
-        NavData memory navBefore = IENavView(pool).getNavDataView();
-        uint256 unitaryBefore = navBefore.unitaryValue;
+        uint256 unitaryBefore = ISmartPoolActions(pool).updateUnitaryValue().unitaryValue;
         assertGt(unitaryBefore, 0, "Pre-deposit NAV should be positive");
 
         uint256 depositAmount = 10_000e6;
@@ -636,16 +626,11 @@ contract AHyperliquidForkTest is Test {
         _mockSpotBalance(pool, 0, 0);
         _mockCoreUserExists(pool, true);
 
-        // The on-chain NAV write (updateUnitaryValue) is exempt from the lock and succeeds, but it
-        // stores the same stale NAV the view reports.
+        // updateUnitaryValue is exempt from the lock and succeeds, but it stores the same stale NAV:
+        // lower than the pre-deposit value because the pool's USDC has already left the wallet but has
+        // not yet been credited by the HyperCore precompile.
         NetAssetsValue memory navStored = ISmartPoolActions(pool).updateUnitaryValue();
         assertLt(navStored.unitaryValue, unitaryBefore, "Stored NAV should be stale during window");
-
-        // Off-chain view succeeds but reads the lagging Core balance (zero), so it reports a stale NAV
-        // that is lower than the pre-deposit value because the pool's USDC has already left the wallet
-        // but has not yet been credited by the HyperCore precompile.
-        NavData memory navDuring = IENavView(pool).getNavDataView();
-        assertLt(navDuring.unitaryValue, unitaryBefore, "Off-chain NAV should be stale during window");
 
         // After the settlement window elapses and HyperCore reflects the deposit, the settled NAV
         // matches the pre-deposit value: USDC has moved from the pool wallet to HyperCore, total value
@@ -654,25 +639,8 @@ contract AHyperliquidForkTest is Test {
         _advanceL1Block();
         _mockAccountMarginSummary(int64(uint64(depositAmount)));
 
-        NavData memory navAfter = IENavView(pool).getNavDataView();
+        NetAssetsValue memory navAfter = ISmartPoolActions(pool).updateUnitaryValue();
         assertEq(navAfter.unitaryValue, unitaryBefore, "Settled NAV should match pre-deposit value");
-    }
-
-    /// @notice Off-chain NAV view methods succeed once the settlement window has elapsed.
-    function testFork_NavViewSucceedsAfterSettlementWindow() public {
-        uint256 depositAmount = 10_000e6;
-        vm.prank(poolOwner);
-        IAHyperliquid(pool).deposit(depositAmount, HLConstants.DEFAULT_PERP_DEX);
-
-        vm.warp(block.timestamp + 17 seconds);
-        _advanceL1Block();
-
-        // Mock a caught-up Core state so the view returns the settled NAV.
-        _mockAccountMarginSummary(int64(uint64(depositAmount)));
-        _mockSpotBalance(pool, 0, 0);
-
-        NavData memory navData = IENavView(pool).getNavDataView();
-        assertGt(navData.unitaryValue, 0, "NavView should report a positive unitary value after the window");
     }
 
     /// @notice A spot-send withdrawal re-arms the settlement lock: share issuance reverts from the

@@ -17,16 +17,20 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {GmxLib} from "../libraries/GmxLib.sol";
-import {HyperliquidLib} from "../libraries/HyperliquidLib.sol";
-import {Applications} from "../types/Applications.sol";
+import {Applications, LighterSlot, LighterViewData, TrackedMarket} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
 
 /// @notice A universal aggregator for external contracts positions.
-/// @dev External positions are consolidating into a single view contract. As more apps are connected, can be split into multiple mixing.
-/// @dev Future-proof as can route to dedicated extensions, should the size of the contract become too big.
+/// @dev Base implementation covering the chain-agnostic applications (GRG staking, Uniswap V4
+///  liquidity). Chain-specific applications are added by per-chain subclasses so that each
+///  deployment only pays the bytecode for the protocols it actually hosts:
+///   - EAppsArbitrum adds GMX v2 positions (chain 42161)
+///   - EAppsHyperliquid adds Hyperliquid perps (chain 999)
+///   - EAppsLighter adds Lighter perps (chain 19529)
+/// @dev _handleApplication is internal virtual: subclasses override it, handle their
+///  application and super-call the base for the rest.
 contract EApps is IEApps {
     using ApplicationsLib for uint256;
     using StateLibrary for IPoolManager;
@@ -82,24 +86,36 @@ contract EApps is IEApps {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
     }
 
+    /// @inheritdoc IEApps
+    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
+        LighterSlot storage slot = StorageLib.lighterSlot();
+        uint16[] storage markets = slot.trackedMarkets;
+        uint256 length = markets.length;
+        viewData.marketIds = new uint16[](length);
+        viewData.sizeDecimals = new uint8[](length);
+        viewData.priceDecimals = new uint8[](length);
+        for (uint256 i; i < length; ++i) {
+            uint16 marketId = markets[i];
+            viewData.marketIds[i] = marketId;
+            TrackedMarket memory market = slot.markets[marketId];
+            viewData.sizeDecimals[i] = market.sizeDecimals;
+            viewData.priceDecimals[i] = market.priceDecimals;
+        }
+        viewData.inFlightAmount = slot.data.inFlightAmount;
+        viewData.lastActionTimestamp = slot.data.lastActionTimestamp;
+        viewData.lastReqId = slot.data.lastReqId;
+    }
+
     /// @notice Directly retrieve balances from target application contract.
     /// @dev A failure to get response from one application will revert the entire call.
     /// @dev This is ok as we do not want to produce an inaccurate nav.
-    function _handleApplication(Applications appType) private returns (AppTokenBalance[] memory balances) {
+    /// @dev Internal virtual: per-chain subclasses (EAppsArbitrum, EAppsHyperliquid, EAppsLighter)
+    ///  override this to add their application branch and super-call the base for the rest.
+    function _handleApplication(Applications appType) internal virtual returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.GRG_STAKING) {
             balances = _getGrgStakingProxyBalances();
         } else if (appType == Applications.UNIV4_LIQUIDITY) {
             balances = _getUniV4PmBalances();
-        } else if (appType == Applications.GMX_V2_POSITIONS) {
-            balances = GmxLib.getGmxPositionBalances(address(this));
-        } else if (appType == Applications.HYPERLIQUID) {
-            // Hyperliquid-specific settlement lock: reverts with NavLocked while a Core deposit/spot-send
-            // may still leave NAV reads stale. updateUnitaryValue (and crosschain donate, which routes
-            // through it) is explicitly exempt via the transient flag; see docs/hyperliquid/INTEGRATION.md.
-            if (!TransientStorage.getNavLockExempt()) {
-                HyperliquidLib.assertNavUnlocked();
-            }
-            balances = HyperliquidLib.getHyperliquidBalances(address(this));
         } else {
             revert UnknownApplication(uint256(appType));
         }
