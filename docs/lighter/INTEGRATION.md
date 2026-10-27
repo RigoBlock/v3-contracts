@@ -41,7 +41,7 @@ The 17 M hard limit is what bounds our NAV loop; the 4.25 M figure governs fee
 auction pricing and would only matter if LighterEVM enforced it as a per-tx cap,
 which it does not.
 | Deterministic deploys | SafeSingletonFactory preinstalled at the canonical `0x914d7Fec6aaC8cd542e72Bca78B30650d45643d7` |
-| Public RPC / explorer | access-gated devnet RPC only (`LIGHTER_RPC_URL`); no public endpoint yet |
+| Public RPC / explorer | access-gated devnet RPC only (`LIGHTER_DEVNET_RPC_URL`); no public endpoint yet |
 
 ## Architecture
 
@@ -553,20 +553,27 @@ block limit (see Gas analysis) — no additional constraint beyond the tracked-m
 
 ## RPC / environment naming
 
-The env variable stays **`LIGHTER_RPC_URL`** (foundry keeps its own `lighter` RPC alias in
-`foundry.toml`; the fork fixture forks `"lighter"`). Hardhat's network for the devnet is
-`lighterevm-devnet` (chainId 19529), named per Lighter's docs; its URL resolves from
-`LIGHTER_RPC_URL` or the private `LIGHTER_DEVNET_EXPLORER_URL`. The explorer URLs for
-verification are `LIGHTER_DEVNET_API_URL` / `LIGHTER_DEVNET_BROWSER_URL` — they are
-access-restricted and must not be committed or published. `.env.sample` documents this.
-Naming follows the existing convention (`HYPERLIQUID_RPC_URL` also names a non-mainnet
-chain): `LIGHTER_RPC_URL` always means the devnet. **When a LighterEVM mainnet launches, do
-not repoint it** — add a separate `LIGHTER_MAINNET_RPC_URL` / `lighter-mainnet` endpoint, its
-own chainid constant and fork tests (see the `foundry.toml` note). Two guards make a stale or
-misconfigured secret fail loudly instead of testing the wrong chain: the fork fixture requires
-`block.chainid == 19529` after forking, and the live suite's setUp asserts the endpoint's
-`eth_chainId` equals the devnet chainid. Like every other chain's fork suite, a missing
-`LIGHTER_RPC_URL` fails at `createSelectFork` — the lighter suites never skip silently.
+The devnet RPC env variable is **`LIGHTER_DEVNET_RPC_URL`** — explicit devnet naming, so a
+mainnet endpoint can never silently occupy the variable the tests read (unlike
+`HYPERLIQUID_RPC_URL`, which is and always was **hyperEVM mainnet**, chain 999 — do not
+assume otherwise from the absence of a "mainnet" infix). Foundry keeps its own `lighter` RPC
+alias in `foundry.toml` resolving from `LIGHTER_DEVNET_RPC_URL`; the fork fixture forks
+`"lighter"`. Hardhat's network for the devnet is `lighterevm-devnet` (chainId 19529), named
+per Lighter's docs, and its URL is exactly `LIGHTER_DEVNET_RPC_URL` — nothing else (in
+particular not `LIGHTER_DEVNET_EXPLORER_URL`, which is the blockscout API base used for
+contract verification only). The verification URLs are `LIGHTER_DEVNET_API_URL` /
+`LIGHTER_DEVNET_BROWSER_URL` — access-restricted, never committed. `.env.sample` documents
+all of these.
+
+**When a LighterEVM mainnet launches, do not repoint anything** — add a separate
+`LIGHTER_MAINNET_RPC_URL` / `lighter-mainnet` endpoint, its own chainid constant and fork
+tests (see the `foundry.toml` note). Three guards make a stale or misconfigured secret fail
+loudly instead of testing the wrong chain: the fork fixture requires
+`block.chainid == 19529` after forking, the live suite's setUp asserts the endpoint's
+`eth_chainId` equals the devnet chainid, and CI only ever injects the secret via the
+workflow `env:` mapping (`.github/workflows/ci.yml`). Like every other chain's fork suite, a
+missing `LIGHTER_DEVNET_RPC_URL` fails at `createSelectFork` — the lighter suites never skip
+silently.
 
 ## Gas analysis and the 32-market cap
 
@@ -694,7 +701,7 @@ No extension/adapter storage (Rigoblock hard rule).
 - `src/utils/constants.ts` chainConfig: WETH9 predeploy as wrapped native; zero
   oracle/staking/uniV4/posm/router/across/wormhole entries; devnet USDC.
 - `hardhat.config.ts` `lighterevm-devnet` network + fee caps (`src/utils/networkFees.ts`: 1 gwei max /
-  0.01 gwei priority), `foundry.toml` `lighter = "${LIGHTER_RPC_URL}"`, `.env.sample` entries.
+  0.01 gwei priority), `foundry.toml` `lighter = "${LIGHTER_DEVNET_RPC_URL}"`, `.env.sample` entries.
 - `src/deploy/deploy_extensions.ts`: chain-19529 branch skips Uniswap/0x/AGovernance (not
   deployed there) and deploys `ALighter`; the `EApps` artifact is selected per chain
   (42161→`EAppsArbitrum`, 999→`EAppsHyperliquid`, 19529→`EAppsLighter`, else base `EApps`).
@@ -925,11 +932,11 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Testing
 
-| Suite          | File                                                                                                              | Status                                                                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Unit (offline) | `test/extensions/ALighterUnit.t.sol`, `test/libraries/LighterLib.t.sol`, `test/extensions/EAppsLighterUnit.t.sol` | 58 tests, run in CI (the EAppsLighter suite deploys the full pool offline so the extension is covered even without `LIGHTER_RPC_URL`)     |
-| Fork (devnet)  | `test/extensions/ALighterFork.t.sol` + `test/fixtures/LighterDeploymentFixture.sol`                               | **10 tests pass** at `LIGHTER_BLOCK = 51_000`; requires `LIGHTER_RPC_URL` — a missing or wrong-chain URL fails setUp loudly (never skips) |
-| Live (devnet)  | `test/extensions/ALighterLive.t.sol`                                                                              | **2 tests** against the live devnet RPC (no fork, no mocks); setUp asserts the endpoint chainid is 19529                                  |
+| Suite          | File                                                                                                              | Status                                                                                                                                           |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Unit (offline) | `test/extensions/ALighterUnit.t.sol`, `test/libraries/LighterLib.t.sol`, `test/extensions/EAppsLighterUnit.t.sol` | 58 tests, run in CI (the EAppsLighter suite deploys the full pool offline so the extension is covered even without `LIGHTER_DEVNET_RPC_URL`)     |
+| Fork (devnet)  | `test/extensions/ALighterFork.t.sol` + `test/fixtures/LighterDeploymentFixture.sol`                               | **10 tests pass** at `LIGHTER_BLOCK = 51_000`; requires `LIGHTER_DEVNET_RPC_URL` — a missing or wrong-chain URL fails setUp loudly (never skips) |
+| Live (devnet)  | `test/extensions/ALighterLive.t.sol`                                                                              | **2 tests** against the live devnet RPC (no fork, no mocks); setUp asserts the endpoint chainid is 19529                                         |
 
 The live suite exists because READ_CORE (`0x6600…0000`) is a **native precompile with no code**
 (verified via `eth_getCode` = `0x`) — Foundry's EVM cannot execute it even when forking — so it

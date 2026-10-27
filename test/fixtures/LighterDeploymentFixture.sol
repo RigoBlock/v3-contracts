@@ -30,7 +30,7 @@ import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLi
 /// @notice Deploys real Rigoblock infrastructure on a LighterEVM fork for Lighter integration tests.
 /// @dev Mirrors HyperliquidDeploymentFixture: no Uniswap V4 / BackGeoOracle on LighterEVM, so the
 ///  pool is restricted to USDC-denominated assets by the LighterEVM carve-out in EOracle.
-/// @dev Requires LIGHTER_RPC_URL (like every other chain's fork suite): a missing or misconfigured
+/// @dev Requires LIGHTER_DEVNET_RPC_URL (like every other chain's fork suite): a missing or misconfigured
 ///  URL fails loudly at createSelectFork or at the chainid require below — never silently.
 /// @dev READ_CORE is a native LighterEVM precompile that Foundry's EVM does not implement even when
 ///  forking, so read-precompile return data is mocked (same approach as the Hyperliquid fork tests).
@@ -56,7 +56,7 @@ contract LighterDeploymentFixture is Test {
     /// @notice True when the fixture reuses the live Authority/Registry/Factory from Constants.
     bool public usingLiveInfrastructure;
 
-    /// @notice Deploy the fixture on a LighterEVM fork. Reverts when LIGHTER_RPC_URL is unset
+    /// @notice Deploy the fixture on a LighterEVM fork. Reverts when LIGHTER_DEVNET_RPC_URL is unset
     ///  (createSelectFork) or points at the wrong chain (chainid require) — like every other
     ///  chain's fork suite, so a missing or stale CI secret fails the build instead of skipping.
     function deployFixture() public {

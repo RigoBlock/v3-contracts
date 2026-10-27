@@ -286,19 +286,16 @@ const userConfig: HardhatUserConfig = {
       // `hardhat hyperliquid:enable-big-blocks`). Fee caps for this network
       // live in src/utils/networkFees.ts and are applied by the managed-nonce helper.
     },
-    // LighterEVM devnet (chainId 19529), named per Lighter's docs. The
-    // access-gated LIGHTER_RPC_URL is preferred; LIGHTER_DEVNET_EXPLORER_URL
-    // (kept private) is the explorer RPC fallback. The placeholder only
-    // satisfies Hardhat's URL validation at config load — it is never
+    // LighterEVM devnet (chainId 19529), named per Lighter's docs. The chain URL is exactly
+    // LIGHTER_DEVNET_RPC_URL — the access-gated devnet RPC. (LIGHTER_DEVNET_EXPLORER_URL is
+    // the blockscout API base, used for verification only — never as a chain RPC.) The
+    // placeholder only satisfies Hardhat's URL validation at config load — it is never
     // contacted unless a task explicitly targets this network.
     "lighterevm-devnet": {
       type: "http",
       ...sharedNetworkConfig,
       chainId: 19529,
-      url:
-        process.env.LIGHTER_RPC_URL ||
-        process.env.LIGHTER_DEVNET_EXPLORER_URL ||
-        "https://lighter.invalid",
+      url: process.env.LIGHTER_DEVNET_RPC_URL || "https://lighter.invalid",
     },
   },
   test: {

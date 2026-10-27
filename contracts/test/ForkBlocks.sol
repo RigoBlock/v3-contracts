@@ -42,6 +42,6 @@ library ForkBlocks {
     /// @dev Pinned below latest for RPC/archive stability. Devnet state evolves quickly and can be
     ///      wiped entirely (the fixture skips gracefully when the predeploys have no code);
     ///      bump at every branch creation like the other pins. The Lighter fork tests skip
-    ///      themselves while LIGHTER_RPC_URL is unset.
+    ///      themselves while LIGHTER_DEVNET_RPC_URL is unset.
     uint256 internal constant LIGHTER_BLOCK = 51_000;
 }

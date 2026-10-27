@@ -16,7 +16,7 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 /// @dev READ_CORE (0x6600...0000) is a native precompile with no on-chain code, so Foundry forks
 ///  cannot execute it; these tests call the live devnet RPC through vm.rpc instead. The devnet
 ///  RPC may only support "latest", so no block tag is ever passed.
-/// @dev Requires LIGHTER_RPC_URL; a missing URL fails at the first vm.rpc call, and a URL
+/// @dev Requires LIGHTER_DEVNET_RPC_URL; a missing URL fails at the first vm.rpc call, and a URL
 ///  pointing at the wrong chain fails the setUp chainid guard — the suite never runs against
 ///  an unintended LighterEVM deployment (e.g. a mainnet endpoint swapped into the CI secret
 ///  without updating the devnet chainid pinned here).
@@ -40,7 +40,7 @@ contract ALighterLiveTest is Test {
         //  the minimal-byte quantity (0x4c49), not an ABI-encoded uint256.
         bytes memory res = vm.rpc("lighter", "eth_chainId", "[]");
         uint256 chainId = uint256(bytes32(res)) >> (8 * (32 - res.length));
-        require(chainId == LighterConstants.LIGHTEREVM_CHAIN_ID, "LIGHTER_RPC_URL is not the LighterEVM devnet");
+        require(chainId == LighterConstants.LIGHTEREVM_CHAIN_ID, "LIGHTER_DEVNET_RPC_URL is not the LighterEVM devnet");
     }
 
     /*//////////////////////////////////////////////////////////////

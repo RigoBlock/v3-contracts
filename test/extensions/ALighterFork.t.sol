@@ -21,7 +21,7 @@ import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @title ALighterForkTest
 /// @notice Fork tests for the Lighter adapter against real LighterEVM predeploys.
-/// @dev Requires LIGHTER_RPC_URL; a missing or misconfigured URL fails setUp loudly (like every
+/// @dev Requires LIGHTER_DEVNET_RPC_URL; a missing or misconfigured URL fails setUp loudly (like every
 ///  other chain's fork suite), it never skips.
 /// @dev Foundry's EVM does not implement the READ_CORE precompile even when forking, so read
 ///  precompile return data is mocked (same approach as AHyperliquidFork.t.sol).
