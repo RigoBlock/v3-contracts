@@ -29,7 +29,9 @@ isolate = false
 # - --fork-retries, --fork-retry-backoff, --compute-units-per-second are CLI-only
 #   flags that also require --fork-url to be present (Foundry rejects the combination
 #   without it), so they are intentionally omitted — see the createSelectFork note above.
-# - All chains (mainnet, base, arbitrum, unichain, polygon) have RPC URL secrets in CI.
+# - All chains (mainnet, base, arbitrum, unichain, polygon, hyperliquid, lighter) have
+#   RPC URL secrets in CI. A missing secret fails the fork suite loudly at
+#   createSelectFork — fork tests never skip silently.
 #   Coverage (`yarn coverage:foundry`) runs fork and non-fork tests in a single
 #   invocation via [profile.coverage]; only the local-only networks are excluded
 #   (PolygonFork, A0xRouterUnichainFork) plus test/debug/** and the two invariant
@@ -86,6 +88,11 @@ ignore = ["contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol"]
 lint_on_build = false
 
 [rpc_endpoints]
+# `lighter` is the LighterEVM devnet (chain 19529). When a LighterEVM mainnet launches, add a
+# SEPARATE endpoint (e.g. `lighter-mainnet = "${LIGHTER_MAINNET_RPC_URL}"`) plus its own
+# Constants chainid/fork-block pair and fork tests — do NOT repoint `lighter` at mainnet:
+# the fork fixture's chainid require and the live suite's setUp guard fail loudly when the
+# endpoint's chain does not match the pinned devnet chainid.
 mainnet = "${MAINNET_RPC_URL}"
 bnb = "${BNB_MAINNET_RPC_URL}"
 optimism = "${OPTIMISM_MAINNET_RPC_URL}"
@@ -94,3 +101,4 @@ base = "${BASE_MAINNET_RPC_URL}"
 polygon = "${POLYGON_MAINNET_RPC_URL}"
 unichain = "${UNICHAIN_RPC_URL}"
 hyperliquid = "${HYPERLIQUID_RPC_URL}"
+lighter = "${LIGHTER_DEVNET_RPC_URL}"

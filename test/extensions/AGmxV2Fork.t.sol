@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-import {NavData} from "../../contracts/protocol/types/NavData.sol";
 import {GMX_ROUTER, _MAX_GMX_POSITIONS, _GMX_DATA_STORE, _FLOAT_PRECISION, _GMX_CONTROLLER_ROLE} from "../../contracts/protocol/types/GmxConstants.sol";
 
 import {Test} from "forge-std/Test.sol";
@@ -11,11 +10,10 @@ import {console2} from "forge-std/console2.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
 import {AGmxV2} from "../../contracts/protocol/extensions/adapters/AGmxV2.sol";
-import {EApps} from "../../contracts/protocol/extensions/EApps.sol";
+import {EAppsArbitrum} from "../../contracts/protocol/extensions/EAppsArbitrum.sol";
 import {ECrosschain} from "../../contracts/protocol/extensions/ECrosschain.sol";
 import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {EGmxCallback} from "../../contracts/protocol/extensions/EGmxCallback.sol";
-import {ENavView} from "../../contracts/protocol/extensions/ENavView.sol";
 import {EOracle} from "../../contracts/protocol/extensions/EOracle.sol";
 import {EUpgrade} from "../../contracts/protocol/extensions/EUpgrade.sol";
 import {SmartPool} from "../../contracts/protocol/SmartPool.sol";
@@ -55,8 +53,6 @@ import {Price} from "gmx-synthetics/price/Price.sol";
 import {GmxFallback, Feed, getFallbackPriceFeed} from "../../contracts/protocol/types/GmxFallback.sol";
 import {Market} from "gmx-synthetics/market/Market.sol";
 import {Position} from "gmx-synthetics/position/Position.sol";
-import {IENavView} from "../../contracts/protocol/extensions/adapters/interfaces/IENavView.sol";
-import {NavView} from "../../contracts/protocol/libraries/NavView.sol";
 import {GmxAdapterLib} from "../../contracts/protocol/libraries/GmxAdapterLib.sol";
 import {GmxClaimableHelpers} from "../../contracts/protocol/types/GmxClaimableHelpers.sol";
 import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.sol";
@@ -181,12 +177,11 @@ contract AGmxV2ForkTest is Test {
         // ------------------------------------------------------------------
         // 2. Deploy extensions with Arbitrum-specific + GMX params
         // ------------------------------------------------------------------
-        EApps eApps = new EApps(EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM}));
-        EOracle eOracle = new EOracle(ARB_ORACLE, ARB_WETH);
-        EUpgrade eUpgrade = new EUpgrade(FACTORY);
-        ENavView eNavView = new ENavView(
+        EAppsArbitrum eApps = new EAppsArbitrum(
             EAppsParams({grgStakingProxy: ARB_GRG_STAKING, univ4Posm: ARB_UNISWAP_V4_POSM})
         );
+        EOracle eOracle = new EOracle(ARB_ORACLE, ARB_WETH);
+        EUpgrade eUpgrade = new EUpgrade(FACTORY);
         ECrosschain eCrosschain = new ECrosschain();
 
         // ------------------------------------------------------------------
@@ -198,7 +193,6 @@ contract AGmxV2ForkTest is Test {
                 eApps: address(eApps),
                 eOracle: address(eOracle),
                 eUpgrade: address(eUpgrade),
-                eNavView: address(eNavView),
                 eCrosschain: address(eCrosschain),
                 eGmxCallback: address(eGmxCallback),
                 eErc20: address(new EERC20())
@@ -1120,135 +1114,6 @@ contract AGmxV2ForkTest is Test {
     /// @dev ERC-20 decimals read for sizing the (never-transferred) collateral amount.
     function _tokenDecimals(address token) private view returns (uint8) {
         return IERC20Extended(token).decimals();
-    }
-
-    // =========================================================================
-    // Tests — ENavView NAV parity with pool state
-    // =========================================================================
-
-    /// @notice Before any mint (totalSupply == 0), ENavView returns the par value
-    ///   and that value equals what getPoolTokens() returns.
-    function test_ENavView_NavMatchesStoredNav_NoSupply() public view {
-        // No mint has happened — stored unitaryValue == 0, fallback is 10^decimals.
-        ISmartPoolState.PoolTokens memory pt = ISmartPoolState(pool).getPoolTokens();
-        // getPoolTokens() also uses the same fallback, so stored and pool-state values match.
-        NavData memory navData = IENavView(pool).getNavDataView();
-
-        assertEq(navData.unitaryValue, pt.unitaryValue, "ENavView NAV must equal pool-state NAV at par (no supply)");
-        assertEq(navData.unitaryValue, 10 ** 18, "Par NAV must be 1e18 for 18-decimal base token");
-    }
-
-    /// @notice After a WETH mint, ENavView's computed NAV equals the stored NAV
-    ///   returned by updateUnitaryValue() — both read from the same on-chain state.
-    function test_ENavView_NavMatchesStoredNav_AfterMint() public {
-        uint256 mintAmount = 1 ether;
-
-        // Give poolOwner WETH and mint shares into the pool.
-        deal(ARB_WETH, poolOwner, mintAmount);
-        vm.startPrank(poolOwner);
-        IERC20(ARB_WETH).approve(pool, mintAmount);
-        ISmartPoolActions(pool).mint(poolOwner, mintAmount, 0);
-        vm.stopPrank();
-
-        // Refresh the stored NAV.
-        ISmartPoolActions(pool).updateUnitaryValue();
-        uint256 storedNav = ISmartPoolState(pool).getPoolTokens().unitaryValue;
-
-        // ENavView must report the same NAV computed fresh from on-chain state.
-        NavData memory navData = IENavView(pool).getNavDataView();
-        assertEq(
-            navData.unitaryValue,
-            storedNav,
-            "ENavView NAV must match stored NAV after mint (pure base-token pool)"
-        );
-        // Sanity: NAV must be > 0.
-        assertGt(navData.unitaryValue, 0, "NAV must be positive after mint");
-    }
-
-    /// @notice ENavView and updateUnitaryValue must agree on NAV when a GMX position is
-    ///  open, including at prices that give the position unrealized profit and unrealized loss.
-    ///  Both code paths call the same GmxLib via NavView — this test pins their
-    ///  equivalence so regressions are caught immediately.
-    function test_ENavView_NavMatchesStoredNav_WithOpenPosition_PosAndNegPnL() public {
-        // ── Setup: mint so live NAV is computed ──────────────────────────────
-        uint256 mintWeth = 1 ether;
-        deal(ARB_WETH, poolOwner, mintWeth);
-        vm.startPrank(poolOwner);
-        IERC20(ARB_WETH).approve(pool, mintWeth);
-        ISmartPoolActions(pool).mint(poolOwner, mintWeth, 0);
-        vm.stopPrank();
-
-        // ── Open WETH long and execute via keeper ────────────────────────────
-        vm.prank(poolOwner);
-        bytes32 orderKey = IAGmxV2(pool).createIncreaseOrder(_defaultIncreaseParams());
-        _executeOrder(orderKey, GMX_ETH_USD_MARKET);
-
-        // ── Read real oracle price as baseline ───────────────────────────────
-        OracleUtils.ValidatedPrice memory realPrice = ChainlinkPriceFeedProvider(GMX_CHAINLINK_PRICE_FEED)
-            .getOraclePrice(ARB_WETH, "");
-
-        // ── Positive PnL: mock +10% oracle price ─────────────────────────────
-        vm.mockCall(
-            GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeCall(ChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
-            abi.encode(
-                OracleUtils.ValidatedPrice({
-                    token: ARB_WETH,
-                    min: (realPrice.min * 110) / 100,
-                    max: (realPrice.max * 110) / 100,
-                    timestamp: realPrice.timestamp,
-                    rawMin: realPrice.min,
-                    rawMax: realPrice.max,
-                    provider: GMX_CHAINLINK_PRICE_FEED
-                })
-            )
-        );
-        ISmartPoolActions(pool).updateUnitaryValue();
-        uint256 storedNavHighPrice = ISmartPoolState(pool).getPoolTokens().unitaryValue;
-        NavData memory navDataHighPrice = IENavView(pool).getNavDataView();
-        vm.clearMockedCalls();
-
-        assertEq(
-            navDataHighPrice.unitaryValue,
-            storedNavHighPrice,
-            "ENavView and updateUnitaryValue must agree at +10% price (positive PnL)"
-        );
-        assertGt(storedNavHighPrice, 0, "NAV must be positive at high price");
-
-        // ── Negative PnL: mock -10% oracle price ─────────────────────────────
-        vm.mockCall(
-            GMX_CHAINLINK_PRICE_FEED,
-            abi.encodeCall(ChainlinkPriceFeedProvider.getOraclePrice, (ARB_WETH, "")),
-            abi.encode(
-                OracleUtils.ValidatedPrice({
-                    token: ARB_WETH,
-                    min: (realPrice.min * 90) / 100,
-                    max: (realPrice.max * 90) / 100,
-                    timestamp: realPrice.timestamp,
-                    rawMin: realPrice.min,
-                    rawMax: realPrice.max,
-                    provider: GMX_CHAINLINK_PRICE_FEED
-                })
-            )
-        );
-        ISmartPoolActions(pool).updateUnitaryValue();
-        uint256 storedNavLowPrice = ISmartPoolState(pool).getPoolTokens().unitaryValue;
-        NavData memory navDataLowPrice = IENavView(pool).getNavDataView();
-        vm.clearMockedCalls();
-
-        assertEq(
-            navDataLowPrice.unitaryValue,
-            storedNavLowPrice,
-            "ENavView and updateUnitaryValue must agree at -10% price (negative PnL)"
-        );
-        assertGt(storedNavLowPrice, 0, "NAV must be positive at low price");
-
-        // ── Sanity: price direction must be reflected ─────────────────────────
-        assertGt(
-            storedNavHighPrice,
-            storedNavLowPrice,
-            "long position: high price must give higher NAV than low price"
-        );
     }
 
     // =========================================================================
@@ -2660,8 +2525,8 @@ contract AGmxV2ForkTest is Test {
     ///  so it was NOT in activeTokensSet and NOT counted in navBefore.  After
     ///  createIncreaseOrder calls _trackToken(USDC), the token enters activeTokensSet.
     ///  During the open position, USDC wallet balance = 0 (all in GMX); the position
-    ///  is valued by EApps.  After close, USDC returns to the wallet and is counted by
-    ///  ENavView via the oracle price feed.  Both navAfterOpen and navAfterClose reflect
+    ///  is valued by EApps.  After close, USDC returns to the wallet and is counted in NAV
+    ///  via the oracle price feed.  Both navAfterOpen and navAfterClose reflect
     ///  the true pool value including USDC; comparing them isolates the fee cost.
     ///
     ///  If _trackToken were absent, the returned USDC (≈ 1 000e6) would be invisible to
@@ -2763,7 +2628,7 @@ contract AGmxV2ForkTest is Test {
 
         // ── NAV after close ≈ NAV after open (within 2%) ─────────────────────
         // navAfterOpen: WETH_wallet + EApps(USDC-in-GMX) valued in WETH.
-        // navAfterClose: WETH_wallet + ENavView(USDC_wallet) valued in WETH via oracle.
+        // navAfterClose: WETH_wallet + USDC_wallet valued in WETH via oracle.
         // Both states include the USDC value; only two execution fees + trading costs differ.
         // If _trackToken were missing, the USDC wallet balance would be invisible after
         // close, and navAfterClose would be several percent below navAfterOpen.
@@ -3166,15 +3031,6 @@ contract AGmxV2ForkTest is Test {
             FallbackEntry(
                 0x9759C297fb6C91e252c7292cECa30a509558E5De,
                 0xA0C8611b0CfB31Bc8AdE3189ae2b982c90D9302f,
-                8,
-                18,
-                34
-            )
-        );
-        fallbackEntries.push(
-            FallbackEntry(
-                0x97Ce1F309B949f7FBC4f58c5cb6aa417A5ff8964,
-                0x17d8D87dF3E279c737568aB0C5cC3fF750aB763e,
                 8,
                 18,
                 34

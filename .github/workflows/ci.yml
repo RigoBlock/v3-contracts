@@ -35,10 +35,11 @@ jobs:
       POLYGON_MAINNET_RPC_URL: ${{ secrets.POLYGON_MAINNET_RPC_URL }}
       UNICHAIN_RPC_URL: ${{ secrets.UNICHAIN_RPC_URL }}
       HYPERLIQUID_RPC_URL: ${{ secrets.HYPERLIQUID_RPC_URL }}
+      LIGHTER_DEVNET_RPC_URL: ${{ secrets.LIGHTER_DEVNET_RPC_URL }}
     steps:
       - uses: actions/checkout@v7
         with:
-          submodules: 'recursive'
+          submodules: "recursive"
 
       - uses: actions/setup-node@v7
         with:

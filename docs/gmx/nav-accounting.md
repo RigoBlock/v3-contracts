@@ -1,5 +1,11 @@
 # GMX v2 NAV Accounting
 
+> **Update (protocol v4.6.0, 2026-10-20): `ENavView` and the `NavView` library were removed from
+> the codebase** (per-chain `EApps` split: `EAppsArbitrum` on 42161 now carries the GMX branch;
+> see docs/lighter/INTEGRATION.md, "Per-chain EApps split and ENavView removal"). The sections
+> below that reference `ENavView`/`NavView` are kept for historical context — on current code,
+> `EAppsArbitrum.getAppTokenBalances` is the only NAV evaluation path.
+
 ## Overview
 
 Open GMX perpetual positions must be included in the pool's Net Asset Value (NAV). Because positions are stored in the GMX DataStore (not as ERC-20 tokens), the standard token-based NAV calculation is insufficient. Rigoblock uses a dedicated **active-app gate** plus **Reader calls** to include GMX position value.
@@ -8,9 +14,7 @@ Open GMX perpetual positions must be included in the pool's Net Asset Value (NAV
 
 | Component             | Responsibility                                                                     |
 | --------------------- | ---------------------------------------------------------------------------------- |
-| `EApps`               | Per-call position valuation (called by delegates during deposits/withdrawals)      |
-| `ENavView`            | View-only NAV computation including GMX (off-chain queries, multi-call)            |
-| `NavView`             | Shared library: NAV calculation with optional GMX inclusion                        |
+| `EAppsArbitrum`       | Per-call position valuation (called by delegates during deposits/withdrawals)      |
 | `GmxLib`              | NAV-only position/order/callback balance assembly                                  |
 | `GmxAdapterLib`       | Adapter-only helpers: execution fee, position limit, market queries                |
 | `GmxFallback`         | Hardcoded Chainlink fallback feeds for synthetic GMX index tokens                  |
