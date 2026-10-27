@@ -927,8 +927,42 @@ No extension/adapter storage (Rigoblock hard rule).
   `args`), so the plugin cannot auto-detect them — pass every constructor word explicitly, decoded
   from `deployments/lighterevm-devnet/<Contract>.json`; and address arguments must be EIP-55
   checksummed (use `cast to-checksum <addr>`), otherwise the plugin fails with HHE80017 "constructor
-  parameter … cannot be encoded". Verified 2026-10-27: all 13 contracts (factories, extensions,
-  SmartPool, ExtensionsMap(+Deployer), AMulticall, ALighter).
+  parameter … cannot be encoded". Verified 2026-10-27: **all 13 contracts** (Authority, PoolRegistry,
+  RigoblockPoolProxyFactory, ExtensionsMapDeployer, ExtensionsMap, SmartPool, EUpgrade, EOracle,
+  EAppsLighter, ECrosschain, EERC20, AMulticall, ALighter).
+
+  Three contracts could not go through the plain plugin command and were verified via the Blockscout
+  v2 API directly (`POST $LIGHTER_DEVNET_API_URL/v2/smart-contracts/<addr>/verification/via/standard-input`,
+  multipart with `compiler_version=v0.8.37+commit.f401782d` / `v0.8.17+commit.8df45f5f`,
+  `license_type=apache_2_0`, `contract_name=<file>:<Contract>`, `constructor_args=<argsData>`,
+  `files[0]=@<input>.json;type=application/json` — the `;type=application/json` is mandatory):
+  - `RigoblockPoolProxyFactory`, `ExtensionsMapDeployer`: the plugin's local auto-detect step
+    compares on-chain bytecode against every local artifact **including embedded creation-code
+    metadata** (both contracts embed another contract's init code — proxy / ExtensionsMap — whose
+    CBOR tail on-chain is the rocketh-canonical one, never reproducible by a fresh compile), finds
+    no match, and fails with HHE80009 before ever submitting. The explorer itself masks metadata,
+    so submitting a standard-json input succeeds (status shows `is_partially_verified: true`, as
+    do the plugin-verified canonical-tail contracts — this is expected and matches mainnet's
+    verification state).
+  - `EAppsLighter`: its constructor takes a struct (`EAppsParams`), which the plugin CLI cannot
+    encode (HHE80018/HHE80017). Same direct-API route with `constructor_args` = the 64-byte
+    `argsData` (both params are zero on the devnet — no GRG staking / UniV4 POSM there).
+  - `RigoblockPoolProxy` (the per-pool proxy, verified at the tester pool
+    `0x0CD1eb6ACc12F24aD190a2708a7FEe3f23389adc`): the plugin refused without `--force`
+    ("partially verified contract") even though the API reported no verification — a stale
+    plugin-side check. `--force` + explicit `--contract` verified it (null constructor, so no
+    args). Pool proxies are user-deployed, so each new pool's proxy address needs its own
+    one-line verify; the input is the same every time.
+    For the direct-API route, submit a **minimal** standard-json input (the contract's import closure
+    only): the full-project 5.3 MB input was never picked up by the explorer's verifier, while
+    ~100–300 KB closure inputs verified in minutes. Build the closure from
+    `build/artifacts/build-info/<id>.json` (`input.sources`), resolving imports with solc's
+    remapping semantics — contexts matter (`project/lib/universal-router/:permit2/=…` must win over
+    the global `project/:permit2/=…` for importers under `project/lib/universal-router/`), and a
+    hand-rolled resolver that gets this wrong produces a "Source not found" compile error that the
+    explorer silently drops (the job just never appears). Sanity-check locally with
+    `solc-0.8.37 --standard-json` that the output's `deployedBytecode` body (CBOR tail stripped)
+    equals the on-chain code before submitting.
 
 ## Testing
 
