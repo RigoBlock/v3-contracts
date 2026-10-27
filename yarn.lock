@@ -408,12 +408,12 @@
     zod "^3.23.8"
 
 "@nomicfoundation/hardhat-network-helpers@^3.0.0":
-  version "3.0.11"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-network-helpers/-/hardhat-network-helpers-3.0.11.tgz#50f95468504a5006aab6d75a2935e787c0eb1748"
-  integrity sha512-3/xuORejAOGbfqBmIen+OCHu9ExK9O8pjE11ILU9NcN37zy3GDbyNCKV9keK1gSjWWVb0okAlAR/yvewfEE4TA==
+  version "3.0.12"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-network-helpers/-/hardhat-network-helpers-3.0.12.tgz#56a90f8c2075ab3530b0abd5a12cc55c056cc8eb"
+  integrity sha512-rT9Zz9ssFIJV/omKY7h0u5XqWMHzlSSwL4Fjk9r+Yj48kYgV6WpMsDcpo4f0dmI0vSDkdme3WgZOb7cO0BxteA==
   dependencies:
     "@nomicfoundation/hardhat-errors" "^3.0.16"
-    "@nomicfoundation/hardhat-utils" "^4.1.4"
+    "@nomicfoundation/hardhat-utils" "^5.0.0"
 
 "@nomicfoundation/hardhat-utils@3.0.0":
   version "3.0.0"
@@ -667,6 +667,16 @@
   version "0.21.0"
   resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.21.0.tgz#4e0b9e8c7979d694baaeb7548717552d08e9dda1"
   integrity sha512-Wd2RmICYUonK1YMlCTL+A043Xb5cJuppS5Sx0mEWojWO1CXrA3Jtjb57Xj+5zR9P0AoN0V1sU1pXApU3Eqxchw==
+  dependencies:
+    abitype "^1.3.0"
+    eip-1193 "^0.6.5"
+    named-logs "^0.4.1"
+    viem "^2.55.13"
+
+"@rocketh/core@0.22.0":
+  version "0.22.0"
+  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.22.0.tgz#9791726b6c86e1864efacf3d6abefe8d4bed4f73"
+  integrity sha512-lg2tNP85iCMqOYjBmPzaRy2oE25ygun0HKQnWMzBFKa47Nh5zQuk26GJPHNnThpYnxcA3uxer1egu8IYOrAKRw==
   dependencies:
     abitype "^1.3.0"
     eip-1193 "^0.6.5"
@@ -4225,11 +4235,11 @@ rimraf@^3.0.2:
     glob "^7.1.3"
 
 rocketh@^0.21.0:
-  version "0.21.0"
-  resolved "https://registry.yarnpkg.com/rocketh/-/rocketh-0.21.0.tgz#b06c68ce61aaed760ac6955a62ca542403aeda03"
-  integrity sha512-08LObTBhK1kM1KnScqw6910WFBL9khoIb5ujlA2QNGu7mFH7tUgNiKTEyX8gezEh4LaXUiQBmBfRrxsgRNuV3Q==
+  version "0.21.1"
+  resolved "https://registry.yarnpkg.com/rocketh/-/rocketh-0.21.1.tgz#8d5802e08a391c9bdc278359dcaff8c7704241bc"
+  integrity sha512-A+VlAeDU+mdteNTbTWf83x2+ha4GiZ9BlLsb6IpPJ2G6I6YHrtm3HovBaofHtRx9zOq1zPAips5zTl2+3TL4kA==
   dependencies:
-    "@rocketh/core" "0.21.0"
+    "@rocketh/core" "0.22.0"
     abitype "^1.3.0"
     change-case "^5.4.4"
     eip-1193 "^0.6.5"
