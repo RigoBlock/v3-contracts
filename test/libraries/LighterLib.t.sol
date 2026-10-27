@@ -61,9 +61,10 @@ contract LighterLibHarness {
 /// @title LighterLibTest
 /// @notice Non-fork unit tests for LighterLib's deterministic READ_CORE reads, tracked-market
 ///  registry validation and the NAV-loop pruning of stale tracked markets.
-/// @dev Per the Lighter docs a read FAILS (the staticcall returns false) when the queried
-///  account/asset/market does not exist, and a successful read returns the raw abi.encode
-///  tuple — there is no (bool found, bytes) envelope.
+/// @dev Per the Lighter docs every read except tx status returns the
+///  abi.encode(bool found, bytes data) envelope: found=false (with empty data, read still
+///  succeeding) means the queried account/asset/market does not exist, while a failed
+///  staticcall means a malformed query. Mocks below reproduce the envelope.
 contract LighterLibTest is Test {
     LighterLibHarness internal harness;
 
@@ -76,30 +77,44 @@ contract LighterLibTest is Test {
     }
 
     // =========================================================================
-    // READ_CORE mock helpers (raw tuples, no envelope)
+    // READ_CORE mock helpers (found/data envelope, per the Lighter docs)
     // =========================================================================
 
+    function _wrap(bytes memory data) internal pure returns (bytes memory) {
+        return abi.encode(true, data);
+    }
+
+    function _notFound() internal pure returns (bytes memory) {
+        return abi.encode(false, bytes(""));
+    }
+
     function _mockAccountInfo(address account, LighterTypes.AccountInfo memory info) private {
-        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false), abi.encode(info));
+        vm.mockCall(
+            READ_CORE,
+            abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false),
+            _wrap(abi.encode(info))
+        );
     }
 
     function _mockMarketInfo(uint16 marketId, uint8 marketType, uint32 quoteAssetId) private {
         vm.mockCall(
             READ_CORE,
             abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, marketId),
-            abi.encode(
-                LighterTypes.MarketInfo({
-                    marketType: marketType,
-                    baseAssetId: 2,
-                    quoteAssetId: quoteAssetId,
-                    takerFee: 0,
-                    makerFee: 0,
-                    minBaseAmount: 0,
-                    minQuoteAmount: 0,
-                    liquidationFee: 0,
-                    indexPrice: 500_0000,
-                    markPrice: 500_0000
-                })
+            _wrap(
+                abi.encode(
+                    LighterTypes.MarketInfo({
+                        marketType: marketType,
+                        baseAssetId: 2,
+                        quoteAssetId: quoteAssetId,
+                        takerFee: 0,
+                        makerFee: 0,
+                        minBaseAmount: 0,
+                        minQuoteAmount: 0,
+                        liquidationFee: 0,
+                        indexPrice: 500_0000,
+                        markPrice: 500_0000
+                    })
+                )
             )
         );
     }
@@ -109,19 +124,21 @@ contract LighterLibTest is Test {
         vm.mockCall(
             READ_CORE,
             abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, marketId),
-            abi.encode(
-                LighterTypes.MarketInfo({
-                    marketType: 0,
-                    baseAssetId: 2,
-                    quoteAssetId: 0,
-                    takerFee: 0,
-                    makerFee: 0,
-                    minBaseAmount: 0,
-                    minQuoteAmount: 0,
-                    liquidationFee: 0,
-                    indexPrice: markPrice,
-                    markPrice: markPrice
-                })
+            _wrap(
+                abi.encode(
+                    LighterTypes.MarketInfo({
+                        marketType: 0,
+                        baseAssetId: 2,
+                        quoteAssetId: 0,
+                        takerFee: 0,
+                        makerFee: 0,
+                        minBaseAmount: 0,
+                        minQuoteAmount: 0,
+                        liquidationFee: 0,
+                        indexPrice: markPrice,
+                        markPrice: markPrice
+                    })
+                )
             )
         );
     }
@@ -130,53 +147,54 @@ contract LighterLibTest is Test {
         vm.mockCall(
             READ_CORE,
             abi.encodePacked(LighterLib._SELECTOR_POSITION, account, false, marketId),
-            abi.encode(position)
+            _wrap(abi.encode(position))
         );
     }
 
-    function _mockPositionReadReverts(address account, uint16 marketId) private {
-        vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_POSITION, account, false, marketId), "");
+    /// @notice found=false envelope: the position read succeeds and reports "no position".
+    function _mockPositionNotFound(address account, uint16 marketId) private {
+        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_POSITION, account, false, marketId), _notFound());
     }
 
-    /// @notice A read failure means "no account": coreAccountExists reports false.
-    function testCoreAccountExistsFalseWhenReadFails() public {
-        vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, ACCOUNT, false), "");
+    /// @notice found=false means "no account": coreAccountExists reports false.
+    function testCoreAccountExistsFalseWhenNotFound() public {
+        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, ACCOUNT, false), _notFound());
         assertFalse(harness.coreAccountExists(ACCOUNT));
     }
 
-    /// @notice Existence is success-gated only: coreAccountExists does not decode the payload,
-    ///  so even a malformed successful read reports the account as existing (the precompile
-    ///  return format is spec'd; malformed output is out of scope).
-    function testCoreAccountExistsTrueOnMalformedSuccessfulRead() public {
-        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, ACCOUNT, false), new bytes(5 * 32));
-        assertTrue(harness.coreAccountExists(ACCOUNT));
+    /// @notice A failed staticcall is a malformed-query error, not "not found": it reverts.
+    function testCoreAccountExistsRevertsOnFailedRead() public {
+        vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, ACCOUNT, false), "");
+        vm.expectRevert(LighterLib.LighterReadFailed.selector);
+        harness.coreAccountExists(ACCOUNT);
     }
 
     function testCoreAccountExistsTrueOnSixWords() public {
         assertTrue(harness.coreAccountExists(ACCOUNT));
     }
 
-    /// @notice A malformed successful position read reverts at abi.decode instead of being
-    ///  silently treated as "no position".
+    /// @notice An envelope claiming found=true with a malformed inner payload reverts at the
+    ///  tuple decode instead of being silently treated as "no position".
     function testReadPositionRevertsOnMalformedSuccessfulData() public {
+        // found=true wrapping fewer words than the 7-field Position tuple.
         vm.mockCall(
             READ_CORE,
             abi.encodePacked(LighterLib._SELECTOR_POSITION, ACCOUNT, false, uint16(1)),
-            new bytes(7 * 32)
+            abi.encode(true, new bytes(6 * 32))
         );
         vm.expectRevert();
         harness.readPosition(ACCOUNT, 1);
     }
 
-    /// @notice A failed position read means "no position": the zeroed struct is pruned by the
-    ///  NAV loop and NAV degrades to collateral-only instead of reverting.
-    function testGetLighterBalancesNoPositionWhenReadFails() public {
+    /// @notice A not-found position read means "no position": the zeroed struct is pruned by
+    ///  the NAV loop and NAV degrades to collateral-only instead of reverting.
+    function testGetLighterBalancesNoPositionWhenNotFound() public {
         _track(1);
-        _mockPositionReadReverts(ACCOUNT, 1);
+        _mockPositionNotFound(ACCOUNT, 1);
 
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances.length, 0, "No collateral and no size: purgeable empty list");
-        assertEq(harness.trackedMarkets().length, 0, "Failed-read market must be pruned by the NAV loop");
+        assertEq(harness.trackedMarkets().length, 0, "Not-found market must be pruned by the NAV loop");
         assertEq(harness.marketIndex(1), 0);
     }
 
@@ -250,7 +268,6 @@ contract LighterLibTest is Test {
     ) internal pure returns (LighterTypes.Position memory) {
         return
             LighterTypes.Position({
-                lastFundingRatePrefixSum: 0,
                 size: positionSize,
                 entryQuote: 0,
                 initialMarginFraction: 0,
@@ -295,9 +312,9 @@ contract LighterLibTest is Test {
         harness.trackMarket(1);
     }
 
-    /// @notice A market absent from Core fails the validation read and reverts LighterReadFailed.
+    /// @notice A market absent from Core reports found=false and reverts LighterReadFailed.
     function testNonexistentMarketRevertsReadFailed() public {
-        vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, uint16(1)), "");
+        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, uint16(1)), _notFound());
         vm.expectRevert(LighterLib.LighterReadFailed.selector);
         harness.trackMarket(1);
     }
@@ -314,13 +331,13 @@ contract LighterLibTest is Test {
     // =========================================================================
 
     /// @dev Seeds MAX_TRACKED_MARKETS entries directly (bypassing the 4-entry decimals table)
-    ///  and fails every position read for `account`: a failed read is a zeroed position, i.e. an
-    ///  empty (stale) market.
+    ///  and reports found=false for every position read of `account`: a not-found read is a
+    ///  zeroed position, i.e. an empty (stale) market.
     function _seedFullRegistry(address account) internal {
         for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
             uint16 marketId = 100 + uint16(i);
             harness.seedTrackedMarket(marketId, 4, 2);
-            _mockPositionReadReverts(account, marketId);
+            _mockPositionNotFound(account, marketId);
         }
         assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
     }

@@ -26,17 +26,15 @@ library LighterLib {
     uint16 internal constant _SELECTOR_POSITION = 0x0007;
     uint16 internal constant _SELECTOR_EVM_ACCOUNT_INDEX = 0x0009;
 
-    /// @dev Isolated margin is 12-decimal USDC; everything else here is 6-decimal.
-    int256 internal constant _ISOLATED_MARGIN_DECIMALS = 1e6;
-
     int256 internal constant _USDC_DECIMAL_FACTOR = 1e6;
 
     /// @notice Returns the pool's Lighter balances valued in 6-decimal USDC, pruning stale
     ///  tracked markets while looping.
-    /// @dev Absence semantics follow the Lighter docs: READ_CORE fails a read for a nonexistent
-    ///  account/market, so NAV degrades instead of reverting (missing account/position = zero,
-    ///  unreadable mark price = position valued flat at entry). A revert here would freeze
-    ///  updateUnitaryValue for every token holder; GmxLib applies the same never-revert policy.
+    /// @dev Absence semantics follow the Lighter docs: READ_CORE reports found=false for a
+    ///  nonexistent account/market, so NAV degrades instead of reverting (missing
+    ///  account/position = zero, unreadable mark price = position valued flat at entry). A
+    ///  revert here would freeze updateUnitaryValue for every token holder; GmxLib applies the
+    ///  same never-revert policy.
     /// @dev This runs inside the non-view getAppTokenBalances path, so it prunes tracked markets
     ///  that hold no position and no orders as it loops (backward, swap-pop safe); see
     ///  docs/lighter/INTEGRATION.md ("Trading flow").
@@ -100,7 +98,8 @@ library LighterLib {
             : int256(0);
 
         if (position.marginMode == 1) {
-            value += int256(position.allocatedMargin) / _ISOLATED_MARGIN_DECIMALS;
+            // Devnet 1.1.0: allocatedMargin is already Core USDC base units (1e6 per USDC).
+            value += int256(position.allocatedMargin);
         }
     }
 
@@ -179,67 +178,70 @@ library LighterLib {
         delete slot.markets[marketId];
     }
 
-    /// @notice True when the account controls an existing LighterCore account. Per the Lighter
-    ///  docs the account-info read fails when the account does not exist, so success alone is
-    ///  the existence proof.
-    function coreAccountExists(address account) internal view returns (bool success) {
-        (success, ) = LighterConstants.READ_CORE.staticcall(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false));
+    /// @notice True when the account controls an existing LighterCore account. The account-info
+    ///  read reports found=false when the account does not exist.
+    function coreAccountExists(address account) internal view returns (bool exists) {
+        (exists, ) = _readCoreData(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false));
     }
 
     /// @notice Processing status of an EVM-to-Core write: 0 pending/unknown, 1 successful,
-    ///  2 failed (data then holds abi.encode(uint32 errorCode)).
+    ///  2 failed (data then holds abi.encode(uint32 errorCode)). The tx-status read is the one
+    ///  read without the (bool found, bytes) envelope.
     function readTxStatus(uint64 reqId) internal view returns (uint8 status) {
         (status, ) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
     }
 
     function readAccountInfo(address account) internal view returns (LighterTypes.AccountInfo memory info) {
-        info = abi.decode(
-            _readCore(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false)),
-            (LighterTypes.AccountInfo)
-        );
+        (bool found, bytes memory data) = _readCoreData(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false));
+        require(found, LighterReadFailed());
+        info = abi.decode(data, (LighterTypes.AccountInfo));
     }
 
     function readMarketInfo(uint16 marketId) internal view returns (LighterTypes.MarketInfo memory info) {
-        info = abi.decode(_readCore(abi.encodePacked(_SELECTOR_MARKET_INFO, marketId)), (LighterTypes.MarketInfo));
+        (bool found, bytes memory data) = _readCoreData(abi.encodePacked(_SELECTOR_MARKET_INFO, marketId));
+        require(found, LighterReadFailed());
+        info = abi.decode(data, (LighterTypes.MarketInfo));
     }
 
-    /// @notice Reads a position; per the Lighter docs the read fails when the account or market
-    ///  does not exist, which here means "no position". An existing market with no position
-    ///  returns a zeroed struct directly.
+    /// @notice Reads a position; found=false (account or market absent, or no position) yields a
+    ///  zeroed struct, which callers read as "no position".
     function readPosition(
         address account,
         uint16 marketId
     ) internal view returns (LighterTypes.Position memory position) {
-        (bool success, bytes memory ret) = LighterConstants.READ_CORE.staticcall(
-            abi.encodePacked(_SELECTOR_POSITION, account, false, marketId)
-        );
-        if (!success) return position;
-        position = abi.decode(ret, (LighterTypes.Position));
+        (bool found, bytes memory data) = _readCoreData(abi.encodePacked(_SELECTOR_POSITION, account, false, marketId));
+        if (found) position = abi.decode(data, (LighterTypes.Position));
     }
 
     function readEvmAccountIndex(address account) internal view returns (uint48 accountIndex) {
-        accountIndex = abi.decode(_readCore(abi.encodePacked(_SELECTOR_EVM_ACCOUNT_INDEX, account)), (uint48));
+        (bool found, bytes memory data) = _readCoreData(abi.encodePacked(_SELECTOR_EVM_ACCOUNT_INDEX, account));
+        require(found, LighterReadFailed());
+        accountIndex = abi.decode(data, (uint48));
     }
 
-    /// @dev NAV variant of readMarketInfo: failure reports found=false so the position can be
+    /// @dev NAV variant of readMarketInfo: found=false reports failure so the position can be
     ///  valued flat instead of freezing NAV.
     function _tryReadMarketInfo(
         uint16 marketId
     ) internal view returns (bool found, LighterTypes.MarketInfo memory info) {
-        (bool success, bytes memory ret) = LighterConstants.READ_CORE.staticcall(
-            abi.encodePacked(_SELECTOR_MARKET_INFO, marketId)
-        );
-        if (!success) return (false, info);
-        found = true;
-        info = abi.decode(ret, (LighterTypes.MarketInfo));
+        bytes memory data;
+        (found, data) = _readCoreData(abi.encodePacked(_SELECTOR_MARKET_INFO, marketId));
+        if (found) info = abi.decode(data, (LighterTypes.MarketInfo));
     }
 
     /// @dev Staticcall wrapper around READ_CORE; reverts with LighterReadFailed when the
-    ///  precompile rejects the query (unknown selector, malformed input, nonexistent
-    ///  account/asset/market per the Lighter docs).
-    function _readCore(bytes memory payload) private view returns (bytes memory data) {
+    ///  precompile rejects the query (unsupported selector, malformed input, or less than
+    ///  20,000 gas forwarded, per the Lighter docs).
+    function _readCore(bytes memory payload) private view returns (bytes memory ret) {
         bool success;
-        (success, data) = LighterConstants.READ_CORE.staticcall(payload);
+        (success, ret) = LighterConstants.READ_CORE.staticcall(payload);
         require(success, LighterReadFailed());
+    }
+
+    /// @dev Unwraps the documented abi.encode(bool found, bytes data) envelope every read
+    ///  except tx status returns; found=false means the account, asset, or market does not
+    ///  exist and data is empty.
+    function _readCoreData(bytes memory payload) private view returns (bool found, bytes memory data) {
+        (found, data) = abi.decode(_readCore(payload), (bool, bytes));
     }
 }

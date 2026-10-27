@@ -273,23 +273,36 @@ contract ALighterUnit is Test {
     // READ_CORE mock helpers
     // =========================================================================
 
+    function _wrap(bytes memory data) private pure returns (bytes memory) {
+        return abi.encode(true, data);
+    }
+
+    function _notFound() private pure returns (bytes memory) {
+        return abi.encode(false, bytes(""));
+    }
+
     function _mockAccountInfo(address account, LighterTypes.AccountInfo memory info) private {
-        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false), abi.encode(info));
+        vm.mockCall(
+            _readCore,
+            abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false),
+            _wrap(abi.encode(info))
+        );
     }
 
     function _mockMarketInfo(uint16 marketId, LighterTypes.MarketInfo memory info) private {
-        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, marketId), abi.encode(info));
+        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, marketId), _wrap(abi.encode(info)));
     }
 
     function _mockPosition(address account, uint16 marketId, LighterTypes.Position memory position) private {
         vm.mockCall(
             _readCore,
             abi.encodePacked(LighterLib._SELECTOR_POSITION, account, false, marketId),
-            abi.encode(position)
+            _wrap(abi.encode(position))
         );
     }
 
     function _mockTxStatus(uint64 reqId, uint8 status) private {
+        // Tx status is the one read without the (bool found, bytes) envelope.
         vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, reqId), abi.encode(status, bytes("")));
     }
 
@@ -297,14 +310,14 @@ contract ALighterUnit is Test {
         vm.mockCall(
             _readCore,
             abi.encodePacked(LighterLib._SELECTOR_EVM_ACCOUNT_INDEX, account),
-            abi.encode(accountIndex)
+            _wrap(abi.encode(accountIndex))
         );
     }
 
-    /// @notice Nonexistent account: per the Lighter docs the account-info read fails, which
+    /// @notice Nonexistent account: the account-info read reports found=false, which
     ///  coreAccountExists reports as "no account".
     function _mockNoAccount(address account) private {
-        vm.mockCallRevert(_readCore, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false), "");
+        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_ACCOUNT_INFO, account, false), _notFound());
     }
 
     // =========================================================================
@@ -351,7 +364,6 @@ contract ALighterUnit is Test {
     ) private pure returns (LighterTypes.Position memory) {
         return
             LighterTypes.Position({
-                lastFundingRatePrefixSum: 0,
                 size: positionSize,
                 entryQuote: entryQuote,
                 initialMarginFraction: 0,
@@ -534,11 +546,11 @@ contract ALighterUnit is Test {
         IALighter(address(pool)).createOrder(0, 5, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
     }
 
-    /// @notice A market that does not exist on Core fails the auto-track validation read and
-    ///  reverts LighterReadFailed.
+    /// @notice A market that does not exist on Core reports found=false on the auto-track
+    ///  validation read and reverts LighterReadFailed.
     function testCreateOrderRevertsForNonexistentCoreMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        vm.mockCallRevert(_readCore, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, uint16(0)), "");
+        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, uint16(0)), _notFound());
         vm.expectRevert(LighterLib.LighterReadFailed.selector);
         IALighter(address(pool)).createOrder(0, 0, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
     }
@@ -648,16 +660,16 @@ contract ALighterUnit is Test {
         for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
             uint16 marketId = 100 + uint16(i);
             harness.seedTrackedMarket(marketId, 4, 2);
-            _mockPositionReadReverts(marketId);
+            _mockPositionNotFound(marketId);
         }
         assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
     }
 
-    function _mockPositionReadReverts(uint16 marketId) private {
-        vm.mockCallRevert(
+    function _mockPositionNotFound(uint16 marketId) private {
+        vm.mockCall(
             _readCore,
             abi.encodePacked(LighterLib._SELECTOR_POSITION, address(pool), false, marketId),
-            ""
+            _notFound()
         );
     }
 
@@ -747,10 +759,10 @@ contract ALighterUnit is Test {
         _mockMarketInfo(0, _marketInfo(0, 0, 50_00));
         libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(100e6));
-        _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 1, 500e12));
+        _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 1, 500e6));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
-        // allocatedMargin is 12-decimal USDC: 500e12 / 1e6 = 500e6.
+        // Devnet 1.1.0: allocatedMargin is already USDC base units (1e6 per USDC).
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 600e6);
     }
@@ -857,7 +869,7 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.6.4");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.0");
     }
 
     function testDirectCallToAdapterReverts() public {

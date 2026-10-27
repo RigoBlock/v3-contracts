@@ -30,8 +30,8 @@ import {SafeTransferLib} from "../../contracts/protocol/libraries/SafeTransferLi
 /// @notice Deploys real Rigoblock infrastructure on a LighterEVM fork for Lighter integration tests.
 /// @dev Mirrors HyperliquidDeploymentFixture: no Uniswap V4 / BackGeoOracle on LighterEVM, so the
 ///  pool is restricted to USDC-denominated assets by the LighterEVM carve-out in EOracle.
-/// @dev The suite is skipped while LIGHTER_RPC_URL is unset (no public RPC yet): every test that
-///  uses this fixture becomes a no-op, so CI stays green until LighterEVM RPC access is available.
+/// @dev Requires LIGHTER_RPC_URL (like every other chain's fork suite): a missing or misconfigured
+///  URL fails loudly at createSelectFork or at the chainid require below — never silently.
 /// @dev READ_CORE is a native LighterEVM precompile that Foundry's EVM does not implement even when
 ///  forking, so read-precompile return data is mocked (same approach as the Hyperliquid fork tests).
 contract LighterDeploymentFixture is Test {
@@ -56,18 +56,10 @@ contract LighterDeploymentFixture is Test {
     /// @notice True when the fixture reuses the live Authority/Registry/Factory from Constants.
     bool public usingLiveInfrastructure;
 
-    /// @notice True when LIGHTER_RPC_URL is unset and the whole suite must skip.
-    /// @dev vm.skip must be called at the top level of each test (forge-std requirement), so the
-    ///  fixture only records the condition; tests call `vm.skip(true)` via the _requireFork helper.
-    bool public skipped;
-
-    /// @notice Deploy the fixture on a LighterEVM fork. Records `skipped` when LIGHTER_RPC_URL is
-    ///  unset; tests must then `vm.skip(true)` at test level (forge-std requirement).
+    /// @notice Deploy the fixture on a LighterEVM fork. Reverts when LIGHTER_RPC_URL is unset
+    ///  (createSelectFork) or points at the wrong chain (chainid require) — like every other
+    ///  chain's fork suite, so a missing or stale CI secret fails the build instead of skipping.
     function deployFixture() public {
-        if (bytes(vm.envOr("LIGHTER_RPC_URL", string(""))).length == 0) {
-            skipped = true;
-            return;
-        }
         vm.createSelectFork("lighter", LIGHTEREVM_BLOCK);
         require(block.chainid == LIGHTEREVM_CHAIN_ID, "Not LighterEVM fork");
 

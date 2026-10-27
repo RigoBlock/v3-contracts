@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {LighterDeploymentFixture} from "../fixtures/LighterDeploymentFixture.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
+import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
@@ -20,7 +21,8 @@ import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @title ALighterForkTest
 /// @notice Fork tests for the Lighter adapter against real LighterEVM predeploys.
-/// @dev Requires LIGHTER_RPC_URL; the whole suite is skipped while LighterEVM has no public RPC.
+/// @dev Requires LIGHTER_RPC_URL; a missing or misconfigured URL fails setUp loudly (like every
+///  other chain's fork suite), it never skips.
 /// @dev Foundry's EVM does not implement the READ_CORE precompile even when forking, so read
 ///  precompile return data is mocked (same approach as AHyperliquidFork.t.sol).
 contract ALighterForkTest is Test {
@@ -43,39 +45,43 @@ contract ALighterForkTest is Test {
         usdc = fixture.LIGHTER_USDC();
     }
 
-    /// @notice Skips the test when LIGHTER_RPC_URL is unset (must run at test level, forge-std rule).
-    modifier withLighterFork() {
-        if (fixture.skipped()) vm.skip(true);
-        _;
-    }
-
     /*//////////////////////////////////////////////////////////////
                         READ_CORE MOCK HELPERS
     //////////////////////////////////////////////////////////////*/
+
+    function _wrap(bytes memory data) internal pure returns (bytes memory) {
+        return abi.encode(true, data);
+    }
+
+    function _notFound() internal pure returns (bytes memory) {
+        return abi.encode(false, bytes(""));
+    }
 
     function _mockAccountInfo(int128 collateral) internal {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0001), pool, false),
-            abi.encode(
-                LighterTypes.AccountInfo({
-                    accountType: 0,
-                    accountIndex: 1,
-                    masterAccountIndex: 1,
-                    l1Address: address(0),
-                    evmAddress: pool,
-                    collateralBaseAmount: collateral
-                })
+            _wrap(
+                abi.encode(
+                    LighterTypes.AccountInfo({
+                        accountType: 0,
+                        accountIndex: 1,
+                        masterAccountIndex: 1,
+                        l1Address: address(0),
+                        evmAddress: pool,
+                        collateralBaseAmount: collateral
+                    })
+                )
             )
         );
     }
 
     function _mockNoAccount() internal {
-        // Per the Lighter docs the account-info read fails when the account does not exist.
-        vm.mockCallRevert(
+        // The account-info read reports found=false when the account does not exist.
+        vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0001), pool, false),
-            ""
+            _notFound()
         );
     }
 
@@ -83,11 +89,12 @@ contract ALighterForkTest is Test {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0009), pool),
-            abi.encode(accountIndex)
+            _wrap(abi.encode(accountIndex))
         );
     }
 
     /// @notice Mocks the transaction-status read (0x0000): 0 pending, 1 successful, 2 failed.
+    /// @dev Tx status is the one read without the (bool found, bytes) envelope.
     function _mockTxStatus(uint64 reqId, uint8 status) internal {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
@@ -100,20 +107,22 @@ contract ALighterForkTest is Test {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0005), marketId),
-            abi.encode(
-                LighterTypes.MarketInfo({
-                    marketType: 0,
-                    baseAssetId: 0,
-                    // Perpetuals carry quoteAssetId == 0 on Core (docs + live devnet verification).
-                    quoteAssetId: 0,
-                    takerFee: 0,
-                    makerFee: 0,
-                    minBaseAmount: 0,
-                    minQuoteAmount: 0,
-                    liquidationFee: 0,
-                    indexPrice: markPrice,
-                    markPrice: markPrice
-                })
+            _wrap(
+                abi.encode(
+                    LighterTypes.MarketInfo({
+                        marketType: 0,
+                        baseAssetId: 0,
+                        // Perpetuals carry quoteAssetId == 0 on Core (docs + live devnet verification).
+                        quoteAssetId: 0,
+                        takerFee: 0,
+                        makerFee: 0,
+                        minBaseAmount: 0,
+                        minQuoteAmount: 0,
+                        liquidationFee: 0,
+                        indexPrice: markPrice,
+                        markPrice: markPrice
+                    })
+                )
             )
         );
     }
@@ -122,7 +131,7 @@ contract ALighterForkTest is Test {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
             abi.encodePacked(uint16(0x0007), pool, false, marketId),
-            abi.encode(position)
+            _wrap(abi.encode(position))
         );
     }
 
@@ -146,12 +155,26 @@ contract ALighterForkTest is Test {
         );
     }
 
+    /// @notice Mocks EvmToCoreEntrypoint.createOrder to accept the write. Since devnet 1.1.0 the
+    ///  predeploy applies Core's order admission checks (account must exist on Core with
+    ///  collateral), which a forked pool can never satisfy — the order-write tests assert the
+    ///  adapter's calldata and auto-tracking instead of executing real Core admission. Selector
+    ///  prefix match covers every argument combination; per the 1.1.0 changelog a successful
+    ///  void write returns abi.encode(0).
+    function _mockCreateOrder() internal {
+        vm.mockCall(
+            LighterConstants.CORE_ENTRYPOINT,
+            abi.encodePacked(ILighterCoreEntrypoint.createOrder.selector),
+            abi.encode(0)
+        );
+    }
+
     /*//////////////////////////////////////////////////////////////
                                   TESTS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Smoke test: the adapter is deployed, authorized, and the pool is funded.
-    function testFork_AdapterAndPoolDeployed() public withLighterFork {
+    function testFork_AdapterAndPoolDeployed() public {
         assertEq(block.chainid, fixture.LIGHTEREVM_CHAIN_ID(), "Should be on LighterEVM fork");
         assertTrue(aLighter.code.length > 0, "ALighter should be deployed");
         assertTrue(pool.code.length > 0, "Pool should be deployed");
@@ -159,7 +182,7 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice Deploying the Hyperliquid adapter on LighterEVM reverts: adapters are chain-locked.
-    function testFork_AHyperliquid_DeploymentRevertsOnLighterEVM() public withLighterFork {
+    function testFork_AHyperliquid_DeploymentRevertsOnLighterEVM() public {
         bytes memory code = vm.getCode("AHyperliquid");
         vm.expectRevert(); // NotHyperEVM (AHyperliquid constructor)
         assembly {
@@ -169,7 +192,7 @@ contract ALighterForkTest is Test {
 
     /// @notice Deposit USDC straight into the Core perps route through the adapter's interop
     ///  manager call (mocked return: no token pull happens under the mock).
-    function testFork_DepositToCorePerpsRoute() public withLighterFork {
+    function testFork_DepositToCorePerpsRoute() public {
         uint256 depositAmount = 10_000e6;
         _mockSendToCore(depositAmount, 1);
 
@@ -185,7 +208,7 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice The adapter enforces the pool as recipient, the perps route, and USDC.
-    function testFork_Deposit_GuardsEnforced() public withLighterFork {
+    function testFork_Deposit_GuardsEnforced() public {
         vm.startPrank(poolOwner);
         vm.expectRevert(IALighter.InvalidRecipient.selector);
         IALighter(pool).sendToCore(3, address(0x1), false, 1e6, LighterRouteType.Perps);
@@ -199,7 +222,7 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice Withdrawing without a Core account reverts; with one, it records the out-flight.
-    function testFork_WithdrawRequiresCoreAccount() public withLighterFork {
+    function testFork_WithdrawRequiresCoreAccount() public {
         _mockNoAccount();
         vm.prank(poolOwner);
         vm.expectRevert(IALighter.AccountNotActivated.selector);
@@ -209,11 +232,12 @@ contract ALighterForkTest is Test {
     /// @notice createOrder auto-tracks the traded market: no separate tracking step is needed.
     /// @dev The final createOrder hits the real Core entrypoint predeploy; order parameters may need
     ///  adjustment once devnet RPC access allows validating them against the live predeploy.
-    function testFork_CreateOrderAutoTracksMarket() public withLighterFork {
+    function testFork_CreateOrderAutoTracksMarket() public {
         _mockMarketInfo(MARKET_ID, 100_00);
         _mockEvmAccountIndex(1);
         // createOrder requires an activated Core account (checked after the market gates).
         _mockAccountInfo(0);
+        _mockCreateOrder();
 
         vm.startPrank(poolOwner);
 
@@ -235,10 +259,11 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice NAV valuation reads collateral plus tracked positions from (mocked) Core state.
-    function testFork_NavWithTrackedPosition() public withLighterFork {
+    function testFork_NavWithTrackedPosition() public {
         _mockMarketInfo(MARKET_ID, 101_00);
         _mockEvmAccountIndex(1);
         _mockAccountInfo(0);
+        _mockCreateOrder();
         vm.startPrank(poolOwner);
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
@@ -250,7 +275,6 @@ contract ALighterForkTest is Test {
         _mockPosition(
             MARKET_ID,
             LighterTypes.Position({
-                lastFundingRatePrefixSum: 0,
                 size: 100_000,
                 entryQuote: 1_000e6,
                 initialMarginFraction: 0,
@@ -269,7 +293,7 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice Minting is settlement-locked after a deposit and works again after the window.
-    function testFork_MintLockedDuringSettlementWindow() public withLighterFork {
+    function testFork_MintLockedDuringSettlementWindow() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
 
@@ -301,14 +325,14 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice EOracle on LighterEVM must only recognize USDC as having a price feed.
-    function testFork_EOracle_OnlyUsdcHasPriceFeed() public withLighterFork {
+    function testFork_EOracle_OnlyUsdcHasPriceFeed() public {
         assertTrue(IEOracle(pool).hasPriceFeed(usdc), "USDC must have a price feed");
         assertFalse(IEOracle(pool).hasPriceFeed(fixture.LIGHTER_WETH()), "WETH must not have a price feed");
         assertFalse(IEOracle(pool).hasPriceFeed(address(0x1)), "Random token must not have a price feed");
     }
 
     /// @notice The deposit must not activate any other application bit.
-    function testFork_OnlyLighterAppBitActivated() public withLighterFork {
+    function testFork_OnlyLighterAppBitActivated() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
         _mockSendToCore(10_000e6, 1);

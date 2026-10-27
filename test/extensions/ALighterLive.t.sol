@@ -16,22 +16,31 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 /// @dev READ_CORE (0x6600...0000) is a native precompile with no on-chain code, so Foundry forks
 ///  cannot execute it; these tests call the live devnet RPC through vm.rpc instead. The devnet
 ///  RPC may only support "latest", so no block tag is ever passed.
-/// @dev Requires LIGHTER_RPC_URL; the whole contract is skipped while it is unset.
+/// @dev Requires LIGHTER_RPC_URL; a missing URL fails at the first vm.rpc call, and a URL
+///  pointing at the wrong chain fails the setUp chainid guard — the suite never runs against
+///  an unintended LighterEVM deployment (e.g. a mainnet endpoint swapped into the CI secret
+///  without updating the devnet chainid pinned here).
 /// @dev testLive_NavExactness compares against "latest" state and is skipped inside the
 ///  16-second settlement window after a Core write; see its @dev for the bracketed-price
 ///  retry policy and the observed-skew fallback bound.
 contract ALighterLiveTest is Test {
     /// @notice A live funded Rigoblock pool on LighterEVM devnet (chain 19529) with a Core
-    ///  account and an open perp position.
-    address internal constant TESTER_POOL = 0x7Bcea99B22Caa039ff282519d404dF38fbaC6CB8;
+    ///  account and an open perp position. Re-created after the devnet 1.1.0 reset (create tx
+    ///  0xf336c9335af1236291b319120c1470e664b39b5e1adb9dbd5075ab45033ddf4a); the NAV exactness
+    ///  test skips while the pool controls no Core account (i.e. until it is funded with USDC).
+    address internal constant TESTER_POOL = 0x0CD1eb6ACc12F24aD190a2708a7FEe3f23389adc;
 
     /// @notice The post-action settlement window, mirroring LighterLib._SETTLEMENT_WINDOW.
     uint256 internal constant _SETTLEMENT_WINDOW = 16 seconds;
 
     function setUp() public {
-        if (bytes(vm.envOr("LIGHTER_RPC_URL", string(""))).length == 0) {
-            vm.skip(true);
-        }
+        // Chain guard: this suite is written against the LighterEVM devnet (chain 19529). A
+        //  misconfigured secret pointing at any other chain (e.g. a future mainnet endpoint)
+        //  must fail here, not run the assertions against the wrong deployment. vm.rpc returns
+        //  the minimal-byte quantity (0x4c49), not an ABI-encoded uint256.
+        bytes memory res = vm.rpc("lighter", "eth_chainId", "[]");
+        uint256 chainId = uint256(bytes32(res)) >> (8 * (32 - res.length));
+        require(chainId == LighterConstants.LIGHTEREVM_CHAIN_ID, "LIGHTER_RPC_URL is not the LighterEVM devnet");
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -49,17 +58,35 @@ contract ALighterLiveTest is Test {
         return _ethCall(LighterConstants.READ_CORE, payload);
     }
 
+    /// @notice Unwraps the documented abi.encode(bool found, bytes data) envelope every read
+    ///  except tx status returns; reverts when Core reports the account/asset/market absent.
+    function _readCoreData(bytes memory payload) internal returns (bytes memory data) {
+        bool found;
+        (found, data) = abi.decode(_readCore(payload), (bool, bytes));
+        require(found, "READ_CORE reported not-found");
+    }
+
     function _readAccountInfo(address account) internal returns (LighterTypes.AccountInfo memory) {
-        return abi.decode(_readCore(abi.encodePacked(uint16(0x0001), account, false)), (LighterTypes.AccountInfo));
+        return abi.decode(_readCoreData(abi.encodePacked(uint16(0x0001), account, false)), (LighterTypes.AccountInfo));
     }
 
     function _readPosition(address account, uint16 marketId) internal returns (LighterTypes.Position memory) {
         return
-            abi.decode(_readCore(abi.encodePacked(uint16(0x0007), account, false, marketId)), (LighterTypes.Position));
+            abi.decode(
+                _readCoreData(abi.encodePacked(uint16(0x0007), account, false, marketId)),
+                (LighterTypes.Position)
+            );
     }
 
     function _readMarketInfo(uint16 marketId) internal returns (LighterTypes.MarketInfo memory) {
-        return abi.decode(_readCore(abi.encodePacked(uint16(0x0005), marketId)), (LighterTypes.MarketInfo));
+        return abi.decode(_readCoreData(abi.encodePacked(uint16(0x0005), marketId)), (LighterTypes.MarketInfo));
+    }
+
+    /// @notice True when the tester pool controls an existing Core account (envelope found flag).
+    function _poolHasCoreAccount() internal returns (bool) {
+        bytes memory ret = _readCore(abi.encodePacked(uint16(0x0001), TESTER_POOL, false));
+        (bool found, ) = abi.decode(ret, (bool, bytes));
+        return found;
     }
 
     /// @notice Timestamp of the devnet's latest block. The object result of
@@ -88,14 +115,16 @@ contract ALighterLiveTest is Test {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Locks the documented READ_CORE response formats against the live precompile:
-    ///  every read is decoded with the exact Solidity tuple type the protocol relies on.
+    ///  every read is decoded through the (bool found, bytes data) envelope with the exact
+    ///  Solidity tuple type the protocol relies on. Pool-dependent checks are skipped while the
+    ///  tester pool controls no Core account (e.g. right after a devnet reset, before funding).
     function testLive_ReadCoreFormats() public {
         // 0x0002 asset decimals: USDC (asset index 3) has 6 decimals.
-        uint8 decimals = abi.decode(_readCore(abi.encodePacked(uint16(0x0002), uint32(3))), (uint8));
+        uint8 decimals = abi.decode(_readCoreData(abi.encodePacked(uint16(0x0002), uint32(3))), (uint8));
         assertEq(decimals, 6);
 
         // 0x0004 asset address: asset index 3 resolves to the USDC token.
-        address asset = abi.decode(_readCore(abi.encodePacked(uint16(0x0004), uint32(3))), (address));
+        address asset = abi.decode(_readCoreData(abi.encodePacked(uint16(0x0004), uint32(3))), (address));
         assertEq(asset, LighterConstants.USDC);
 
         // 0x0005 market info: market 0 is a perp with a positive mark price.
@@ -103,13 +132,22 @@ contract ALighterLiveTest is Test {
         assertEq(market.marketType, 0);
         assertGt(market.markPrice, 0);
 
+        // 0x0000 tx status: an unknown reqId reads as pending (status 0); the read never fails.
+        (uint8 status, ) = abi.decode(_readCore(abi.encodePacked(uint16(0x0000), uint64(999_999_999))), (uint8, bytes));
+        assertEq(status, 0);
+
+        if (!_poolHasCoreAccount()) {
+            console2.log("Tester pool has no Core account yet; skipping pool-dependent format checks");
+            return;
+        }
+
         // 0x0001 account info: the tester pool controls an existing Core account.
         LighterTypes.AccountInfo memory account = _readAccountInfo(TESTER_POOL);
         assertEq(account.evmAddress, TESTER_POOL);
         assertGe(account.collateralBaseAmount, 0);
 
         // 0x0009 EVM account index: nonzero and consistent with the account-info master index.
-        uint48 accountIndex = abi.decode(_readCore(abi.encodePacked(uint16(0x0009), TESTER_POOL)), (uint48));
+        uint48 accountIndex = abi.decode(_readCoreData(abi.encodePacked(uint16(0x0009), TESTER_POOL)), (uint48));
         assertGt(uint256(accountIndex), 0);
         assertEq(uint256(accountIndex), uint256(account.masterAccountIndex));
 
@@ -118,10 +156,6 @@ contract ALighterLiveTest is Test {
         if (position.size != 0) {
             assertGt(position.entryQuote, 0);
         }
-
-        // 0x0000 tx status: an unknown reqId reads as pending (status 0); the read never fails.
-        (uint8 status, ) = abi.decode(_readCore(abi.encodePacked(uint16(0x0000), uint64(999_999_999))), (uint8, bytes));
-        assertEq(status, 0);
     }
 
     /// @notice Independently recomputes the tester pool's Lighter NAV from live precompile reads
@@ -148,6 +182,11 @@ contract ALighterLiveTest is Test {
     ///  mark-price movement between the brackets and contribution_i = |size_i| * 1e6 /
     ///  10^scale_i is the per-raw-unit NAV sensitivity.
     function testLive_NavExactness() public {
+        if (!_poolHasCoreAccount()) {
+            console2.log("Skipping: tester pool has no Core account (fund it with a deposit first)");
+            vm.skip(true);
+        }
+
         NavAttempt memory attempt;
         for (uint256 round = 1; round <= 8; ++round) {
             attempt = _attemptNavComparison();
@@ -251,8 +290,8 @@ contract ALighterLiveTest is Test {
             int256 entryValue = position.size > 0
                 ? int256(uint256(position.entryQuote))
                 : -int256(uint256(position.entryQuote));
-            // allocatedMargin is 12-decimal USDC (see LighterTypes.Position).
-            int256 isolated = position.marginMode == 1 ? int256(position.allocatedMargin) / 1e6 : int256(0);
+            // Devnet 1.1.0: allocatedMargin is already Core USDC base units (1e6 per USDC).
+            int256 isolated = position.marginMode == 1 ? int256(position.allocatedMargin) : int256(0);
             attempt.expectedBefore +=
                 ((int256(position.size) * int256(uint256(markBefore[i])) * 1e6) / int256(10 ** scale[i])) -
                 entryValue +
