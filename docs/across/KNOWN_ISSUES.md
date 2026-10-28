@@ -18,6 +18,21 @@ forks, real Across `depositV3` and MulticallHandler fills).
   a confirmed operator workaround recovers everything; on-chain fix drafted below,
   **not urgent**, scheduled for a future adapter train with a dedicated review
   session.
+- **W22 — stray-balance capture via permissionless first-activation** (reported by
+  deviykee): **accepted design consequence** of the Jan 2026 zero-supply-DOS fix,
+  severity **Informational**, no code change, no payout. The fix deliberately
+  changed stray allowlisted balances from "donate reverts" to "enter NAV on first
+  activation"; a JIT minter can capture the resulting unitary-value jump. This is
+  a redistribution of a balance already treated as lost/donated, bounded by
+  `minPeriod`. The external Known Issues wording that said stray tokens "stay lost"
+  is outdated and has been corrected below.
+- **W23 — sentinel unitary value during non-positive NAV** (reported Oct 2026):
+  **accepted limitation**, severity **Informational**, no code change, no payout.
+  When `netTotalValue <= 0` the implementation clamps `unitaryValue` to the
+  sentinel `1` as burn-side protection. Three operations (mint, source debit,
+  destination credit) divide by that sentinel without a guard, producing
+  share/VS inflation or deflation. Reachable only when the pool is already
+  insolvent; no deployed pool is currently in that state.
 
 ## W21 — Round-trip VS residual under price moves (accepted model property)
 
@@ -377,10 +392,193 @@ A redesign that carries the outbound leg's value basis in the bridge message and
 reconciles the return leg against it (accepting message-channel trust assumptions), or
 a governance-triggered VS reset. Neither is currently planned.
 
-Covered by `test/debug/PoCVsRoundTrip.t.sol` (17 tests: control, +10/25/50% sweeps,
+Covered by `test/debug/PoCVsRoundTrip.t.sol` (18 tests: control, +10/25/50% sweeps,
 burn-boundary at the pin, mint/donate liveness with negative VS, inbound-transfer
 relief, sync-out coverage invariance, NAV-parity disproof, mid-window sync
 worsening, realistic sync-rebalance cycle, stablecoin-pool operator-induced
 residual, WETH-loss originator-pinned scenario with sync variants, stuck-to-fully-
 burnable operator unstick, single-supply-chain zero-tolerance return trap,
-TS=0 partial-return-plus-sync workaround, all-virtual boundary).
+TS=0 partial-return-plus-sync workaround, all-virtual boundary, stray-balance JIT
+capture — see W22 below).
+
+## W22 — Stray-balance capture via permissionless first-activation (accepted design consequence, Informational)
+
+**Reported by:** deviykee (Oct 2026). **Status:** accepted design consequence of the
+January 2026 zero-supply-DOS fix, severity **Informational**, no code change, no
+payout. The report is **not a duplicate** of the old "externally transferred assets
+are lost for the sender" wording — that wording described the pre-January-2026
+behavior and is now **superseded** for allowlisted tokens by the DOS fix (see
+[ZERO_SUPPLY_DOS_VULNERABILITY.md](./ZERO_SUPPLY_DOS_VULNERABILITY.md)). The only
+action item is the documentation correction below.
+
+### Behavior
+
+When `ECrosschain.donate` activates a token that was **not previously tracked**
+(`previouslyActive == false`) and the pool holds a **pre-existing balance** of that
+token (externally transferred, never accounted), the first-activation validation
+adds the full pre-existing balance into the expected NAV
+(`ECrosschain.sol:147-153`, `tokenAmount += storedBalance`), but **no offsetting
+virtual supply is written for it** — Sync mode writes no VS at all
+(`ECrosschain.sol:97-102`), and even Transfer mode writes VS only for the
+bridge-expected `amount`, not for `storedBalance` (`ECrosschain.sol:97-99`).
+
+The result: unitary value jumps by `strayValue / effectiveSupply` at activation.
+A JIT minter who minted base while the stray was still invisible to NAV holds
+shares priced at the old unitary value and can burn them after `minPeriod` into
+the newly activated token, capturing the stray. `NavDecreased` (the interleaving
+guard, `ECrosschain.sol:171`) does not block this — it only blocks unitary-value
+_decreases_, and the activation is an increase.
+
+`donate` is permissionless **by design** (`ECrosschain.sol:23` — "anyone with
+tokens to donate"), so no privilege is needed. The donate transient lock requires
+the two-step sequence (`donate(token, 1, Sync)` snapshot → transfer delta →
+`donate(token, delta, Sync)`) to execute **atomically in one transaction**.
+
+### Why this is not a vulnerability
+
+1. **The captured value is a balance the protocol already treats as lost or
+   donated.** Before the January 2026 zero-supply-DOS fix, a donation activating a
+   pre-funded token **reverted** (`NavManipulationDetected`), so stray allowlisted
+   balances could never enter NAV via `donate`. The DOS fix deliberately changed
+   this so legitimate Across fills to pre-funded pools succeed. The side effect —
+   stray value entering NAV with no offsetting VS — is the **intended price of that
+   fix**, not an unintended bug. Capturing it is capturing a donation, not stealing
+   accounted user deposits.
+
+2. **No accounted principal is at risk.** The control test (`WETH accounted via
+`mintWithToken`` before activation) shows the attacker captures **zero** — the
+   entry path that issues shares against the real asset value is unaffected.
+
+3. **If the attacker is the only holder and the stray sender, there is no external
+   damage.** He is recovering his own externally transferred balance (minus the
+   `minPeriod` lock and spread). If there are existing LPs, the attacker captures a
+   share of the stray that would otherwise have uplifted all LPs on organic
+   activation — a redistribution of the donation, not a loss of principal.
+
+4. **The capital is locked for `minPeriod`** (default 30 days) and the profit is
+   bounded to the stray balance of an allowlisted token on a pool that has not yet
+   activated it. The attack fires once per stray balance per pool.
+
+### Measured behavior (fork test `test_StrayBalance_JitCapture_ViaSyncActivate`)
+
+- **Empty pool, 50 WETH stray:** user mints ~1 ETH of base while the stray is
+  invisible (`u == 1e6`, asserted); one-tx donate sequence activates WETH;
+  `u` jumps to ~51,050,050 (50× supply, asserted); after `minPeriod` the user
+  burns and captures **~49.95 of 50 WETH** (asserted > 45 WETH).
+- **Existing 1 ETH LP + user mints 1 ETH + 20 WETH stray:** user captures
+  **~50% of the stray** — exactly his share of supply; the existing LP's
+  principal is untouched (share count asserted unchanged) and his claim also rises.
+- **Control (WETH accounted via `mintWithToken` before activation):** user
+  captures **0** WETH (asserted) — accounted principal is not affected.
+
+These numbers confirm the mechanism but do not change the severity: the captured
+value is a balance already treated as lost/donated.
+
+### Candidate design changes (not scheduled)
+
+The following options were considered and rejected for the current train because
+the current behavior is accepted:
+
+1. **NAV-neutral activation:** on first activation, write `+VS` for the
+   pre-existing balance's share value in **both** modes. This would prevent the
+   unitary-value jump and the JIT capture, but it strands the value as positive
+   VS — a different accepted residual class. Only relevant if the protocol later
+   decides to treat stray balances as communal surplus rather than capturable
+   donations.
+2. **Restore "stay lost" semantics for the pre-existing balance:** count only
+   `amountDelta` toward expected NAV for inactive tokens. This reintroduces the
+   pre-funded-token DOS the January 2026 fix removed — rejected.
+3. **Restrict `donate` caller:** rejected — `donate` is deliberately
+   permissionless, and caller restriction does not prevent the same effect on
+   the operator's or Across's own legitimate activation anyway.
+
+### Disposition
+
+Accepted design consequence, **Informational**, no bounty. Documentation updated
+to replace the outdated "lost for the sender" wording for allowlisted tokens.
+No contract change is required. The behavior is bounded to pre-existing balances
+of allowlisted tokens and is the intended result of the zero-supply-DOS fix.
+
+## W23 — Sentinel unitary value during non-positive NAV (accepted limitation, Informational)
+
+**Reported by:** anonymous (Oct 2026). **Status:** accepted limitation, severity
+**Informational**, no code change, no payout. The behavior is a deliberate
+sentinel design choice; the three division paths are only reachable when the pool
+is already in a non-positive NAV state (effectively insolvent).
+
+### Shared root
+
+`MixinPoolValue.sol:70-77` stores `unitaryValue = 1` whenever `netTotalValue` is
+not greater than `0` while effective supply is outstanding. This is intentional
+**burn-side protection**: it prevents holders from draining the pool at a stale
+or zero unitary value during an insolvency event. The same block also clamps a
+dust-positive unitary value back to `1` (`MixinPoolValue.sol:80-84`).
+
+A non-positive NAV episode can in principle arise from an underwater Hyperliquid
+perp position: `HyperliquidLib.sol:32-56` casts the signed precompile
+`accountValue` into the NAV sum unclamped, so if the perp loss exceeds the spot
+cash offset, `netTotalValue` becomes non-positive. No owner action is required
+beyond the market mark moving.
+
+### Three affected paths
+
+While the sentinel is stored, any operation that divides a value by
+`unitaryValue` (or by the transient `storedNav`) scales the result by
+`10^decimals` instead of by the fair share fraction:
+
+1. **Mint (`MixinActions.sol:175`).** `mintedAmount = amountIn * 10^decimals /
+unitaryValue`. At sentinel `1` the minter receives `amountIn * 10^decimals`
+   shares. If the NAV later recovers, the minter burns those shares and captures
+   value from the pre-existing holders.
+2. **Across source debit (`AIntents.sol:253`).** `burntAmount = outputValueInBase
+   - 10^decimals / unitaryValue`. A routine outbound Transfer writes a negative
+virtual supply of `outputValue * 10^decimals`, which can pin effective supply
+at the `validateSupply` floor (`NavImpactLib`) and lock the burn tail.
+3. **Destination credit (`ECrosschain.sol:128`).** `mintedAmount =
+amountValueInBase * 10^decimals / storedNav`. An inbound fill writes a phantom
+   positive virtual supply of `amount * 10^decimals`, deflating the unitary value
+   when the mark later recovers.
+
+The researcher provided local Foundry PoCs confirming all three effects at the
+pinned commit.
+
+### Why this is not a rewardable finding
+
+- **The precondition is insolvency, not a normal operating state.** A pool with
+  `netTotalValue <= 0` has no positive net asset value per share. The sentinel is
+  the protocol's chosen behavior for that state. Operations that price against it
+  are only corrupt in the same sense that arithmetic on an insolvent balance sheet
+  is ill-defined.
+- **No deployed pool is currently affected.** The researcher checked all 12
+  registered Arbitrum pools and found none with `unitaryValue == 1` and supply
+  outstanding.
+- **The Hyperliquid path is a black-swan liquidation failure.** Reaching
+  `accountValue < 0` requires the perp position to be underwater beyond the spot
+  cash offset after Hyperliquid's auto-liquidation mechanism has run. This is not
+  a routine market move.
+- **No current user funds are at risk, and no immediate exploit exists.** The
+  mint attack additionally requires the attacker to mint _during_ the sentinel
+  window and for the NAV to recover afterwards — a recovery-from-insolvency
+  scenario, not a present exploit.
+
+### Disposition
+
+Accepted limitation, **Informational**, no bounty. No contract change is
+required. The external Known Issues wording should reflect that the sentinel is
+an insolvency handler and that pricing operations during `unitaryValue == 1` are
+not guaranteed to be fair. If the protocol later wants to harden this surface, a
+cheap guard is to revert (or skip the VS/share write) in mint, source-debit, and
+destination-credit paths when `unitaryValue == 1` or `netTotalValue <= 0`.
+
+### Possible future hardening (not scheduled)
+
+- **Mint:** revert if `unitaryValue == 1` or `netTotalValue <= 0` before issuing
+  shares; or price against the last positive stored unitary value.
+- **Source debit:** revert the Transfer initiation if the chain is at sentinel,
+  preventing a `10^decimals`-scaled negative VS write.
+- **Destination credit:** skip the VS write or price it against the last positive
+  stored unitary value while at sentinel.
+
+Any such change must preserve the burn-side sentinel behavior, because that is
+what protects remaining holders from being drained at stale NAV during
+insolvency.
