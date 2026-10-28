@@ -389,12 +389,12 @@
     zod "^3.23.8"
 
 "@nomicfoundation/hardhat-foundry@^3.0.4":
-  version "3.0.4"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-foundry/-/hardhat-foundry-3.0.4.tgz#d950d91d26b8c9214e83b3c5ae71179d529f1078"
-  integrity sha512-+8jZUIgQ+frC8XFCafERiqRj5Za0SoIv/jSHKUYTs0SMnpNhx0Mit0n49L6Y+OUiX4349ZsmI1vj89Nk/jsVRg==
+  version "3.0.5"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-foundry/-/hardhat-foundry-3.0.5.tgz#fc90aa79b3dbd70e68340c96f94b8017343ad6a9"
+  integrity sha512-I+B/CvSA6HwspGOO80qYGZk4QVGA1zM0Y2N+Z1sKUlsoKU0T2/IZmBycU5+1k91KQsFwN0cix1P1sAwMYvG1Ag==
   dependencies:
     "@nomicfoundation/hardhat-errors" "^3.0.15"
-    "@nomicfoundation/hardhat-utils" "^4.1.2"
+    "@nomicfoundation/hardhat-utils" "^5.0.0"
 
 "@nomicfoundation/hardhat-mocha@^3.1.0":
   version "3.1.0"
