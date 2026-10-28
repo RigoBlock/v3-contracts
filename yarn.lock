@@ -733,13 +733,13 @@
     viem "^2.55.13"
 
 "@rocketh/signer@^0.19.15":
-  version "0.19.15"
-  resolved "https://registry.yarnpkg.com/@rocketh/signer/-/signer-0.19.15.tgz#e97c2be21fcd1f9f5c8a6ff54e21bc02164c1148"
-  integrity sha512-/1+KEnop/V4HkZGMVd3iGYB84vKAvntyhgNrtyP8W2lxxE29zk6i+pDTqjeXUM75x0o7mRMO3q643PfP2ugxSQ==
+  version "0.19.19"
+  resolved "https://registry.yarnpkg.com/@rocketh/signer/-/signer-0.19.19.tgz#209b62cdef7c2f6be6d6035f09c07df535709f3f"
+  integrity sha512-Ltm5bzaCuj6pwr0HkZWaN+SjwK1TMF0HTAwc653clA+TRijzVAgAVXcuJlBCJMJk/5PD+lwOy+uwUiIUG6d2KQ==
   dependencies:
-    "@rocketh/core" "0.21.0"
+    "@rocketh/core" "0.23.1"
     eip-1193 "^0.6.5"
-    eip-1193-signer "^0.1.1"
+    eip-1193-signer "^0.2.0"
 
 "@rtsao/scc@^1.1.0":
   version "1.1.0"
@@ -1791,10 +1791,10 @@ eip-1193-jsonrpc-provider@^0.4.3:
     named-logs "^0.3.2"
     promise-throttle "^1.1.2"
 
-eip-1193-signer@^0.1.1:
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/eip-1193-signer/-/eip-1193-signer-0.1.1.tgz#85648a2c9a6c3b9a64a50aa349c7744e1f3ed3c4"
-  integrity sha512-dEMgcibZnOccQDDQ5zA6hVvDSNCce7tfzu/E08cCd3fBhcX7Sh8P83YJKfd7f0XNUXJBQ0aJSO31eZ5Cic/Qpg==
+eip-1193-signer@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/eip-1193-signer/-/eip-1193-signer-0.2.0.tgz#1fee71ef889889f6f3182d4e0be3469c24b4c530"
+  integrity sha512-lmJqJKww4eHVNBhY91cpnePX+nJPE5cuzgA5LDhzdkqqXCcTGysH4MLk7OEcKzgudvI3IpEJhtQIi/L71dOLGA==
   dependencies:
     viem "^2.23.12"
 
