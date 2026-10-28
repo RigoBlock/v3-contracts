@@ -181,6 +181,18 @@ originator; the destination burned to TS = 0, assets = 0; full-WETH Transfer out
 reverts, do not retry the full amount — see the confirmed workaround below. With any
 TS > 0 the return leg has proportional slack and completes.
 
+**Root cause (why the mismatch exists at all):** the spec's formulas are integer
+operations — mint writes `floor(V·10^d/u)`, burn writes `floor(V·10^d/u)`, NAV is
+`floor(NV·10^d/ES)` — and claims are re-derived from value ÷ price at every leg
+rather than tracked as ledger entries. Composition of independently rounded
+re-derivations does not cancel: worked example with test values (+10% move,
+M = 761,105,872,903 shares minted): the oracle truncates the returned value
+(`…193.3 → …193`), the NAV update floors `u_B` to 1,099,999 instead of 1,100,000,
+and the burn against that one-unit-low price lands 691,914 shares ABOVE the
+outstanding VS — 0.00009% of supply, economically nothing, fatal only because the
+TS = 0 tolerance is zero. At zero performance every intermediate is bit-identical
+and all divisions are exact, which is why the control unwinds perfectly.
+
 **Operator workaround (confirmed in `test_TsZeroTrap_PartialReturnPlusSync`, works
 today, no code change):** initiate a PARTIAL return sized to burn exactly the
 outstanding VS, then Sync out the dust. Sizing is deterministic same-block: binary-
@@ -254,6 +266,32 @@ Effect: the TS = 0 return burns `min(computed, outstanding)` → VS = 0, leg com
 funds return — the on-chain equivalent of the confirmed workaround, sub-unit
 conservative on the booking. `validateSupply` still runs after the write and still
 guards every TS > 0 path unchanged.
+
+**Alternative fix design (root cause — candidate for the same session):** compute the
+burn directly against total assets instead of through the floored unitary value:
+
+```solidity
+// sharesLeaving = value / netTotalValue * effectiveSupply  (single division)
+int256 effectiveSupply = int256(totalSupply) + VirtualStorageLib.getVirtualSupply();
+int256 burntAmount = int256(outputValueInBase) * effectiveSupply / int256(navParams.netTotalValue);
+```
+
+Why this eliminates the trap rather than guarding it: the current form divides by
+`floor(NV·10^d/ES)` — an intermediary rounded DOWN, which inflates the quotient —
+while the direct form rounds once, downward, so `burnt = floor(V·ES/NV) ≤ V·ES/NV ≤
+ES` by construction: the burn can never exceed the effective supply, hence at TS = 0
+can never make VS negative, with no special-case gate at all. On the full return
+(where the returned value IS the chain's assets, V = NV) it is exact to the unit:
+`floor(V·M/V) = M` — the TS = 0 unwind lands on VS = 0 by arithmetic, not by clamp.
+Verified by exhaustive property check: `floor(V·ES/NV) ≤ ES` holds for all
+V ≤ NV (200k random cases), and the full-return case is exact in all of them.
+Trade-offs vs the clamp: it deviates from the codebase-wide convention of pricing
+every operation at `unitaryValue` (mints, burns, donations included); it needs the
+ES read and an NV = 0 guard (sentinel path); and its drift direction becomes
+strictly conservative (burns a sub-unit fewer shares, leaving ≤1 share of dust
+positive VS instead of occasionally reverting). Session decision: pick ONE of
+clamp (minimal diff, guards the symptom) or direct-ratio (removes the double-floor,
+slightly wider diff) — do not ship both.
 
 **Review checklist for the fix session (why this is a separate, careful change):**
 
