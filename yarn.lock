@@ -705,11 +705,11 @@
     viem "^2.55.13"
 
 "@rocketh/node@^0.21.0":
-  version "0.21.0"
-  resolved "https://registry.yarnpkg.com/@rocketh/node/-/node-0.21.0.tgz#6add4d4012081fd24eb6f5caa14d5801e170687e"
-  integrity sha512-PDyRZNqlcleh/6pNhyGI9qp8byWlpwPLwhThQNscqTLyAN7gN/1JThlPseJVlSH7V1mUS3H+WlJoSL0h7P49PA==
+  version "0.21.1"
+  resolved "https://registry.yarnpkg.com/@rocketh/node/-/node-0.21.1.tgz#2f4ffeaef8f15a4fec7892fbfc08f87d00ffe53d"
+  integrity sha512-PJeuVurzDxVxxsIX+uZmiCofgBG6dK+9XSboVlF2JeX+zlK0zvjPn/YdsJcbDKJX334yRZUrMMY0Ry+nse0ssg==
   dependencies:
-    "@rocketh/core" "0.21.0"
+    "@rocketh/core" "0.22.0"
     "@types/prompts" "^2.4.9"
     change-case "^5.4.4"
     commander "^15.0.0"
