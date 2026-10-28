@@ -1,0 +1,568 @@
+diff --git a/test/extensions/AIntentsRealFork.t.sol b/test/extensions/AIntentsRealFork.t.sol
+index 0ee4caae..56e82fad 100644
+--- a/test/extensions/AIntentsRealFork.t.sol
++++ b/test/extensions/AIntentsRealFork.t.sol
+@@ -29,6 +29,13 @@ import {NavImpactLib} from "../../contracts/protocol/libraries/NavImpactLib.sol"
+ import {CrosschainTokens} from "../../contracts/protocol/types/CrosschainTokens.sol";
+ import {NetAssetsValue} from "../../contracts/protocol/types/NavComponents.sol";
+ 
++// Wave2 PoC (delta.md §2): oracle observe() mocking for the price move (same technique as
++// AIntentsPerformanceAttributionAnalysis.t.sol test_MockObserveForPriceChange).
++import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
++import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
++import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
++import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
++
+ /// @notice Interface for Across MulticallHandler contract
+ /// @dev This matches the actual Across Protocol MulticallHandler interface
+ interface IMulticallHandler {
+@@ -37,6 +44,32 @@ interface IMulticallHandler {
+     function drainLeftoverTokens(address token, address payable destination) external;
+ }
+ 
++/// @notice Minimal BackGeoOracle interface for PoC price mocking (wave2 delta §2).
++/// @dev PoolKey layout matches EOracle's internal IOracle key: (native=address(0), token, fee 0,
++///      MAX_TICK_SPACING, hooks = the oracle hook). ABI-identical to the hook's observe().
++interface IPoCBackGeoOracle {
++    struct PoolKey {
++        Currency currency0;
++        Currency currency1;
++        uint24 fee;
++        int24 tickSpacing;
++        IHooks hooks;
++    }
++
++    struct ObservationState {
++        uint16 index;
++        uint16 cardinality;
++        uint16 cardinalityNext;
++    }
++
++    function observe(
++        PoolKey calldata key,
++        uint32[] calldata secondsAgos
++    ) external view returns (int56[] memory tickCumulatives, uint160[] memory secondsPerLiquidityCumulativeX128s);
++
++    function getState(PoolKey calldata key) external view returns (ObservationState memory);
++}
++
+ /// @title AIntentsRealFork - Comprehensive tests for AIntents using RealDeploymentFixture
+ /// @notice Tests AIntents functionality with real smart pools instead of mocks
+ /// @dev Covers functionality previously tested in Across.spec.ts TypeScript tests
+@@ -3981,4 +4014,516 @@ contract AIntentsRealForkTest is Test, RealDeploymentFixture {
+             "NAV increase must be bounded by net donation / total supply, not gross transfer"
+         );
+     }
++
++    /*//////////////////////////////////////////////////////////////////////////
++        WAVE2 PoC — TRANSFER-MODE ROUND-TRIP VALUE CONSERVATION (delta.md §2)
++        Reference sim: ~/.hermes/cache/scratch/vs_roundtrip_sim.py
++        Scenario: src pool (10x moved value) sends its whole WETH position to a dst
++        pool (5x moved value) in Transfer mode; the token then gains ~10%; the whole
++        position returns in Transfer mode. The two legs price the same position at
++        different oracle states, leaving unowned VS residuals:
++          - dst ends with negative VS -> unburnable tail + phantom local claim
++          - src ends with positive VS -> stranded gain, uv pinned at 1.0
++    //////////////////////////////////////////////////////////////////////////*/
++
++    struct RoundTripObs {
++        uint256 wSend; // WETH amount moved (18 dec)
++        uint256 vSend; // its USDC value at departure (6 dec)
++        uint256 srcTsPre;
++        uint256 srcUvPre;
++        uint256 srcClaimPre;
++        uint256 dstTsPre;
++        uint256 dstUvPre;
++        int256 srcVsAfterOut;
++        int256 dstVsAfterIn;
++        uint256 dstTsAfterIn;
++        uint256 dstUvAfterIn;
++        uint256 dstUvAfterMove;
++        uint256 dstTvAfterMove;
++        int256 dstVsFinal;
++        uint256 dstTsFinal;
++        uint256 dstUvFinal;
++        uint256 dstBalFinal;
++        uint256 dstClaimFinal;
++        uint256 dstUserBalPreBurn;
++        uint256 dstTailBound;
++        bool dstAboveMaxReverted;
++        bytes4 dstAboveMaxErr;
++        bool dstMaxBurnOk;
++        uint256 dstMaxBurnNet;
++        uint256 dstUserBalAfterMax;
++        bool dstTailBurnReverted;
++        bytes4 dstTailBurnErr;
++        int256 srcVsFinal;
++        uint256 srcTsFinal;
++        uint256 srcUvFinal;
++        uint256 srcTvFinal;
++        uint256 srcClaimFinal;
++        bool srcBurnOk;
++        uint256 srcBurnShares;
++        uint256 srcBurnNet;
++        uint256 srcBurnGross;
++    }
++
++    /// @notice Runs the full Transfer-mode round trip (Ethereum -> Base -> Ethereum) with
++    ///         pools sized 10x/5x of the moved value, and optionally a +~10% price move.
++    /// @param withPriceMove Mock the BackGeoOracle on both forks to appreciate the moved
++    ///        token ~+10% vs the base token while the position sits on the destination.
++    function _pocRoundTrip(bool withPriceMove) internal returns (RoundTripObs memory o) {
++        address srcPool = ethereum.pool;
++        address dstPool = base.pool;
++        console2.log("[poc] price move enabled:", withPriceMove);
++
++        // --- build source pool: TV ~ 10x position value, uv = 1.0 ------------------
++        vm.selectFork(mainnetForkId);
++        {
++            int256 perEth = IEOracle(srcPool).convertTokenAmount(Constants.ETH_WETH, int256(1e18), Constants.ETH_USDC);
++            require(perEth > 0, "no WETH price feed");
++            uint256 x = (1_000_000e6 * 1e18) / uint256(perEth);
++            deal(Constants.ETH_WETH, poolOwner, x + 1e18);
++            vm.startPrank(poolOwner);
++            IERC20(Constants.ETH_WETH).approve(srcPool, type(uint256).max);
++            ISmartPoolOwnerActions(srcPool).setAcceptableMintToken(Constants.ETH_WETH, true);
++            ISmartPoolActions(srcPool).mintWithToken(poolOwner, x, 0, Constants.ETH_WETH);
++            vm.stopPrank();
++        }
++        {
++            o.wSend = IERC20(Constants.ETH_WETH).balanceOf(srcPool);
++            o.vSend = uint256(
++                IEOracle(srcPool).convertTokenAmount(Constants.ETH_WETH, int256(o.wSend), Constants.ETH_USDC)
++            );
++            uint256 usdcBal = IERC20(Constants.ETH_USDC).balanceOf(srcPool);
++            uint256 target = 10 * o.vSend;
++            uint256 extra = target > usdcBal + o.vSend ? target - usdcBal - o.vSend : 0;
++            uint256 mintAmt = (extra * 10_000) / 9_990 + 1; // default spread is 10 bps
++            deal(Constants.ETH_USDC, user, mintAmt + 1e12);
++            vm.startPrank(user);
++            IERC20(Constants.ETH_USDC).approve(srcPool, type(uint256).max);
++            ISmartPoolActions(srcPool).mint(user, mintAmt, 0);
++            vm.stopPrank();
++        }
++        {
++            ISmartPoolActions(srcPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory t = ISmartPoolState(srcPool).getPoolTokens();
++            o.srcTsPre = t.totalSupply;
++            o.srcUvPre = t.unitaryValue;
++            o.srcClaimPre = (uint256(t.totalSupply) * t.unitaryValue) / 1e6;
++            console2.log("[poc] src built. WETH position value (USDC):", o.vSend / 1e6);
++            console2.log("[poc] src TS pre (USDC):", o.srcTsPre / 1e6);
++            console2.log("[poc] src uv pre:", o.srcUvPre);
++        }
++
++        // --- build destination pool: TV ~ 5x position value ------------------------
++        vm.selectFork(baseForkId);
++        {
++            // size by the DESTINATION chain's own oracle valuation of the same position so
++            // the moved fraction k = v / TS ~= 0.2 exactly as in the reference sim
++            uint256 vSendDst = uint256(
++                IEOracle(dstPool).convertTokenAmount(Constants.BASE_WETH, int256(o.wSend), Constants.BASE_USDC)
++            );
++            console2.log("[poc] moved position value on dst oracle (USDC):", vSendDst / 1e6);
++            uint256 usdcBalD = IERC20(Constants.BASE_USDC).balanceOf(dstPool);
++            uint256 target = 5 * vSendDst;
++            uint256 extra = target > usdcBalD ? target - usdcBalD : 0;
++            uint256 mintAmt = (extra * 10_000) / 9_990 + 1;
++            deal(Constants.BASE_USDC, user, mintAmt + 1e12);
++            vm.startPrank(user);
++            IERC20(Constants.BASE_USDC).approve(dstPool, type(uint256).max);
++            ISmartPoolActions(dstPool).mint(user, mintAmt, 0);
++            vm.stopPrank();
++        }
++        {
++            ISmartPoolActions(dstPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory td = ISmartPoolState(dstPool).getPoolTokens();
++            o.dstTsPre = td.totalSupply;
++            o.dstUvPre = td.unitaryValue;
++            console2.log("[poc] dst TS pre (USDC):", o.dstTsPre / 1e6);
++            console2.log("[poc] dst uv pre:", o.dstUvPre);
++        }
++
++        // --- leg 1: source outbound (Transfer, whole position) ---------------------
++        vm.selectFork(mainnetForkId);
++        {
++            IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
++                depositor: poolOwner,
++                recipient: dstPool,
++                inputToken: Constants.ETH_WETH,
++                outputToken: Constants.BASE_WETH,
++                inputAmount: o.wSend,
++                outputAmount: o.wSend,
++                destinationChainId: Constants.BASE_CHAIN_ID,
++                exclusiveRelayer: address(0),
++                quoteTimestamp: uint32(block.timestamp),
++                fillDeadline: uint32(block.timestamp + 1 hours),
++                exclusivityDeadline: 0,
++                message: abi.encode(
++                    SourceMessageParams({
++                        opType: OpType.Transfer,
++                        navTolerance: TOLERANCE_BPS,
++                        shouldUnwrapOnDestination: false,
++                        sourceNativeAmount: 0
++                    })
++                )
++            });
++            vm.prank(poolOwner);
++            IAIntents(srcPool).depositV3(params);
++            o.srcVsAfterOut = int256(uint256(vm.load(srcPool, virtualSupplySlot)));
++            console2.log("[poc] leg1 src -VS (USDC):", -o.srcVsAfterOut / 1e6);
++        }
++
++        // --- leg 2: destination inbound via the real Across MulticallHandler -------
++        vm.selectFork(baseForkId);
++        {
++            SourceMessageParams memory sm = SourceMessageParams({
++                opType: OpType.Transfer,
++                navTolerance: TOLERANCE_BPS,
++                shouldUnwrapOnDestination: false,
++                sourceNativeAmount: 0
++            });
++            Instructions memory ins = buildTestInstructions(Constants.BASE_WETH, dstPool, o.wSend, sm);
++            deal(Constants.BASE_WETH, ethMulticallHandler, o.wSend);
++            vm.prank(user);
++            IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
++                Constants.BASE_WETH,
++                o.wSend,
++                user,
++                abi.encode(ins)
++            );
++            ISmartPoolActions(dstPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory td = ISmartPoolState(dstPool).getPoolTokens();
++            o.dstVsAfterIn = int256(uint256(vm.load(dstPool, virtualSupplySlot)));
++            o.dstTsAfterIn = td.totalSupply;
++            o.dstUvAfterIn = td.unitaryValue;
++            console2.log("[poc] leg2 dst +VS (USDC):", o.dstVsAfterIn / 1e6);
++            console2.log("[poc] dst uv after arrival:", o.dstUvAfterIn);
++        }
++
++        // --- price move: moved token ~ +10% vs base token --------------------------
++        if (withPriceMove) {
++            _pocApplyPriceMove(dstPool, Constants.BASE_ORACLE, Constants.BASE_WETH, Constants.BASE_USDC);
++        }
++        {
++            ISmartPoolActions(dstPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory td = ISmartPoolState(dstPool).getPoolTokens();
++            o.dstUvAfterMove = td.unitaryValue;
++            o.dstTvAfterMove =
++                (uint256(td.totalSupply) + uint256(int256(uint256(vm.load(dstPool, virtualSupplySlot))))) *
++                td.unitaryValue /
++                1e6;
++            console2.log("[poc] dst uv after move:", o.dstUvAfterMove);
++            console2.log("[poc] dst TV after move (USDC):", o.dstTvAfterMove / 1e6);
++        }
++
++        // --- leg 3: destination outbound (return whole position) -------------------
++        uint256 wBack = IERC20(Constants.BASE_WETH).balanceOf(dstPool);
++        {
++            IAIntents.AcrossParams memory params = IAIntents.AcrossParams({
++                depositor: poolOwner,
++                recipient: srcPool,
++                inputToken: Constants.BASE_WETH,
++                outputToken: Constants.ETH_WETH,
++                inputAmount: wBack,
++                outputAmount: wBack,
++                destinationChainId: Constants.ETHEREUM_CHAIN_ID,
++                exclusiveRelayer: address(0),
++                quoteTimestamp: uint32(block.timestamp),
++                fillDeadline: uint32(block.timestamp + 1 hours),
++                exclusivityDeadline: 0,
++                message: abi.encode(
++                    SourceMessageParams({
++                        opType: OpType.Transfer,
++                        navTolerance: TOLERANCE_BPS,
++                        shouldUnwrapOnDestination: false,
++                        sourceNativeAmount: 0
++                    })
++                )
++            });
++            vm.prank(poolOwner);
++            IAIntents(dstPool).depositV3(params);
++            console2.log("[poc] leg3 dst return done");
++        }
++
++        // --- leg 4: source inbound via the real Across MulticallHandler ------------
++        vm.selectFork(mainnetForkId);
++        if (withPriceMove) {
++            _pocApplyPriceMove(srcPool, Constants.ORACLE, Constants.ETH_WETH, Constants.ETH_USDC);
++        }
++        {
++            SourceMessageParams memory sm = SourceMessageParams({
++                opType: OpType.Transfer,
++                navTolerance: TOLERANCE_BPS,
++                shouldUnwrapOnDestination: false,
++                sourceNativeAmount: 0
++            });
++            Instructions memory ins = buildTestInstructions(Constants.ETH_WETH, srcPool, wBack, sm);
++            deal(Constants.ETH_WETH, ethMulticallHandler, wBack);
++            vm.prank(user);
++            IMulticallHandler(ethMulticallHandler).handleV3AcrossMessage(
++                Constants.ETH_WETH,
++                wBack,
++                user,
++                abi.encode(ins)
++            );
++            ISmartPoolActions(srcPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory t = ISmartPoolState(srcPool).getPoolTokens();
++            o.srcVsFinal = int256(uint256(vm.load(srcPool, virtualSupplySlot)));
++            o.srcTsFinal = t.totalSupply;
++            o.srcUvFinal = t.unitaryValue;
++            o.srcTvFinal = (uint256(t.totalSupply) + uint256(o.srcVsFinal)) * t.unitaryValue / 1e6;
++            o.srcClaimFinal = (uint256(t.totalSupply) * t.unitaryValue) / 1e6;
++            console2.log("[poc] leg4 src VS final (USDC):", o.srcVsFinal / 1e6);
++            console2.log("[poc] src uv final:", o.srcUvFinal);
++        }
++
++        // --- dst burn PoC: max burnable vs unburnable tail -------------------------
++        vm.selectFork(baseForkId);
++        vm.warp(block.timestamp + 31 days); // clear the default 30-day minPeriod activation
++        {
++            ISmartPoolActions(dstPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory td = ISmartPoolState(dstPool).getPoolTokens();
++            o.dstTsFinal = td.totalSupply;
++            o.dstUvFinal = td.unitaryValue;
++            o.dstBalFinal = IERC20(Constants.BASE_USDC).balanceOf(dstPool);
++            o.dstClaimFinal = (uint256(td.totalSupply) * td.unitaryValue) / 1e6;
++            o.dstVsFinal = int256(uint256(vm.load(dstPool, virtualSupplySlot)));
++            o.dstUserBalPreBurn = ISmartPoolState(dstPool).getUserAccount(user).userBalance;
++
++            uint256 absVs = uint256(-o.dstVsFinal);
++            uint256 tail = absVs == 0 ? 0 : (absVs * 20 + 18) / 19; // ceil(|VS| * 20 / 19)
++            o.dstTailBound = tail;
++            uint256 maxBurn = o.dstTsFinal - tail;
++
++            if (tail > 0) {
++                // one unit beyond the bound must revert (raw revert captured) - probe on a snapshot
++                uint256 snap = vm.snapshotState();
++                vm.prank(user);
++                try ISmartPoolActions(dstPool).burn(maxBurn + 1, 0) returns (uint256) {
++                    o.dstAboveMaxReverted = false;
++                } catch (bytes memory err) {
++                    o.dstAboveMaxReverted = true;
++                    o.dstAboveMaxErr = bytes4(err);
++                }
++                vm.revertToState(snap);
++            }
++            // the bound itself must burn
++            vm.prank(user);
++            try ISmartPoolActions(dstPool).burn(maxBurn, 0) returns (uint256 netRev) {
++                o.dstMaxBurnOk = true;
++                o.dstMaxBurnNet = netRev;
++            } catch (bytes memory err) {
++                o.dstMaxBurnOk = false;
++                console2.log("[poc] maxBurn call failed:");
++                console2.logBytes(err);
++            }
++            o.dstUserBalAfterMax = ISmartPoolState(dstPool).getUserAccount(user).userBalance;
++            // nothing may burn anymore: any residual burn attempt must revert
++            uint256 probe = o.dstUserBalAfterMax > 1_000e6 ? 1_000e6 : o.dstUserBalAfterMax;
++            if (probe > 0) {
++                vm.prank(user);
++                try ISmartPoolActions(dstPool).burn(probe, 0) returns (uint256) {
++                    o.dstTailBurnReverted = false;
++                } catch (bytes memory err) {
++                    o.dstTailBurnReverted = true;
++                    o.dstTailBurnErr = bytes4(err);
++                }
++            }
++        }
++
++        // --- src burn PoC: the stranded +VS is not redeemable by holders -----------
++        vm.selectFork(mainnetForkId);
++        vm.warp(block.timestamp + 31 days);
++        {
++            ISmartPoolActions(srcPool).updateUnitaryValue();
++            ISmartPoolState.PoolTokens memory t = ISmartPoolState(srcPool).getPoolTokens();
++            uint256 shares = 1_000e6; // $1,000 of shares
++            o.srcBurnShares = shares;
++            o.srcBurnGross = (shares * t.unitaryValue) / 1e6;
++            vm.prank(user);
++            try ISmartPoolActions(srcPool).burn(shares, 0) returns (uint256 netRev) {
++                o.srcBurnOk = true;
++                o.srcBurnNet = netRev;
++            } catch (bytes memory err) {
++                o.srcBurnOk = false;
++                console2.log("[poc] src burn failed:");
++                console2.logBytes(err);
++            }
++        }
++
++        return o;
++    }
++
++    /// @notice PoC: Transfer-mode round trip WITH a +10% price move. The destination ends
++    ///         with a negative VS residual (phantom claim + unburnable tail) and the source
++    ///         keeps a stranded positive VS residual at uv = 1.0.
++    function test_PoC_RoundTrip_Transfer_PriceMove_Residuals() public {
++        console2.log("\n===== PoC: Transfer-mode round trip with +10% price move =====");
++        RoundTripObs memory o = _pocRoundTrip(true);
++
++        vm.selectFork(baseForkId);
++        console2.log("\n--- destination (Base) after round trip ---");
++        console2.log("dst VS final (USDC):", o.dstVsFinal / 1e6);
++        console2.log("dst TS final (USDC):", o.dstTsFinal / 1e6);
++        console2.log("dst uv final:", o.dstUvFinal);
++        console2.log("dst USDC balance final (USDC):", o.dstBalFinal / 1e6);
++        console2.log("dst total claim (USDC):", o.dstClaimFinal / 1e6);
++        console2.log("dst phantom NAV (claim - balance, USDC):", (o.dstClaimFinal - o.dstBalFinal) / 1e6);
++        console2.log("dst unburnable tail bound (shares):", o.dstTailBound);
++        console2.log("dst max burnable (shares):", o.dstTsFinal - o.dstTailBound);
++        console2.log("dst max burn payout net (USDC):", o.dstMaxBurnNet / 1e6);
++        console2.log("dst above-max revert selector:");
++        console2.logBytes4(o.dstAboveMaxErr);
++        console2.log("dst tail revert selector:");
++        console2.logBytes4(o.dstTailBurnErr);
++        {
++            uint256 absVs = uint256(-o.dstVsFinal);
++            console2.log("dst |VS| / TS (bps):", (absVs * 10000) / o.dstTsFinal);
++        }
++        console2.log("--- raw values (6-dec base units) ---");
++        console2.log("dst VS final raw:", o.dstVsFinal);
++        console2.log("dst VS after in raw:", o.dstVsAfterIn);
++        console2.log("dst TS raw:", o.dstTsFinal);
++        console2.log("dst uv after in raw:", o.dstUvAfterIn);
++        console2.log("dst uv after move raw:", o.dstUvAfterMove);
++        console2.log("dst uv final raw:", o.dstUvFinal);
++        console2.log("dst claim raw:", o.dstClaimFinal);
++        console2.log("dst balance raw:", o.dstBalFinal);
++        console2.log("dst maxBurn net raw:", o.dstMaxBurnNet);
++        console2.log("src VS final raw:", o.srcVsFinal);
++        console2.log("src TS raw:", o.srcTsFinal);
++        console2.log("src claim raw:", o.srcClaimFinal);
++        console2.log("src claim pre-out raw:", o.srcClaimPre);
++        console2.log("wSend raw (WETH wei):", o.wSend);
++        console2.log("vSend raw (USDC units):", o.vSend);
++
++        assertEq(o.srcVsAfterOut, -int256(o.vSend), "leg1 -VS must equal the departure value");
++        assertLt(o.dstVsFinal, 0, "dst VS must end negative");
++        assertGt(o.dstClaimFinal, o.dstBalFinal, "dst claim must exceed physical balance (phantom)");
++        assertEq(o.dstUserBalPreBurn, o.dstTsFinal, "user must hold the whole supply");
++        assertTrue(o.dstAboveMaxReverted, "burn(maxBurnable+1) must revert");
++        assertEq(o.dstAboveMaxErr, NavImpactLib.EffectiveSupplyTooLow.selector, "different revert above max");
++        assertTrue(o.dstMaxBurnOk, "burn(maxBurnable) must succeed");
++        assertTrue(o.dstTailBurnReverted, "tail burn must revert");
++        assertEq(o.dstTailBurnErr, NavImpactLib.EffectiveSupplyTooLow.selector, "different revert on tail");
++        {
++            uint256 absVs = uint256(-o.dstVsFinal);
++            assertGt(absVs, o.dstTsFinal / 100, "dst residual must exceed 1% of TS");
++            assertLt(absVs, o.dstTsFinal / 40, "dst residual must stay under 2.5% of TS");
++        }
++
++        vm.selectFork(mainnetForkId);
++        console2.log("\n--- source (Ethereum) after round trip ---");
++        console2.log("src VS final (USDC):", o.srcVsFinal / 1e6);
++        console2.log("src uv final:", o.srcUvFinal);
++        console2.log("src TS final (USDC):", o.srcTsFinal / 1e6);
++        console2.log("src claim final (USDC):", o.srcClaimFinal / 1e6);
++        console2.log("src claim pre-out (USDC):", o.srcClaimPre / 1e6);
++        console2.log("src burn gross (USDC):", o.srcBurnGross / 1e6);
++        console2.log("src burn net (USDC):", o.srcBurnNet / 1e6);
++
++        assertGt(o.srcVsFinal, 0, "src VS must end positive (stranded)");
++        assertApproxEqRel(uint256(o.srcVsFinal), o.vSend / 10, 0.05e18, "stranded value not ~10% of moved value");
++        assertApproxEqAbs(o.srcUvFinal, 1e6, 1, "src uv must stay at 1.0");
++        assertApproxEqAbs(o.srcClaimFinal, o.srcClaimPre, 2, "src local claim must be unchanged");
++        assertTrue(o.srcBurnOk, "src burn must succeed");
++        assertApproxEqAbs(o.srcBurnGross, o.srcBurnShares, 2, "burn payout must be at par (uv=1.0)");
++        assertApproxEqAbs(o.srcBurnNet, (o.srcBurnShares * 999) / 1000, 2, "burn net must be par minus spread");
++    }
++
++    /// @notice Control: the same round trip WITHOUT the price move leaves no VS residual
++    ///         on either chain, and the full supply remains burnable.
++    function test_PoC_RoundTrip_NoPriceMove_Control() public {
++        console2.log("\n===== CONTROL: same round trip, no price move =====");
++        RoundTripObs memory o = _pocRoundTrip(false);
++
++        vm.selectFork(baseForkId);
++        console2.log("dst VS final:", o.dstVsFinal);
++        console2.log("dst tail bound:", o.dstTailBound);
++        console2.log("dst full-supply burn ok:", o.dstMaxBurnOk);
++        console2.log("dst VS raw:", o.dstVsFinal);
++        console2.log("dst TS raw:", o.dstTsFinal);
++        console2.log("dst balance raw:", o.dstBalFinal);
++        console2.log("dst maxBurn net raw:", o.dstMaxBurnNet);
++        assertEq(o.dstVsFinal, 0, "control: dst VS residual must be zero");
++        assertEq(o.dstTailBound, 0, "control: no unburnable tail");
++        assertTrue(o.dstMaxBurnOk, "control: full supply must burn");
++
++        vm.selectFork(mainnetForkId);
++        console2.log("src VS final:", o.srcVsFinal);
++        console2.log("src uv final:", o.srcUvFinal);
++        assertEq(o.srcVsFinal, 0, "control: src VS residual must be zero");
++        assertTrue(o.srcBurnOk, "control: src burn must succeed");
++        console2.log("control completed - only rounding-level residuals");
++    }
++
++    /*//////////////////////////////////////////////////////////////////////////
++        PoC HELPERS — oracle observe() mocking (technique from
++        AIntentsPerformanceAttributionAnalysis.t.sol test_MockObserveForPriceChange)
++    //////////////////////////////////////////////////////////////////////////*/
++
++    /// @dev Mirrors EOracle price math for a tick: price = sqrtPriceX96^2 / 2^96, applied to amount.
++    function _pocSimConvert(uint256 amount, int24 tick) internal pure returns (uint256) {
++        uint160 sqrtPriceX96 = TickMath.getSqrtPriceAtTick(tick);
++        uint256 priceX96 = FullMath.mulDiv(uint256(sqrtPriceX96), uint256(sqrtPriceX96), 2 ** 96);
++        return FullMath.mulDiv(amount, priceX96, 2 ** 96);
++    }
++
++    /// @dev Same secondsAgos derivation as EOracle._getSecondsAgos (8 s on mainnet, 1 s elsewhere).
++    function _pocSecondsAgos(uint16 cardinality) internal view returns (uint32[] memory secondsAgos) {
++        require(cardinality > 1, "oracle pool without observations");
++        uint256 blockTime = block.chainid == Constants.ETHEREUM_CHAIN_ID ? 8 : 1;
++        uint256 maxSecondsAgos = uint256(cardinality - 1) * blockTime;
++        secondsAgos = new uint32[](2);
++        secondsAgos[0] = maxSecondsAgos > 300 ? 300 : uint32(maxSecondsAgos);
++        secondsAgos[1] = 0;
++    }
++
++    /// @dev Mocks BackGeoOracle.observe() for the (native, baseToken) pool so the wrapped
++    ///      native token gains ~+10% vs the base token. Verifies the mock landed by comparing
++    ///      convertTokenAmount against the same sqrt-price math EOracle uses.
++    function _pocApplyPriceMove(
++        address samplePool,
++        address oracleHook,
++        address wethToken,
++        address baseToken
++    ) internal returns (uint256 convBefore, uint256 convAfter) {
++        (bytes memory callData, bytes memory returnData) = _pocPriceMoveMock(oracleHook, baseToken);
++        convBefore = uint256(IEOracle(samplePool).convertTokenAmount(wethToken, int256(1e18), baseToken));
++        vm.mockCall(oracleHook, callData, returnData);
++        convAfter = uint256(IEOracle(samplePool).convertTokenAmount(wethToken, int256(1e18), baseToken));
++        require(convAfter != convBefore, "observe() mock did not land");
++        require(convAfter >= (convBefore * 105) / 100 && convAfter <= (convBefore * 115) / 100, "move magnitude off");
++        console2.log("[poc] price move convBefore:", convBefore, "convAfter:", convAfter);
++    }
++
++    /// @dev Builds the (calldata, returndata) pair for a ~+10% WETH-vs-base observe() mock.
++    function _pocPriceMoveMock(
++        address oracleHook,
++        address baseToken
++    ) internal view returns (bytes memory callData, bytes memory returnData) {
++        IPoCBackGeoOracle.PoolKey memory key = IPoCBackGeoOracle.PoolKey({
++            currency0: Currency.wrap(address(0)),
++            currency1: Currency.wrap(baseToken),
++            fee: 0,
++            tickSpacing: TickMath.MAX_TICK_SPACING,
++            hooks: IHooks(oracleHook)
++        });
++        IPoCBackGeoOracle.ObservationState memory st = IPoCBackGeoOracle(oracleHook).getState(key);
++        uint32[] memory secondsAgos = _pocSecondsAgos(st.cardinality);
++        (int56[] memory tc, uint160[] memory liq) = IPoCBackGeoOracle(oracleHook).observe(key, secondsAgos);
++        int24 twap = int24((tc[1] - tc[0]) / int56(int32(secondsAgos[0])));
++
++        // 953 ticks = 1.0001^953 ~= +10.0% on the conversion price (either direction).
++        int24 tUp = twap + 953;
++        int24 tDn = twap - 953;
++        int24 chosen = _pocSimConvert(1e18, tUp) >= _pocSimConvert(1e18, tDn) ? tUp : tDn;
++
++        // observe() must return cumulatives whose implied twap is `chosen`:
++        // twap = (tc[1] - tc[0]) / secondsAgos[0]  =>  mocked tc[0] = tc[1] - chosen * secondsAgos[0]
++        int56[] memory mocked = new int56[](2);
++        mocked[0] = tc[1] - int56(chosen) * int56(uint56(secondsAgos[0]));
++        mocked[1] = tc[1];
++
++        callData = abi.encodeWithSelector(IPoCBackGeoOracle.observe.selector, key, secondsAgos);
++        returnData = abi.encode(mocked, liq);
++    }
+ }

@@ -69,6 +69,7 @@ With VS-only model, both chains share performance proportionally:
 ## Documentation
 
 - **[PERFORMANCE.md](PERFORMANCE.md)** - Performance attribution model and rebalancing guide
+- **[KNOWN_ISSUES.md](KNOWN_ISSUES.md)** - Accepted limitations of the VS model, including the round-trip VS residual (W21)
 - **[IMPLEMENTATION_GUIDE.md](IMPLEMENTATION_GUIDE.md)** - Technical implementation details
 - **[ZERO_SUPPLY_DOS_VULNERABILITY.md](ZERO_SUPPLY_DOS_VULNERABILITY.md)** - Fixed DOS vulnerability analysis (resolved Jan 2026)
 

@@ -1,0 +1,63 @@
+W2-1 (AIntents crosschain round-trip) - deployed-vs-development check + repro environment
+Captured: Tue Oct  6 06:07:48 UTC 2026
+
+## repo HEAD
+b5383216 chore(release): v2.8.1 [skip ci]
+
+## commits touching involved files since 49f45a19 (4.4.4):
+e258b3f0 style: code linting
+f9f0d0ad feat: bump solc from 0.8.28 to 0.8.37 everywhere
+
+## git diff --stat (involved files, 49f45a19..HEAD):
+ contracts/protocol/extensions/ECrosschain.sol       | 2 +-
+ contracts/protocol/extensions/adapters/AIntents.sol | 2 +-
+ contracts/protocol/libraries/NavImpactLib.sol       | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+## full diff (involved files):
+diff --git a/contracts/protocol/extensions/ECrosschain.sol b/contracts/protocol/extensions/ECrosschain.sol
+index 8e2d7af4..a6b517c6 100644
+--- a/contracts/protocol/extensions/ECrosschain.sol
++++ b/contracts/protocol/extensions/ECrosschain.sol
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: Apache-2.0-or-later
+-pragma solidity 0.8.28;
++pragma solidity 0.8.37;
+ 
+ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+ import {IERC20} from "../interfaces/IERC20.sol";
+diff --git a/contracts/protocol/extensions/adapters/AIntents.sol b/contracts/protocol/extensions/adapters/AIntents.sol
+index 3bae989c..4c819bc1 100644
+--- a/contracts/protocol/extensions/adapters/AIntents.sol
++++ b/contracts/protocol/extensions/adapters/AIntents.sol
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: Apache-2.0-or-later
+ // solhint-disable-next-line
+-pragma solidity 0.8.28;
++pragma solidity 0.8.37;
+ 
+ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+ import {IAcrossSpokePool} from "../../interfaces/IAcrossSpokePool.sol";
+diff --git a/contracts/protocol/libraries/NavImpactLib.sol b/contracts/protocol/libraries/NavImpactLib.sol
+index 156d6669..fd3e7fe4 100644
+--- a/contracts/protocol/libraries/NavImpactLib.sol
++++ b/contracts/protocol/libraries/NavImpactLib.sol
+@@ -1,5 +1,5 @@
+ // SPDX-License-Identifier: Apache-2.0-or-later
+-pragma solidity ^0.8.28;
++pragma solidity ^0.8.4;
+ 
+ import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
+ import {ISmartPoolState} from "../interfaces/v4/pool/ISmartPoolState.sol";
+
+## on-chain deployed builds (read-only):
+-- https://ethereum-rpc.publicnode.com
+factory.implementation = 0xb4b97942F176E389E18707C80d52A28BD5A6E857
+"4.4.4"
+-- https://base-rpc.publicnode.com
+factory.implementation = 0xb4b97942F176E389E18707C80d52A28BD5A6E857
+"4.4.4"
+
+## repro (pinned forks; archive RPCs required — publicnode refuses these pins):
+env: MAINNET_RPC_URL=<eth archive> / BASE_MAINNET_RPC_URL=<base archive>; pins: ETH block 26000000, Base block 51700000
+cmd: forge test --match-path test/extensions/AIntentsRealFork.t.sol --match-test "test_PoC_RoundTrip" -vv

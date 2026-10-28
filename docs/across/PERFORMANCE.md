@@ -3,12 +3,19 @@
 ## Overview
 
 The Rigoblock cross-chain system uses **Virtual Supply (VS) only** to maintain NAV integrity during cross-chain transfers. This document explains:
+
 1. How performance is attributed across chains
 2. How to rebalance performance when needed
 
 ## Core Principle
 
 **Performance is shared proportionally**: Both source and destination chains share trading gains/losses based on their effective supply ratios.
+
+This holds **at every point in time for each leg individually**. It does not imply
+round-trip value conservation: a round trip (outbound + return leg) that spans a NAV
+move strands a residual VS on each participating chain. See
+[Known Limitation: Round-Trip VS Residual](#known-limitation-round-trip-vs-residual)
+and [KNOWN_ISSUES.md](./KNOWN_ISSUES.md).
 
 ## Virtual Supply Model
 
@@ -27,12 +34,14 @@ NAV = Total Pool Value / Effective Supply
 ### Transfer Flow Example
 
 **Setup:**
+
 - Pool A on Arbitrum (source chain)
-- Pool B on Optimism (destination chain)  
+- Pool B on Optimism (destination chain)
 - Transfer 1000 USDC from A to B
 - USDC price: $1.00, NAV: $1.00, Total Supply: 10,000 shares
 
 **Source Chain (Arbitrum) - AIntents:**
+
 ```
 Before Transfer:
   Real Balance: 10,000 USDC
@@ -48,6 +57,7 @@ After Transfer:
 ```
 
 **Destination Chain (Optimism) - ECrosschain:**
+
 ```
 Before Transfer:
   Real Balance: 5,000 USDC
@@ -133,22 +143,26 @@ Destination Chain:
 ### Transfer Mode (OpType.Transfer) - NAV Neutral
 
 **Behavior:**
+
 - Source: Writes **negative VS** (shares leaving)
 - Destination: Writes **positive VS** (shares arriving)
 - Both chains: NAV unchanged
 
 **Use for:**
+
 - Moving liquidity between chains
 - NAV-neutral token movement
 
 ### Sync Mode (OpType.Sync) - NAV Changes
 
 **Behavior:**
+
 - Source: No VS adjustment → NAV decreases (tokens leave)
 - Destination: No VS adjustment → NAV increases (tokens arrive)
 - Both chains: NAV changes naturally
 
 **Use for:**
+
 - Performance rebalancing
 - Donations
 - Intentional NAV adjustments
@@ -160,12 +174,14 @@ Destination Chain:
 ### Scenario A: Equalizing Chain NAVs
 
 **Situation:**
+
 - Chain A: NAV = 1.0, low activity
 - Chain B: NAV = 1.2, high trading gains
 
 **Goal:** Share performance from B to A
 
 **Solution:** Use Sync mode
+
 ```
 1. Initiate Sync transfer from B to A
 2. B sends tokens (NAV decreases from 1.2)
@@ -176,12 +192,14 @@ Destination Chain:
 ### Scenario B: Emergency Liquidity
 
 **Situation:**
+
 - Chain A: Needs liquidity, NAV = 1.0
 - Chain B: Excess liquidity, NAV = 1.0
 
 **Goal:** Move liquidity without NAV impact
 
 **Solution:** Use Transfer mode
+
 ```
 1. Initiate Transfer from B to A
 2. B writes negative VS (effective supply decreases)
@@ -192,10 +210,12 @@ Destination Chain:
 ### Scenario C: Consolidating Assets
 
 **Situation:**
+
 - Pool has assets scattered across 5 chains
 - Want to consolidate on one chain
 
 **Solution:** Sequential Transfers
+
 ```
 For each source chain:
 1. Transfer tokens to destination (Transfer mode)
@@ -251,6 +271,7 @@ if (virtualSupply < 0) {
 ### NAV Invariant (Transfer Mode)
 
 For transfers to be NAV-neutral:
+
 ```
 NAV_before = NAV_after
 
@@ -260,6 +281,7 @@ Where:
 ```
 
 **Proof:**
+
 ```
 Before: NAV = V / S
 After:  NAV = (V - ΔV) / (S + (-ΔV/NAV))
@@ -270,11 +292,52 @@ After:  NAV = (V - ΔV) / (S + (-ΔV/NAV))
            = NAV ✓
 ```
 
+The proof is exact for a single leg at execution-time NAV. It does not extend to a
+round trip whose legs execute at different NAVs — see below.
+
+---
+
+## Known Limitation: Round-Trip VS Residual
+
+A Transfer round trip that spans a NAV move of the pool's holdings strands a residual
+VS. Each leg books a share count `V / u` at its own execution-time unitary value; if
+the pool's NAV moves between the outbound initiation snapshot and the inbound arrival
+snapshot, the restored claim count differs from the removed one by
+`V·(1/u_out − 1/u_in)`.
+
+Consequences (quantified in `test/debug/PoCVsRoundTrip.t.sol`, mainnet + Base forks):
+
+- The chain ending with negative VS overstates its unitary value: total burn claims
+  exceed physical assets, exits are first-come-first-served, and
+  `NavImpactLib.validateSupply` pins the burn tail at
+  `totalSupply − 20·|VS|/19` (reverts `EffectiveSupplyTooLow` beyond it).
+  Measured locked tail: ~0.84% of supply at a +10% move, ~3.6% at +50% (scenario
+  dependent).
+- The mirror chain ends with positive VS: value is stranded at an understated unitary
+  value and accrues to future minters there.
+- The pool is never fully stuck: mints and donations keep working; only the pinned
+  burn tail reverts. New inbound Transfers write positive VS and relieve a negative
+  pin — sized exactly (`v = |VS|·u/10^6` from on-chain state) they cancel the
+  residual to zero and the entire supply becomes burnable (verified: stuck → one
+  inbound Transfer → full burn to TS = 0). Sync transfers do **not** relieve it: the
+  over-claim ratio `TS/(TS+VS)` is invariant to the asset level, so syncing assets
+  out leaves coverage unchanged.
+- Cross-chain NAV parity does not prevent it (verified: parity holds at every
+  checkpoint while the residual appears), and NAV-changing actions mid-window (e.g.
+  Sync donates) worsen it.
+
+This is an accepted property of the per-leg neutrality design, not an implementation
+bug: exact round-trip reconciliation would require carrying the outbound leg's value
+basis through the bridge message, coupling both chains' accounting to the message
+channel. Full analysis, operator guidance, and disposition:
+[KNOWN_ISSUES.md](./KNOWN_ISSUES.md) (W21).
+
 ---
 
 ## Summary
 
 The **VS-only model** provides:
+
 - ✅ Simpler implementation (single storage per chain)
 - ✅ Proportional performance attribution by default
 - ✅ Lower gas costs (1 SSTORE per side)
@@ -282,3 +345,4 @@ The **VS-only model** provides:
 - ✅ Effective supply buffer prevents supply exhaustion
 - ✅ Post-burn protection prevents constraint bypass
 - ✅ Clear distinction between Transfer (NAV-neutral) and Sync (NAV-impacting)
+- ⚠️ Round trips spanning a NAV move strand a residual VS (see Known Limitation above)
