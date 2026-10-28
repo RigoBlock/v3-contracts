@@ -1,0 +1,348 @@
+# Across Integration — Known Issues and Accepted Design Decisions
+
+This document records known limitations and accepted properties of the cross-chain
+Virtual Supply (VS) model (`AIntents` / `ECrosschain`) so that recurring security
+reviews do not re-litigate settled questions. Each entry states the behavior, the
+measured impact, why it is accepted, and what would change the disposition.
+
+For the performance model see [PERFORMANCE.md](./PERFORMANCE.md). The regression
+tests referenced below live in `test/debug/PoCVsRoundTrip.t.sol` (mainnet + Base
+forks, real Across `depositV3` and MulticallHandler fills).
+
+**Dispositions at a glance:**
+
+- **W21 residual** (reported by pismol): accepted model property. Documented, no
+  code change, no urgency. Residuals are bounded, redistributive, and exactly
+  relievable while the sibling chain holds funds.
+- **TS = 0 return trap** (found during W21 edge-case analysis): no funds at risk;
+  a confirmed operator workaround recovers everything; on-chain fix drafted below,
+  **not urgent**, scheduled for a future adapter train with a dedicated review
+  session.
+
+## W21 — Round-trip VS residual under price moves (accepted model property)
+
+**Reported by:** pismol (Oct 2026). **Status:** acknowledged, documented. No code
+change. The reporter's PoC (`reports/W21_TEST_DIFF.patch`) was independently re-run
+against current `development` and current fork pins: 2/2 tests pass, reproducing the
+reported signs and magnitudes (destination VS ≈ −$81k, phantom NAV ≈ $82k, 163 bps
+|VS|/TS → 1.72% locked tail, source VS ≈ +$99.9k pinned at par, zero-residual
+control).
+
+### Behavior
+
+A Transfer round trip (outbound leg + return leg) that spans a NAV move of the pool's
+holdings leaves a **residual VS on each participating chain**. The sign and size
+depend on the direction of the move and on which chain's NAV moved during the bridge
+window:
+
+- The chain whose unitary value **rose** during the window ends with **negative VS**
+  (if it originated the round trip): unitary value is overstated, total burn claims
+  exceed physical assets ("phantom NAV"), and `NavImpactLib.validateSupply` pins the
+  burn tail at `totalSupply − 20·|VS|/19` (`EffectiveSupplyTooLow` beyond it).
+- The mirror chain ends with **positive VS**: unitary value is understated and the
+  residual value is stranded (no holder path converts VS into claims); it silently
+  accrues to future minters on that chain.
+
+### Mechanism
+
+Each leg is NAV-neutral **at its own execution-time unitary value** by construction.
+A leg books a share count `V / u` — outbound at the initiation snapshot `u₀`, inbound
+at the arrival snapshot `u₁`. A round trip therefore restores `V/u₁` claims after
+removing `V/u₀`, and any move of the pool's own NAV between the two snapshots strands
+`V·(1/u₀ − 1/u₁)` shares. The residual has exactly **two drivers**, and only two — a
+change in the originator chain's unitary value between its two snapshots:
+
+1. **Market repricing while value is in flight** (the common case). Two sub-channels,
+   both following `V₀/u₀ − V₁/u₁` on the originator:
+   - **(a) The originator's remaining book reprices** — the pool keeps volatile assets
+     that move during the window, moving its unitary value between snapshots.
+   - **(b) The transferred asset itself reprices** — the originator converts to /
+     already holds the volatile asset, transfers it away, and is left holding only
+     the base stablecoin (unitary value pinned at par), but the returned value
+     `V₁` differs from the departed `V₀`. The residual is then exactly
+     `−(V₀−V₁)/par`: the originator over-claims by the full P&L of the in-flight
+     position on a loss (burn pin, phantom NAV) or strands the gain on a win. This
+     is the researcher's scenario (verified: residual equals `−(V₀−V₁)/par` to the
+     unit) — and it does not require cross-chain oracle divergence.
+2. **Operator NAV actions mid-window**: a Sync donate (or any NAV-changing operation)
+   on the originating chain between initiating a Transfer and its return leg
+   completing. Verified with a pure-USDC round trip and zero market movement: a
+   100k USDC mid-window donate created a −22,220-share residual (~$25k over-claim)
+   where the static control is exactly 0.
+
+Consequently, a pool holding **only its base stablecoin and transferring that
+stablecoin is immune to driver 1** — unitary value is pinned at par, so both
+snapshots coincide and market moves cannot strand anything. It is **not** immune to
+driver 2. Neither driver requires an attacker, crafted parameters, or oracle
+manipulation — ordinary market movement or an ordinary operator action during an
+in-flight round trip suffices. Keeping NAVs "in sync" across chains does not prevent
+it, and any NAV-changing action on the originating chain mid-window strictly worsens
+it (measured: 2.8× worse at +10%).
+
+### Measured impact (fork tests, `test/debug/PoCVsRoundTrip.t.sol`)
+
+Scenario-dependent — scales with the moved fraction and the share of NAV held in
+assets that reprice during the window:
+
+| Move         | Residual VS (originating chain)         | Locked burn tail         | Phantom NAV |
+| ------------ | --------------------------------------- | ------------------------ | ----------- |
+| 0% (control) | exactly 0                               | none — full supply burns | $0          |
+| +10%         | −1,998 shares (~$12.5k on a $1.5M pool) | 0.84% of supply          | $12,498     |
+| +25%         | −4,712 shares                           | 1.98% of supply          | $31,241     |
+| +50%         | −8,613 shares                           | 3.63% of supply          | $62,503     |
+
+An extreme boundary case (a chain whose effective supply is ~100% virtual returns
+everything over a +10% move) strands the appreciation as positive VS on the
+all-virtual chain ($5.42M holderless) and leaves the originator at **64.5% asset
+coverage** of its claims. This configuration requires the pool to hold essentially
+all claims virtually and is not the expected operating mode.
+
+### What does NOT happen
+
+- The pool is **never fully stuck**. Mints and donations keep working with negative
+  VS in place (they relax or leave unchanged the `validateSupply` constraint); only
+  the burn tail past the pin reverts. Burns are the only supply-shrinking operation
+  and are checked post-decrement, so the invariant cannot be ratcheted past the pin.
+- **Sync transfers do not restore coverage.** The over-claim ratio
+  `claims/assets = TS/(TS+VS)` is invariant to the asset level: a Sync transfer out
+  removes assets and unitary value proportionally, leaving the ratio and VS
+  byte-identical (measured: 80 bps over-claim before and after a 50k Sync-out at
+  +10%). Only an inbound Transfer moves the ratio toward par.
+- **NAV parity across chains is not required and does not prevent the residual.**
+  The model prices each chain locally and tolerates permanently divergent per-chain
+  NAVs between operator rebalances (different TWAPs, fees, timing). Verified with
+  mirror pools under a symmetric move: unitary values stayed within ~1.35% at
+  every checkpoint while the residual appeared anyway. Nor does the periodic
+  rebalance Sync fix it — see the realistic-cycle finding below.
+- Positive VS has no enforcement effect at all (`validateSupply` only fires on
+  negative VS).
+- No user funds can be stolen and no attacker profits; the harm lands on the pool's
+  own holders (tail lock, first-come-first-served exits at an overstated unitary
+  value).
+
+### Realistic-cycle finding (sync does not fix the residual)
+
+Measured end-to-end (`test_RealisticCycle_SyncRebalance_CreatesResidual`): outbound
+Transfer, performance accrues on the destination chain's holdings only (277 bps NAV
+divergence), operator executes the documented rebalance — exact equalizing Sync of
+Δ = 19,997 USDC, NAV parity restored to 0 bps — then the return leg. Results:
+
+- Without the sync the residual is exactly 0 on the originator and +1,350.0 raw-M on
+  the destination. The rebalance sync does not eliminate the imbalance: it moves the
+  originator's NAV between its two snapshots, creating a residual of −818.8 raw-M
+  there, and the two chains end mirror-stranded (−818.8 / +818.8, sum exactly 0 —
+  the sync achieves global conservation and perfect NAV parity, but splits the
+  imbalance equally instead of removing it).
+- Coverage ratios are invariant throughout (Sync writes no VS). Magnitude scales as
+  ≈ moved value × sync amount, so small cycles strand small residuals.
+
+Implication: there is no operator sequence that both maintains the documented
+periodic NAV equalization and avoids the residual — only rebalance when no Transfer
+is in flight, and relieve pins with inbound Transfers.
+
+Direction of the equalizing Sync matters, measured: a Sync that DRAINS the pinned
+chain's NAV before the return leg shrinks its residual (loss case: originator at par
+sends to the loser chain; originator residual −68.17M → −37.55M raw, NAV parity
+restored to 0 bps, residuals become mirror images) — but it cannot remove it, and
+the mirror residual on the other chain grows correspondingly. A Sync that RAISES the
+pinned chain's NAV (gain case, funds flowing in) creates or worsens the residual
+(measured 2.8× at +10%). The residual is conserved across the pair up to the
+cross-leg oracle basis: the sync redistributes, never eliminates.
+
+### Single-supply-chain geometry — the zero-tolerance return trap
+
+Measured in `test_SingleSupplyChainGeometry_WethRoundTrip` (all supply on the
+originator; the destination burned to TS = 0, assets = 0; full-WETH Transfer out;
+±10% move; with/without pre-return sync):
+
+- **The return leg itself reverts in 3 of 4 variants.** With `totalSupply = 0` on
+  the sending chain, `NavImpactLib.validateSupply` allows ZERO negative VS: the
+  constraint `|VS|·20 ≤ TS·19` collapses to "VS must not be negative at all".
+  Integer truncation in the share math (`u = floor(NV·10^d/ES)`,
+  `burnt = floor(V·10^d/u)`) makes a few units of negative drift essentially
+  certain once any price move has occurred, so the initiation reverts
+  `EffectiveSupplyTooLow` and **the in-flight funds cannot be returned at all** —
+  they sit on the destination chain with its positive VS, while the originator
+  keeps its negative VS and its holders burn down to the pin. Only the no-move
+  control cancels exactly (VS = 0 both chains, everything burns). The one completing
+  moved variant (loss + pre-return sync) leaves a positive residual of +35.9 raw-M.
+- **The trap is reachable without operator error:** holders of one chain can simply
+  burn everything (allowed while VS > 0), and a later return initiation then bricks.
+- **Remedies in this geometry:** the inbound-Transfer unstick is impossible (the
+  sibling chain holds nothing — the real initiation reverts ERC20-insufficient-
+  balance). The only escapes: an **implementation upgrade** resetting the VS slot
+  (verified via `vm.store` emulation: originator burns fully, but the WETH left on
+  the supply-less chain ≈ $692k at test scale strands as fresh-minter sweep
+  surface), or **external money** bootstrapped into the empty chain (a new holder
+  minting real funds gives the return leg TS-slack; measured operator net cost
+  ≈ 65.2e9 USDC for a 69.2e9 hole at test scale, leaving a small unburnable husk).
+
+**Operational rule (until the fix ships):** if a return leg from a zero-supply chain
+reverts, do not retry the full amount — see the confirmed workaround below. With any
+TS > 0 the return leg has proportional slack and completes.
+
+**Operator workaround (confirmed in `test_TsZeroTrap_PartialReturnPlusSync`, works
+today, no code change):** initiate a PARTIAL return sized to burn exactly the
+outstanding VS, then Sync out the dust. Sizing is deterministic same-block: binary-
+search the WETH amount against the pool's own `convertTokenAmount` +
+`unitaryValue` (the exact math `_handleSourceTransfer` runs); the exact-equality
+window measured ~4.5×10^8 wei wide. Measured results: the sending chain unwinds to
+VS = 0 exactly and zero assets (the dust sync succeeds — `validateNavImpact`
+bypasses tolerance when effective supply ≤ 0), and the originator ends precisely as
+a successful full return would: **gain case — positive residual, no pin, 100% of
+supply burns with zero reverts; loss case — the documented negative residual class,
+95% of supply burnable vs ~47% while trapped.** The gain case is fully resolved by
+operator action alone; the loss case reduces to the residual, which still needs an
+upgrade reset or external money because the sibling chain is empty.
+
+**Disposition: no code change required for fund recovery — workaround confirmed;
+fix specified below, NOT urgent, scheduled for a future adapter train.**
+
+Rationale for "not urgent": no funds are ever at risk or unrecoverable. The
+confirmed workaround recovers 100% of assets to the originating chain with ordinary
+operator actions (no external money in the gain case; 95% exitability plus the
+already-accepted residual class in the loss case, whose remainder is upgrade- or
+bootstrap-remediable). The trap additionally requires a specific geometry — the
+returning chain at `totalSupply = 0` — AND a price move during the flight; at zero
+performance the unwind is exact. It should nonetheless ship in the next routine
+adapter train rather than linger, because single-supply-chain operation is the
+standard mode ("multi-chain from genesis" is explicitly supported,
+`test_PerformanceAttribution_ZeroRealSupplyReceivesTransfer`) and an on-chain fix
+removes the manual sizing procedure.
+
+**Fix draft (for review in a dedicated session — NOT merged).** In
+`AIntents._handleSourceTransfer` (`AIntents.sol:245-263`), clamp the burn to the
+outstanding positive VS when total supply is zero:
+
+```solidity
+function _handleSourceTransfer(
+  AcrossParams memory params,
+  uint256 scaledOutputAmount
+) private {
+  uint256 outputValueInBase = _getOutputValueInBase(params, scaledOutputAmount);
+  require(outputValueInBase > 0, ZeroConvertedValue());
+  NetAssetsValue memory navParams = ISmartPoolActions(address(this))
+    .updateUnitaryValue();
+  uint8 poolDecimals = StorageLib.pool().decimals;
+
+  // shares = outputValue / unitaryValue
+  int256 burntAmount = ((outputValueInBase * (10 ** poolDecimals)) /
+    navParams.unitaryValue).toInt256();
+
+  // TS == 0 with positive VS: a computed burn beyond the outstanding VS is
+  // truncation noise — no local holders exist whose claims could be reduced.
+  // Clamp so the leg completes with VS == 0 instead of reverting.
+  if (ISmartPoolState(address(this)).getPoolTokens().totalSupply == 0) {
+    int256 outstandingVs = VirtualStorageLib.getVirtualSupply();
+    if (outstandingVs > 0 && burntAmount > outstandingVs) {
+      burntAmount = outstandingVs;
+    }
+  }
+
+  // Write negative VS (shares leaving this chain → reduces effective supply)
+  (-burntAmount).updateVirtualSupply();
+
+  // Validate effective supply is still above minimum threshold after VS update.
+  NavImpactLib.validateSupply(
+    ISmartPoolState(address(this)).getPoolTokens().totalSupply,
+    VirtualStorageLib.getVirtualSupply()
+  );
+}
+```
+
+Effect: the TS = 0 return burns `min(computed, outstanding)` → VS = 0, leg completes,
+funds return — the on-chain equivalent of the confirmed workaround, sub-unit
+conservative on the booking. `validateSupply` still runs after the write and still
+guards every TS > 0 path unchanged.
+
+**Review checklist for the fix session (why this is a separate, careful change):**
+
+- [ ] Clamp is gated on `totalSupply == 0` ONLY — confirm no TS > 0 path can reach
+      it, and that the clamp cannot be abused to burn more VS than a chain's
+      effective claims (at TS = 0 the effective supply IS the outstanding VS, so
+      `burnt ≤ outstanding` keeps ES ≥ 0 by construction — prove this invariant).
+- [ ] Sign safety: `burntAmount` is positive by construction (`outputValueInBase > 0`,
+      `unitaryValue ≥ 1`); assert no negative-zero or overflow path.
+- [ ] The clamp discards sub-unit claim value silently — confirm the discarded
+      amount is bounded by the truncation error (`< u/10^d` shares) and cannot be
+      amplified by repeated legs.
+- [ ] Extra `getPoolTokens()` read adds an SLOAD — negligible, but confirm no
+      reentrancy surface (staticcall context, no external calls between read and write).
+- [ ] Check the same class of issue in every VS-writing path: `ECrosschain` arrival
+      (writes +VS — cannot go negative), Escrow refund (writes +VS — same), burns
+      (user-exact, cannot overshoot). Only `_handleSourceTransfer` can overshoot.
+- [ ] `AIntents` is an **adapter**: shipping = new adapter + Authority governance
+      update. No implementation redeploy, no `VERSION` bump, no `extensionsMapSalt`
+      bump. Run `npx hardhat codesize` on the adapter and add a regression test
+      pinning the TS = 0 full return (the suite already contains the trap test and
+      the workaround test to derive it from).
+- [ ] Consider (separately) whether `MixinPoolValue`'s zero-supply sentinel interacts
+      with post-clamp dust states — the clamp targets exactly VS = 0, leaving no dust.
+
+**Origin of the gap:** the protocol deliberately supports zero-supply chains
+receiving transfers, but no test ever returned a transfer from one — the in-repo
+TODO at `AIntentsRealFork.t.sol:717` records the gap, and the effective-supply DOS
+guard (`NavImpactLib.validateSupply`, added Apr 2026) was never exercised against
+this path.
+
+### Remedies available today
+
+- **New inbound Transfers are the unstick operation, and exact relief works.** An
+  inbound of value `v` writes `v·10^6/u_arrival` of +VS, and `u_arrival` equals the
+  pinned chain's current unitary value — readable on-chain — so the operator can
+  size `v = |VS|·u/10^6` and cancel the residual **exactly**: measured one iteration,
+  VS = 0 (assertEq), coverage back to par, and the **entire remaining supply then
+  burns to TS = 0** with only wei-dust stranded (~$0.0000007). Verified end-to-end in
+  `test_StuckToFullyBurnable_OperatorUnstick`: stuck (pin + `EffectiveSupplyTooLow`
+  beyond it) → one exactly-sized inbound Transfer → 100% of supply burnable. The
+  last-holder DOS is therefore **operator-remediable, not permanent** — it requires
+  a specific operator action, but that action is precise, cheap, and uses the
+  pool's own cross-chain assets (verified: operator personal balances untouched).
+  Oversized inbounds still overshoot (positive residual strands the other way), so
+  size from on-chain state rather than guessing.
+- **Mints are never blocked** — in no scenario does a mint revert with negative VS
+  in place (minting relaxes the `validateSupply` constraint). The only DOS surface
+  is the burn tail past the pin; everything else keeps working. Burns and donations
+  never relieve the pin (VS untouched).
+- An **implementation upgrade** can reset the slot (governance + per-pool operator
+  approval), as with any storage-affecting fix.
+
+### Why accepted
+
+Per-leg NAV neutrality is the design goal of the VS model, and it holds exactly. Exact
+round-trip conservation would require the return leg to price against the outbound
+leg's value basis — i.e. carrying cross-chain state through the bridge message and
+trusting it on arrival. That couples the two chains' accounting into the message
+channel and enlarges the attack surface (forged/stale bases) far beyond the bounded,
+relievable residual it would eliminate. The residual is the unsettled P&L of the
+bridged position during the window; the model deliberately leaves it on-chain as ±VS
+instead of a message-passing liability. Same acceptance class as the existing
+sync-latency and expired-refund items: real, bounded, documented.
+
+### Operator guidance
+
+- Cross-chain NAV parity is a periodic rebalancing target, not a maintained
+  invariant — do not attempt to hold the chains at equal NAV continuously.
+- Avoid initiating return legs that will straddle volatile windows when the pool's
+  NAV is concentrated in repricing assets; the residual is proportional to both.
+- Never perform NAV-changing actions (Sync transfers/donates, further Transfers) on
+  the originating chain between initiating a Transfer and its return leg completing
+  — measured to worsen the residual 2.8× at +10%. Sync _after_ the round trip does
+  not repair the damage either (ratio-invariant, see above); only a new inbound
+  Transfer moves coverage toward par.
+- If a negative pin exists, a small inbound Transfer relieves it; monitor `VS` via
+  `VirtualStorageLib.getVirtualSupply()`.
+
+### What would change the disposition
+
+A redesign that carries the outbound leg's value basis in the bridge message and
+reconciles the return leg against it (accepting message-channel trust assumptions), or
+a governance-triggered VS reset. Neither is currently planned.
+
+Covered by `test/debug/PoCVsRoundTrip.t.sol` (17 tests: control, +10/25/50% sweeps,
+burn-boundary at the pin, mint/donate liveness with negative VS, inbound-transfer
+relief, sync-out coverage invariance, NAV-parity disproof, mid-window sync
+worsening, realistic sync-rebalance cycle, stablecoin-pool operator-induced
+residual, WETH-loss originator-pinned scenario with sync variants, stuck-to-fully-
+burnable operator unstick, single-supply-chain zero-tolerance return trap,
+TS=0 partial-return-plus-sync workaround, all-virtual boundary).

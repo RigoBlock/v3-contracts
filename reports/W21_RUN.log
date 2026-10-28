@@ -1,0 +1,626 @@
+Compiling 1 files with Solc 0.8.37
+Solc 0.8.37 finished in 3.95s
+Compiler run successful with warnings:
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/Vm.sol:5:1:
+  |
+5 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdAssertions.sol:3:1:
+  |
+3 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdCheats.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdInvariant.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdJson.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdToml.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/interfaces/IMulticall3.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/StdUtils.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (8506): Experimental pragma ABIEncoderV2 is deprecated and will be removed in a future release.
+ --> lib/forge-std/src/Test.sol:4:1:
+  |
+4 | pragma experimental ABIEncoderV2;
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> contracts/protocol/libraries/EnumerableSet.sol:142:5:
+    |
+142 |     function at(Bytes32Set storage set, uint256 index) internal view returns (bytes32) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/permit2/lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol:204:5:
+    |
+204 |     function at(Bytes32Set storage set, uint256 index) internal view returns (bytes32) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/permit2/lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol:270:5:
+    |
+270 |     function at(AddressSet storage set, uint256 index) internal view returns (address) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/permit2/lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol:344:5:
+    |
+344 |     function at(UintSet storage set, uint256 index) internal view returns (uint256) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1186:9:
+     |
+1186 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1200:9:
+     |
+1200 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1208:79:
+     |
+1208 |     function assertApproxEqAbs(uint256 left, uint256 right, uint256 maxDelta, string calldata error) external pure;
+     |                                                                               ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1215:77:
+     |
+1215 |     function assertApproxEqAbs(int256 left, int256 right, uint256 maxDelta, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1232:9:
+     |
+1232 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1250:9:
+     |
+1250 |         string calldata error
+     |         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1260:86:
+     |
+1260 |     function assertApproxEqRel(uint256 left, uint256 right, uint256 maxPercentDelta, string calldata error)
+     |                                                                                      ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1271:84:
+     |
+1271 |     function assertApproxEqRel(int256 left, int256 right, uint256 maxPercentDelta, string calldata error)
+     |                                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1280:77:
+     |
+1280 |     function assertEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1287:75:
+     |
+1287 |     function assertEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1293:46:
+     |
+1293 |     function assertEq(bool left, bool right, string calldata error) external pure;
+     |                                              ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1299:68:
+     |
+1299 |     function assertEq(string calldata left, string calldata right, string calldata error) external pure;
+     |                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1305:66:
+     |
+1305 |     function assertEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+     |                                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1311:68:
+     |
+1311 |     function assertEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+     |                                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1317:74:
+     |
+1317 |     function assertEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1323:72:
+     |
+1323 |     function assertEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+     |                                                                        ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1332:74:
+     |
+1332 |     function assertEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1338:74:
+     |
+1338 |     function assertEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+     |                                                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1344:72:
+     |
+1344 |     function assertEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+     |                                                                        ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1350:70:
+     |
+1350 |     function assertEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+     |                                                                      ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1353:52:
+     |
+1353 |     function assertEq(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1359:50:
+     |
+1359 |     function assertEq(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1365:52:
+     |
+1365 |     function assertEq(address left, address right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1371:52:
+     |
+1371 |     function assertEq(bytes32 left, bytes32 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1377:42:
+     |
+1377 |     function assertFalse(bool condition, string calldata error) external pure;
+     |                                          ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1385:77:
+     |
+1385 |     function assertGeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1393:75:
+     |
+1393 |     function assertGeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1400:52:
+     |
+1400 |     function assertGe(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1407:50:
+     |
+1407 |     function assertGe(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1415:77:
+     |
+1415 |     function assertGtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1423:75:
+     |
+1423 |     function assertGtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1430:52:
+     |
+1430 |     function assertGt(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1437:50:
+     |
+1437 |     function assertGt(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1445:77:
+     |
+1445 |     function assertLeDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1453:75:
+     |
+1453 |     function assertLeDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1460:52:
+     |
+1460 |     function assertLe(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1467:50:
+     |
+1467 |     function assertLe(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1475:77:
+     |
+1475 |     function assertLtDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1483:75:
+     |
+1483 |     function assertLtDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1490:52:
+     |
+1490 |     function assertLt(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                    ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1497:50:
+     |
+1497 |     function assertLt(int256 left, int256 right, string calldata error) external pure;
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1504:80:
+     |
+1504 |     function assertNotEqDecimal(uint256 left, uint256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                                ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1511:78:
+     |
+1511 |     function assertNotEqDecimal(int256 left, int256 right, uint256 decimals, string calldata error) external pure;
+     |                                                                              ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1517:49:
+     |
+1517 |     function assertNotEq(bool left, bool right, string calldata error) external pure;
+     |                                                 ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1523:71:
+     |
+1523 |     function assertNotEq(string calldata left, string calldata right, string calldata error) external pure;
+     |                                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1529:69:
+     |
+1529 |     function assertNotEq(bytes calldata left, bytes calldata right, string calldata error) external pure;
+     |                                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1535:71:
+     |
+1535 |     function assertNotEq(bool[] calldata left, bool[] calldata right, string calldata error) external pure;
+     |                                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1541:77:
+     |
+1541 |     function assertNotEq(uint256[] calldata left, uint256[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1547:75:
+     |
+1547 |     function assertNotEq(int256[] calldata left, int256[] calldata right, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1556:77:
+     |
+1556 |     function assertNotEq(address[] calldata left, address[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1562:77:
+     |
+1562 |     function assertNotEq(bytes32[] calldata left, bytes32[] calldata right, string calldata error) external pure;
+     |                                                                             ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1568:75:
+     |
+1568 |     function assertNotEq(string[] calldata left, string[] calldata right, string calldata error) external pure;
+     |                                                                           ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1574:73:
+     |
+1574 |     function assertNotEq(bytes[] calldata left, bytes[] calldata right, string calldata error) external pure;
+     |                                                                         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1577:55:
+     |
+1577 |     function assertNotEq(uint256 left, uint256 right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1583:53:
+     |
+1583 |     function assertNotEq(int256 left, int256 right, string calldata error) external pure;
+     |                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1589:55:
+     |
+1589 |     function assertNotEq(address left, address right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1595:55:
+     |
+1595 |     function assertNotEq(bytes32 left, bytes32 right, string calldata error) external pure;
+     |                                                       ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (6335): "error" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+    --> lib/forge-std/src/Vm.sol:1601:41:
+     |
+1601 |     function assertTrue(bool condition, string calldata error) external pure;
+     |                                         ^^^^^^^^^^^^^^^^^^^^^
+
+Warning (4591): There are more than 256 warnings. Ignoring the rest.
+warning: invalid natspec tag '@params', custom tags must use format '@custom:name'
+   ╭▸ contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol:67:5
+   │
+67 │     /// @params name String of the name (max 31 characters).
+   ╰╴    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+warning: invalid natspec tag '@params', custom tags must use format '@custom:name'
+   ╭▸ contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol:68:5
+   │
+68 │     /// @params symbol bytes8 symbol.
+   ╰╴    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+warning: invalid natspec tag '@params', custom tags must use format '@custom:name'
+   ╭▸ contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol:69:5
+   │
+69 │     /// @params owner Address of the owner.
+   ╰╴    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+warning: invalid natspec tag '@params', custom tags must use format '@custom:name'
+   ╭▸ contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol:70:5
+   │
+70 │     /// @params baseToken Address of the base token.
+   ╰╴    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+Ran 2 tests for test/extensions/AIntentsRealFork.t.sol:AIntentsRealForkTest
+[PASS] test_PoC_RoundTrip_NoPriceMove_Control() (gas: 3023245)
+Logs:
+  Authority: 0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472
+  === Deploying Real Infrastructure Fixture ===
+  Deployed extensions successfully
+  Deployed ExtensionsMapDeployer: 0x1d1499e622D69689cdf9004d05Ec547d650Ff211
+  Deployed ExtensionsMap: 0x167642072E955b18B03D1b46BaC185e6bBa19b81
+  Deployed AIntents: 0xA4AD4f68d0b91CFD19687c881e50f3A00242828c
+  Deployed SmartPool implementation: 0x03A6a84cD762D9707A21605b548aaaB891562aAb
+  RigoblockDao: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Updated factory implementation
+  Created pool: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base token: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+  Chain: 1
+  Using authority owner for authority: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Set intents adapter as whitelisted
+  Mapped depositV3 selector in authority
+  Minted pool with base token: 99900000000
+  Deployed extensions successfully
+  Deployed ExtensionsMapDeployer: 0x96d3F6c20EEd2697647F543fE6C08bC2Fbf39758
+  Deployed ExtensionsMap: 0x98Ee75a82980078C2a824f6b5de8388C3C875890
+  Deployed AIntents: 0x13aa49bAc059d709dd0a18D6bb63290076a702D7
+  Deployed SmartPool implementation: 0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240
+  RigoblockDao: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Updated factory implementation
+  Created pool: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+  Chain: 8453
+  Using authority owner for authority: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Set intents adapter as whitelisted
+  Mapped depositV3 selector in authority
+  Minted pool with base token: 99900000000
+  Multi-chain deployment completed
+  === Fixture Deployment Complete ===
+  === Setup Complete ===
+  Ethereum Pool address: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base Pool address: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Ethereum SpokePool address: 0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5
+  Base SpokePool address: 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64
+  
+  ===== CONTROL: same round trip, no price move =====
+  [poc] price move enabled: false
+  [poc] src built. WETH position value (USDC): 999000
+  [poc] src TS pre (USDC): 9990000
+  [poc] src uv pre: 1000000
+  [poc] moved position value on dst oracle (USDC): 1083715
+  [poc] dst TS pre (USDC): 5418577
+  [poc] dst uv pre: 1000000
+  [poc] leg1 src -VS (USDC): 999000
+  [poc] leg2 dst +VS (USDC): 1083715
+  [poc] dst uv after arrival: 1000000
+  [poc] dst uv after move: 1000000
+  [poc] dst TV after move (USDC): 6502293
+  [poc] leg3 dst return done
+  [poc] leg4 src VS final (USDC): 0
+  [poc] src uv final: 1000000
+  dst VS final: 0
+  dst tail bound: 0
+  dst full-supply burn ok: true
+  dst VS raw: 0
+  dst TS raw: 5418577583646
+  dst balance raw: 5418577583646
+  dst maxBurn net raw: 5413159006063
+  src VS final: 0
+  src uv final: 1000000
+  control completed - only rounding-level residuals
+
+[PASS] test_PoC_RoundTrip_Transfer_PriceMove_Residuals() (gas: 3256512)
+Logs:
+  Authority: 0xe35129A1E0BdB913CF6Fd8332E9d3533b5F41472
+  === Deploying Real Infrastructure Fixture ===
+  Deployed extensions successfully
+  Deployed ExtensionsMapDeployer: 0x1d1499e622D69689cdf9004d05Ec547d650Ff211
+  Deployed ExtensionsMap: 0x167642072E955b18B03D1b46BaC185e6bBa19b81
+  Deployed AIntents: 0xA4AD4f68d0b91CFD19687c881e50f3A00242828c
+  Deployed SmartPool implementation: 0x03A6a84cD762D9707A21605b548aaaB891562aAb
+  RigoblockDao: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Updated factory implementation
+  Created pool: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base token: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48
+  Chain: 1
+  Using authority owner for authority: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Set intents adapter as whitelisted
+  Mapped depositV3 selector in authority
+  Minted pool with base token: 99900000000
+  Deployed extensions successfully
+  Deployed ExtensionsMapDeployer: 0x96d3F6c20EEd2697647F543fE6C08bC2Fbf39758
+  Deployed ExtensionsMap: 0x98Ee75a82980078C2a824f6b5de8388C3C875890
+  Deployed AIntents: 0x13aa49bAc059d709dd0a18D6bb63290076a702D7
+  Deployed SmartPool implementation: 0xDB25A7b768311dE128BBDa7B8426c3f9C74f3240
+  RigoblockDao: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Updated factory implementation
+  Created pool: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base token: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+  Chain: 8453
+  Using authority owner for authority: 0x5F8607739c2D2d0b57a4292868C368AB1809767a
+  Set intents adapter as whitelisted
+  Mapped depositV3 selector in authority
+  Minted pool with base token: 99900000000
+  Multi-chain deployment completed
+  === Fixture Deployment Complete ===
+  === Setup Complete ===
+  Ethereum Pool address: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Base Pool address: 0x4f083b55DE7A3748c79Cf4865b5c83da41dC7357
+  Ethereum SpokePool address: 0x5c7BCd6E7De5423a257D81B442095A1a6ced35C5
+  Base SpokePool address: 0x09aea4b2242abC8bb4BB78D537A67a245A7bEC64
+  
+  ===== PoC: Transfer-mode round trip with +10% price move =====
+  [poc] price move enabled: true
+  [poc] src built. WETH position value (USDC): 999000
+  [poc] src TS pre (USDC): 9990000
+  [poc] src uv pre: 1000000
+  [poc] moved position value on dst oracle (USDC): 1083715
+  [poc] dst TS pre (USDC): 5418577
+  [poc] dst uv pre: 1000000
+  [poc] leg1 src -VS (USDC): 999000
+  [poc] leg2 dst +VS (USDC): 1083715
+  [poc] dst uv after arrival: 1000000
+  [poc] price move convBefore: 2661934279 convAfter: 2928083947
+  [poc] dst uv after move: 1016663
+  [poc] dst TV after move (USDC): 6610640
+  [poc] leg3 dst return done
+  [poc] price move convBefore: 2453847254 convAfter: 2699191641
+  [poc] leg4 src VS final (USDC): 99883
+  [poc] src uv final: 1000000
+  
+  --- destination (Base) after round trip ---
+  dst VS final (USDC): -88815
+  dst TS final (USDC): 5418577
+  dst uv final: 1016664
+  dst USDC balance final (USDC): 5418577
+  dst total claim (USDC): 5508872
+  dst phantom NAV (claim - balance, USDC): 90295
+  dst unburnable tail bound (shares): 93490364810
+  dst max burnable (shares): 5325087218836
+  dst max burn payout net (USDC): 5408410
+  dst above-max revert selector:
+  0x0f6e887f
+  dst tail revert selector:
+  0x0f6e887f
+  dst |VS| / TS (bps): 163
+  --- raw values (6-dec base units) ---
+  dst VS final raw: -88815846569
+  dst VS after in raw: 1083715516729
+  dst TS raw: 5418577583646
+  dst uv after in raw: 1000000
+  dst uv after move raw: 1016663
+  dst uv final raw: 1016664
+  dst claim raw: 5508872760499
+  dst balance raw: 5418577583646
+  dst maxBurn net raw: 5408410647778
+  src VS final raw: 99883577646
+  src TS raw: 9990000001941
+  src claim raw: 9990000001941
+  src claim pre-out raw: 9990000001941
+  wSend raw (WETH wei): 407115804935102125961
+  vSend raw (USDC units): 999000000194
+  
+  --- source (Ethereum) after round trip ---
+  src VS final (USDC): 99883
+  src uv final: 1000000
+  src TS final (USDC): 9990000
+  src claim final (USDC): 9990000
+  src claim pre-out (USDC): 9990000
+  src burn gross (USDC): 1000
+  src burn net (USDC): 999
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 785.75ms (14.36ms CPU time)
+
+Ran 1 test suite in 790.99ms (785.75ms CPU time): 2 tests passed, 0 failed, 0 skipped (2 total tests)
