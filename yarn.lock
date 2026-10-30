@@ -683,14 +683,24 @@
     named-logs "^0.4.1"
     viem "^2.55.13"
 
-"@rocketh/deploy@^0.20.1":
-  version "0.20.1"
-  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.20.1.tgz#9980325bc3f6d83b21f4b365d3e368b92928922b"
-  integrity sha512-i2u0Sf3Q6i3bjHMWyxn+onHMjsoGsXB1T1bzHWs51LTCyKBjEhQ9tHmj9t3g1aqGbGwSjL9vNYjNIX/BhEzMWw==
+"@rocketh/core@0.24.0":
+  version "0.24.0"
+  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.24.0.tgz#c34cdf8830f6727718f8bc9f052b589faee3ec0a"
+  integrity sha512-Durg1RMeO9XdXPgsR+iTQboT1rdRngUIOirQcRSk2XGK+AH+wjnJLDXT81Xcu6euifdAKWKZvbBaSCdzGy0+sA==
   dependencies:
-    "@rocketh/core" "0.23.1"
     abitype "^1.3.0"
-    eip-1193 "^0.6.5"
+    eip-1193 "^0.7.1"
+    named-logs "^0.4.1"
+    viem "^2.55.13"
+
+"@rocketh/deploy@^0.22.0":
+  version "0.22.0"
+  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.0.tgz#ce0a46872455237b187f07726e732c66be02a325"
+  integrity sha512-RWNuW7z98ppip6Eig4P1DoAFvw0QGc8sBUMcVhNqpOgZfLn4DYszxYPhx6QJtUzlxllwSQ0Wvk/CfwDYEqUEOQ==
+  dependencies:
+    "@rocketh/core" "0.24.0"
+    abitype "^1.3.0"
+    eip-1193 "^0.7.1"
     named-logs "^0.4.1"
     viem "^2.55.13"
 
@@ -1792,6 +1802,11 @@ eip-1193@^0.6.5:
   version "0.6.6"
   resolved "https://registry.yarnpkg.com/eip-1193/-/eip-1193-0.6.6.tgz#95d27f515bca2856ec09ea30528eaa5a488d7c1b"
   integrity sha512-pnEP5TRFfK0v0EbPsrOuJ1RvKDh8Ykh5OyvB+jlIgkJGdUt0nhC3fM/k2TsrOq6Qk+q1E0dpaikfdRzJ6/fi5g==
+
+eip-1193@^0.7.1:
+  version "0.7.4"
+  resolved "https://registry.yarnpkg.com/eip-1193/-/eip-1193-0.7.4.tgz#48d662806c5d8b16812f4637ef82e6567d363eae"
+  integrity sha512-NYtXIpM8dwiMmeJjdRkCzIdpTXU7ANdeO4fW+SpZE3Pia4ljnfXCyY40TZrQ5iJtaUMcJ1aSUsKxtdh0iwFiyw==
 
 emoji-regex@^10.3.0:
   version "10.4.0"

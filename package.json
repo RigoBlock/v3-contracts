@@ -88,7 +88,7 @@
     "@nomicfoundation/hardhat-mocha": "^3.1.0",
     "@nomicfoundation/hardhat-network-helpers": "^3.0.0",
     "@nomicfoundation/hardhat-verify": "^3.1.0",
-    "@rocketh/deploy": "^0.20.1",
+    "@rocketh/deploy": "^0.22.0",
     "@rocketh/node": "^0.21.0",
     "@rocketh/read-execute": "^0.21.1",
     "@rocketh/signer": "^0.19.15",
