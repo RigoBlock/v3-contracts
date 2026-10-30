@@ -91,7 +91,7 @@
     "@rocketh/deploy": "^0.22.0",
     "@rocketh/node": "^0.21.0",
     "@rocketh/read-execute": "^0.22.2",
-    "@rocketh/signer": "^0.19.15",
+    "@rocketh/signer": "^0.20.2",
     "@safe-global/safe-singleton-factory": "^2.0.0",
     "@solarity/hardhat-markup": "^2.0.0",
     "@types/chai": "^4.2.14",
