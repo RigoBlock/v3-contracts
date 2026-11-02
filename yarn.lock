@@ -385,9 +385,9 @@
     deep-eql "^5.0.1"
 
 "@nomicfoundation/hardhat-ethers@^4.0.0":
-  version "4.2.1"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-ethers/-/hardhat-ethers-4.2.1.tgz#05c9f04aa1dfa2e511fd65b0604a7733d9e4a4bb"
-  integrity sha512-BTjsxkghp8r8khEgkROHSCbdzICyoz2WhjiPrPn81NEiTll2LQZnpMctjYOZh1ZRj/0MtnB7ydEJ5fKenewKYw==
+  version "4.2.2"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-ethers/-/hardhat-ethers-4.2.2.tgz#65dbbdfdcf4362788c7439d80165218234f6946e"
+  integrity sha512-gag6y9TBEzmHsSlNbsTD/brlJVrodiBHxNctZj1peKUURTOaW/QP3wGyrpGWJMQrWDKc3b+d7Vdb/3aFuJuK2w==
   dependencies:
     "@nomicfoundation/hardhat-errors" "^3.1.0"
     "@nomicfoundation/hardhat-utils" "^5.0.0"
