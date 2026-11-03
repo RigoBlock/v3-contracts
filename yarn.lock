@@ -701,6 +701,16 @@
     named-logs "^0.4.1"
     viem "^2.55.13"
 
+"@rocketh/core@0.26.1":
+  version "0.26.1"
+  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.26.1.tgz#237687f5f44be25262c9e70686f5b6ebe27e96de"
+  integrity sha512-nvq4J8n0bV0TKECt26ZvMeQ5ZIv59xXjGmGGWoZucx4pG7sjOilcUF5eGY8txr7zoD5jYSa+6okkHEiBMFTVXw==
+  dependencies:
+    abitype "^1.3.0"
+    eip-1193 "^0.7.1"
+    named-logs "^0.4.1"
+    viem "^2.55.13"
+
 "@rocketh/deploy@^0.22.0":
   version "0.22.0"
   resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.0.tgz#ce0a46872455237b187f07726e732c66be02a325"
@@ -741,12 +751,12 @@
     viem "^2.55.13"
 
 "@rocketh/signer@^0.20.2":
-  version "0.20.2"
-  resolved "https://registry.yarnpkg.com/@rocketh/signer/-/signer-0.20.2.tgz#ea4493a9da3229fafc0cd349afcff020b3a22ce1"
-  integrity sha512-7QPSO6S9lOQMr2wME0Ay9k/GcZ1gcsrGRHSgeh7F/wTW3JUXijw9QJ+8BdNIoSVcZTdDyyC8bmNfT8ukQPs3Hw==
+  version "0.20.4"
+  resolved "https://registry.yarnpkg.com/@rocketh/signer/-/signer-0.20.4.tgz#9751ef343c0d9c455554e4b7b8fa4399a98ae769"
+  integrity sha512-7+T2f6Irl25uceex/H7DpbWIRDou0PUdAgeJE09odT8nlgwqNCco9AhWjusOLOk9Ijeko1SVogu8Wr2AMDrIFA==
   dependencies:
     "@eip-1193/signer" "^0.4.0"
-    "@rocketh/core" "0.25.1"
+    "@rocketh/core" "0.26.1"
     eip-1193 "^0.7.1"
 
 "@rtsao/scc@^1.1.0":
@@ -2799,9 +2809,9 @@ hardhat-deploy@^2.0.26:
     zod "^3.25.76"
 
 hardhat@^3.16.0:
-  version "3.21.1"
-  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-3.21.1.tgz#ceaf9c8ed7cef1e44a725722fd40e407517f2647"
-  integrity sha512-UFp02oiVq9B3M+FBo3MixVFQMdaHO04ZkpDvPM0Il7UXg8AO64CFsKLWbX54h+aCp2wonmyuO+Y/9svOjwZTmg==
+  version "3.21.2"
+  resolved "https://registry.yarnpkg.com/hardhat/-/hardhat-3.21.2.tgz#4f13e5d6a2bddc2db1ccded0dc85420753651b4e"
+  integrity sha512-+vkDnIhuEWBH+FzOAQh+2C1rnnkEaM7JOsm3faj8IyHH2CvgmkiuM1bcqsAMw7uNzdNCpgF5NZhDhvM3kbyXrA==
   dependencies:
     "@nomicfoundation/edr" "0.25.0"
     "@nomicfoundation/hardhat-errors" "^3.1.3"
