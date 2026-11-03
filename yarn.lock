@@ -681,16 +681,6 @@
     named-logs "^0.4.1"
     viem "^2.55.13"
 
-"@rocketh/core@0.24.0":
-  version "0.24.0"
-  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.24.0.tgz#c34cdf8830f6727718f8bc9f052b589faee3ec0a"
-  integrity sha512-Durg1RMeO9XdXPgsR+iTQboT1rdRngUIOirQcRSk2XGK+AH+wjnJLDXT81Xcu6euifdAKWKZvbBaSCdzGy0+sA==
-  dependencies:
-    abitype "^1.3.0"
-    eip-1193 "^0.7.1"
-    named-logs "^0.4.1"
-    viem "^2.55.13"
-
 "@rocketh/core@0.25.1":
   version "0.25.1"
   resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.25.1.tgz#9a49d77a52db1703b2e1a2af90ef2e5a22cfea57"
@@ -712,11 +702,11 @@
     viem "^2.55.13"
 
 "@rocketh/deploy@^0.22.0":
-  version "0.22.0"
-  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.0.tgz#ce0a46872455237b187f07726e732c66be02a325"
-  integrity sha512-RWNuW7z98ppip6Eig4P1DoAFvw0QGc8sBUMcVhNqpOgZfLn4DYszxYPhx6QJtUzlxllwSQ0Wvk/CfwDYEqUEOQ==
+  version "0.22.5"
+  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.5.tgz#2b383f8abf94ed17d1ee392c0713eec075324c2f"
+  integrity sha512-cSs7kAKrfJ/ycmF3GNmyrvpk4rK82Laiq+IfcA/cYp/89BISvJA7w15CdaxU59nF1sttE6NEy345z+VN6V2vag==
   dependencies:
-    "@rocketh/core" "0.24.0"
+    "@rocketh/core" "0.26.1"
     abitype "^1.3.0"
     eip-1193 "^0.7.1"
     named-logs "^0.4.1"
