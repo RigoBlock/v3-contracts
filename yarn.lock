@@ -385,9 +385,9 @@
     deep-eql "^5.0.1"
 
 "@nomicfoundation/hardhat-ethers@^4.0.0":
-  version "4.2.1"
-  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-ethers/-/hardhat-ethers-4.2.1.tgz#05c9f04aa1dfa2e511fd65b0604a7733d9e4a4bb"
-  integrity sha512-BTjsxkghp8r8khEgkROHSCbdzICyoz2WhjiPrPn81NEiTll2LQZnpMctjYOZh1ZRj/0MtnB7ydEJ5fKenewKYw==
+  version "4.2.2"
+  resolved "https://registry.yarnpkg.com/@nomicfoundation/hardhat-ethers/-/hardhat-ethers-4.2.2.tgz#65dbbdfdcf4362788c7439d80165218234f6946e"
+  integrity sha512-gag6y9TBEzmHsSlNbsTD/brlJVrodiBHxNctZj1peKUURTOaW/QP3wGyrpGWJMQrWDKc3b+d7Vdb/3aFuJuK2w==
   dependencies:
     "@nomicfoundation/hardhat-errors" "^3.1.0"
     "@nomicfoundation/hardhat-utils" "^5.0.0"
@@ -681,16 +681,6 @@
     named-logs "^0.4.1"
     viem "^2.55.13"
 
-"@rocketh/core@0.24.0":
-  version "0.24.0"
-  resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.24.0.tgz#c34cdf8830f6727718f8bc9f052b589faee3ec0a"
-  integrity sha512-Durg1RMeO9XdXPgsR+iTQboT1rdRngUIOirQcRSk2XGK+AH+wjnJLDXT81Xcu6euifdAKWKZvbBaSCdzGy0+sA==
-  dependencies:
-    abitype "^1.3.0"
-    eip-1193 "^0.7.1"
-    named-logs "^0.4.1"
-    viem "^2.55.13"
-
 "@rocketh/core@0.25.1":
   version "0.25.1"
   resolved "https://registry.yarnpkg.com/@rocketh/core/-/core-0.25.1.tgz#9a49d77a52db1703b2e1a2af90ef2e5a22cfea57"
@@ -712,11 +702,11 @@
     viem "^2.55.13"
 
 "@rocketh/deploy@^0.22.0":
-  version "0.22.0"
-  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.0.tgz#ce0a46872455237b187f07726e732c66be02a325"
-  integrity sha512-RWNuW7z98ppip6Eig4P1DoAFvw0QGc8sBUMcVhNqpOgZfLn4DYszxYPhx6QJtUzlxllwSQ0Wvk/CfwDYEqUEOQ==
+  version "0.22.5"
+  resolved "https://registry.yarnpkg.com/@rocketh/deploy/-/deploy-0.22.5.tgz#2b383f8abf94ed17d1ee392c0713eec075324c2f"
+  integrity sha512-cSs7kAKrfJ/ycmF3GNmyrvpk4rK82Laiq+IfcA/cYp/89BISvJA7w15CdaxU59nF1sttE6NEy345z+VN6V2vag==
   dependencies:
-    "@rocketh/core" "0.24.0"
+    "@rocketh/core" "0.26.1"
     abitype "^1.3.0"
     eip-1193 "^0.7.1"
     named-logs "^0.4.1"
@@ -924,9 +914,9 @@
   integrity sha512-xPyYSz1cMPnJQhl0CLMH68j3gprKZaTjG3s5Vi+fDgx+uhG9NOXwbVt52eFS8ECyXhyKcjDLCBEqBExKuiZb7Q==
 
 "@types/node@*", "@types/node@^26.0.0":
-  version "26.6.5"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-26.6.5.tgz#cb35209e7767c503551b5fa42a48231c7441d979"
-  integrity sha512-uMzsv9stDdofIZBx4UGh4Z9ZgXnGC9seRDscilBcTHAeOFk67MZg/k9bWVfO+bk4qZmG+l52hRnLwUiH2LnJTg==
+  version "26.6.6"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-26.6.6.tgz#9ed7b5817e728ed9216ef7c5b7d373fe3b777104"
+  integrity sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==
   dependencies:
     undici-types "~8.9.0"
 
