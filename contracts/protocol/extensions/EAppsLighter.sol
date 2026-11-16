@@ -22,15 +22,15 @@ contract EAppsLighter is EApps, IEAppsLighter {
 
     /// @inheritdoc IEAppsLighter
     function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        viewData.marketIds = slot.trackedMarkets;
-        viewData.inFlightAmount = slot.data.inFlightAmount;
-        viewData.lastReqId = slot.data.lastReqId;
-        viewData.balanceSnapshot = slot.data.balanceSnapshot;
+        LighterSlot storage s = StorageLib.lighterSlot();
+        viewData.marketIds = s.trackedMarkets;
+        viewData.inFlightAmount = s.data.inFlightAmount;
+        viewData.lastReqId = s.data.lastReqId;
+        viewData.balanceSnapshot = s.data.balanceSnapshot;
     }
 
-    /// @dev Valuation runs before the lock so a landed leg clears the record and unlocks in the
-    ///  same evaluation; a settled transfer with the leg still in transit reverts here.
+    /// @dev Valuation must run before the lock check: it is what clears a landed leg from the
+    ///  record, so the mint that observes the landing succeeds in the same evaluation.
     function _handleApplication(Applications appType) internal override returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.LIGHTER_PERPS) {
             balances = LighterLib.getLighterBalances(address(this));

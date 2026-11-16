@@ -3,9 +3,6 @@ pragma solidity 0.8.37;
 
 /// @title LighterConstants
 /// @notice Predeploy addresses and protocol constants for the LighterEVM integration.
-/// @dev Since devnet 1.2.0 no market metadata table is needed: READ_CORE market info exposes
-///  quoteMultiplier and LighterLib values positions on-chain (see docs/lighter/INTEGRATION.md,
-///  "Market info"). The USDC token address and asset index are devnet values.
 library LighterConstants {
     /// @notice LighterEVM chain ID (19_529 = 0x4C49 = "LI").
     uint256 internal constant LIGHTEREVM_CHAIN_ID = 19_529;

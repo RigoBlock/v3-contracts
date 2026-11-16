@@ -75,7 +75,8 @@ contract LighterLibHarness {
     }
 
     function readTxStatus(uint64 reqId) external view returns (uint8) {
-        return LighterLib.readTxStatus(reqId);
+        (uint8 status, ) = LighterLib.readTxStatus(reqId);
+        return status;
     }
 
     function recordAction(int256 amount, uint64 reqId) external {
@@ -620,19 +621,6 @@ contract LighterLibTest is Test {
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 110e6, "Malformed accepted payload: full amount stays in NAV");
         assertEq(harness.lighterData().lastReqId, 1, "Record stays unresolved (locked)");
-    }
-
-    /// @notice An unknown future status conservatively carries the amount and stays locked
-    ///  (fail-closed), never reverting the NAV read.
-    function testUnknownStatusCarriesAndLocks() public {
-        _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
-        harness.recordAction(100e6, 1);
-        _mockTxStatus(1, 3, bytes(""));
-
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances[0].amount, 110e6, "Unknown status: conservative carry");
-        vm.expectRevert(LighterLib.NavLocked.selector);
-        harness.assertNavUnlocked();
     }
 
     /// @notice A zero amount records nothing: with no record it is a pure no-op, and it never

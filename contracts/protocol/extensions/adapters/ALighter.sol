@@ -28,10 +28,6 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
 
     address private immutable _adapter;
 
-    /// @notice Core order type 6 (TWAP): rejected by Core with code 6514 (devnet 1.2.0); the
-    ///  adapter fails the write synchronously instead.
-    uint8 private constant _ORDER_TYPE_TWAP = 6;
-
     constructor() {
         require(block.chainid == LighterConstants.LIGHTEREVM_CHAIN_ID, NotLighterEVM());
         _adapter = address(this);
@@ -108,8 +104,8 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
 
     /// @inheritdoc ILighterCoreEntrypoint
     /// @notice Creates a perp order on LighterCore; the market is tracked automatically on first
-    ///  trade so it is always valued in NAV.
-    /// @dev TWAP orders (orderType 6) revert synchronously (Core rejects them asynchronously).
+    ///  trade so it is always valued in NAV. Core rejects unsupported order types (e.g. TWAP,
+    ///  orderType 6) asynchronously with an error code on the reqId status.
     function createOrder(
         uint48 accountIndex,
         uint16 marketIndex,
@@ -124,7 +120,6 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
         uint32 triggerPrice
     ) external override nonReentrant onlyDelegateCall returns (uint64 reqId) {
         require(marketIndex < LighterConstants.FIRST_SPOT_MARKET_ID, InvalidMarket());
-        require(orderType != _ORDER_TYPE_TWAP, InvalidOrderType());
         LighterLib.trackMarket(marketIndex);
 
         reqId = ILighterCoreEntrypoint(LighterConstants.CORE_ENTRYPOINT).createOrder(

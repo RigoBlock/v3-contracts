@@ -237,9 +237,10 @@ flows**: the only way to trade a market through the pool is `createOrder`, which
 the NAV loop only iterates tracked markets. The residual risk vector is API-key trading
 (off-chain), which is why phase 1 excludes `changePubKey` — see [API_KEYS.md](API_KEYS.md).
 
-TWAP orders (`orderType == 6`) revert synchronously with `InvalidOrderType` (Core rejects them
-with code `6514`; failing early saves a guaranteed-to-fail write). `cancelOrder` /
-`cancelAllOrders` are forwarded unchanged (no NAV tracking impact).
+Core rejects unsupported order types asynchronously (TWAP, `orderType == 6`, fails with code
+`6514` on the reqId status — the adapter forwards it unchanged; the failure is surfaced via the
+status read like any other Core write). `cancelOrder` / `cancelAllOrders` are forwarded
+unchanged (no NAV tracking impact).
 
 **App-active vs tracked-markets visibility.** `getLighterTrackedMarkets` reads pool storage
 unconditionally — it does not depend on the `LIGHTER_PERPS` application bit. So if the app bit

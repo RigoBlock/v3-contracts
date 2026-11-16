@@ -23,6 +23,5 @@ interface IALighter is ILighterInteropManager, ILighterCoreEntrypoint {
     error InvalidRoute();
     error InvalidRecipient();
     error InvalidMarket();
-    error InvalidOrderType();
     error AccountNotActivated();
 }

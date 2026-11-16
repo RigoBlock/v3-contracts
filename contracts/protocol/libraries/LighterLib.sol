@@ -93,21 +93,15 @@ library LighterLib {
 
     /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
     ///  request status. Pending requests are valued exactly and never lock. A confirmed request
-    /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
-    ///  request status. The USDC snapshot is taken when the request is recorded, so it provably
-    ///  predates the async EVM-side leg (refund/delivery), which Core only schedules after
-    ///  processing the request. Pending: valued exactly (deposit added back, withdrawal untouched)
-    ///  but locked. Confirmed: the leg is carried until the wallet increases over the snapshot,
-    ///  which clears the record; nothing outstanding (full acceptance) needs no landing. Rejected:
-    ///  nothing is in transit, cleared immediately. Unknown statuses carry conservatively and stay
-    ///  locked. The lock (assertNavUnlocked) spans request to landing: it is what keeps every
-    ///  permissioned flow out of the wallet so the snapshot comparison stays exact.
+    /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
+    ///  predates the async leg (Core schedules refund/delivery only after processing the request),
+    ///  so the record clears exactly when the wallet increases over it.
     function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
         LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
         if (data.lastReqId == 0 || amount == 0) return 0;
 
-        (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
+        (uint8 status, bytes memory payload) = readTxStatus(data.lastReqId);
         if (status == 0) {
             // pending: a deposit left the wallet and is not on Core yet; a withdrawal has not
             //  moved either side; the leg cannot have landed
@@ -116,9 +110,8 @@ library LighterLib {
             if (amount > 0) {
                 // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
                 //  the collateral read) and the unaccepted remainder is refunded async
-                uint256 amount256 = uint256(amount);
                 uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
-                uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
+                uint256 outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
                 adjustment = int256(outstanding);
             } else {
                 // withdrawal confirmed: Core debited and the delivery to the wallet is async;
@@ -132,9 +125,6 @@ library LighterLib {
         } else if (status == 2) {
             // rejected on Core (deposits never fail per spec): nothing is in transit
             delete lighterSlot.data;
-        } else {
-            // unknown future status: conservatively carry the amount and stay locked
-            adjustment = amount > 0 ? amount : int256(0);
         }
     }
 
@@ -152,7 +142,7 @@ library LighterLib {
         LighterData storage data = StorageLib.lighterSlot().data;
         uint64 lastReqId = data.lastReqId;
         if (lastReqId != 0) {
-            uint8 status = readTxStatus(lastReqId);
+            (uint8 status, ) = readTxStatus(lastReqId);
             if (status == 0) revert PendingRequest();
         }
         data.inFlightAmount = int128(amount);
@@ -198,15 +188,7 @@ library LighterLib {
     }
 
     /// @notice status: 0 pending, 1 successful, 2 failed (payload then abi.encode(uint32 errorCode)).
-    function readTxStatus(uint64 reqId) internal view returns (uint8 status) {
-        (status, ) = _readTxStatus(reqId);
-    }
-
-    function readTxStatusResult(uint64 reqId) internal view returns (uint8 status, bytes memory payload) {
-        return _readTxStatus(reqId);
-    }
-
-    function _readTxStatus(uint64 reqId) private view returns (uint8 status, bytes memory payload) {
+    function readTxStatus(uint64 reqId) internal view returns (uint8 status, bytes memory payload) {
         (status, payload) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
     }
 

@@ -87,6 +87,7 @@ contract ExtensionsMap is IExtensionsMap {
 
         // validate immutable constants. Assumes deps are correctly initialized
         assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
+        assert(_EAPPS_LIGHTER_MARKETS_SELECTOR == type(IEAppsLighter).interfaceId);
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
                 _EORACLE_CONVERT_AMOUNT_SELECTOR ^

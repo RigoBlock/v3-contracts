@@ -261,10 +261,6 @@ contract ALighterForkTest is Test {
         vm.expectRevert(IALighter.InvalidMarket.selector);
         IALighter(pool).createOrder(0, 2048, 1, 0, 0, 0, 1, 100_00, true, false, 0);
 
-        // TWAP orders (orderType 6) are rejected synchronously (Core code 6514).
-        vm.expectRevert(IALighter.InvalidOrderType.selector);
-        IALighter(pool).createOrder(0, MARKET_ID, 1, 6, 0, 0, 1, 100_00, true, false, 0);
-
         // A previously untracked perp market trades and is auto-tracked.
         IALighter(pool).createOrder(0, 5, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);

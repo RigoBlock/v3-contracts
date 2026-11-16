@@ -586,14 +586,6 @@ contract ALighterUnit is Test {
         assertGt(LighterLibHarness(address(pool)).marketIndex(5), 0);
     }
 
-    /// @notice TWAP orders (orderType 6) are rejected synchronously (Core code 6514).
-    function testCreateOrderRevertsForTwapOrderType() public {
-        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        _mockMarketInfo(0, _marketInfo(0, 0, 500_0000));
-        vm.expectRevert(IALighter.InvalidOrderType.selector);
-        IALighter(address(pool)).createOrder(0, 0, 0, 6, 0, 0, 100, 500_0000, true, false, 0);
-    }
-
     /// @notice A market that does not exist on Core reports found=false on the auto-track
     ///  validation read and reverts LighterReadFailed.
     function testCreateOrderRevertsForNonexistentCoreMarket() public {
