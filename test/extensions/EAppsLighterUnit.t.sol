@@ -473,7 +473,7 @@ contract EAppsLighterUnitTest is Test {
         LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
         assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
         assertEq(viewData.lastReqId, 1, "Only transfers record an action");
-        assertEq(viewData.walletBaselineUsdc, 0, "Baseline pins at the first settled observation");
+        assertEq(viewData.usdcSnapshotAtSettle, 0, "Baseline pins at the first settled observation");
 
         // The settled, fully-accepted deposit clears on the first NAV evaluation.
         _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));

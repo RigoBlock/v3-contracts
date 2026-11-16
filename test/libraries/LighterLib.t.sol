@@ -570,6 +570,43 @@ contract LighterLibTest is Test {
         harness.assertNavUnlocked();
     }
 
+    /// @notice In-flight tracking is independent of position revaluation: while a transfer is
+    ///  pending (and later settled-in-transit), mark prices and funding keep moving, and the
+    ///  computed NAV still equals the independent recomputation at every evaluation.
+    function testNavExactWhilePositionsMoveDuringTransfer() public {
+        MockERC20(USDC).mint(address(harness), 500e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
+        _track(1);
+        _mockMarketInfoWithPrice(1, 5_000_000, 1);
+
+        // Withdrawal of 400e6 pending; a 100-size long on market 1 (quoteMultiplier 1000) marks
+        //  at 5_000_000: markValue = 100 * 5_000_000 * 1000 = 500_000_000_000, entry 4e11.
+        harness.recordAction(-400e6, 1);
+        _mockTxStatus(1, 0, bytes(""));
+        _mockMarketInfoWithPrice(1, 5_000_000, 1000);
+        LighterTypes.Position memory position = _position(100, 0, 0);
+        position.entryQuote = 400_000_000_000;
+        _mockPosition(ACCOUNT, 1, position);
+        assertEq(_nav(), 1500e6 + 100_000_000_000, "Pending: transfer and mark-to-market compose");
+
+        // Mark moves while Core has not processed anything: the pending withdrawal still needs
+        //  no adjustment and NAV revalues with it.
+        _mockMarketInfoWithPrice(1, 6_000_000, 1000);
+        assertEq(_nav(), 1500e6 + 200_000_000_000, "Pending: only the mark moved");
+
+        // Core debited: collateral drops to 600e6 and the app carries the undelivered 400e6;
+        //  the mark moves again in the same window.
+        _mockTxStatus(1, 1, bytes(""));
+        _mockAccountInfo(ACCOUNT, _accountInfo(600e6));
+        _mockMarketInfoWithPrice(1, 7_000_000, 1000);
+        assertEq(_nav(), 1500e6 + 300_000_000_000, "Settled-in-transit: carry and revaluation compose");
+
+        // The delivery lands: the record clears and the collateral read alone is authoritative.
+        MockERC20(USDC).mint(address(harness), 400e6);
+        assertEq(_nav(), 1500e6 + 300_000_000_000, "Delivered: exact without the carry");
+        assertEq(harness.lighterData().lastReqId, 0);
+    }
+
     /// @notice wallet USDC + Lighter app balance, in 6-dec USDC.
     function _nav() internal returns (uint256) {
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);

@@ -336,7 +336,7 @@ contract ALighterLiveTest is Test {
         );
         if (status == 0) return amount > 0 ? amount : int256(0);
 
-        uint256 baseline = uint256(viewData.walletBaselineUsdc);
+        uint256 baseline = uint256(viewData.usdcSnapshotAtSettle);
         if (amount > 0) {
             uint256 amount256 = uint256(amount);
             uint256 accepted = status == 1 && payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
