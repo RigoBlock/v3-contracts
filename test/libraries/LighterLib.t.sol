@@ -82,10 +82,6 @@ contract LighterLibHarness {
         LighterLib.recordAction(amount, reqId);
     }
 
-    function clearAction() external {
-        LighterLib.clearAction();
-    }
-
     function assertNavUnlocked() external view {
         LighterLib.assertNavUnlocked();
     }
@@ -468,45 +464,39 @@ contract LighterLibTest is Test {
     }
 
     /// @notice A fully-accepted deposit settles: the collateral read is authoritative (no
-    ///  adjustment), but the record persists until the owner attests the EVM-side leg via
-    ///  syncTransfer — mint/burn stay locked in between.
-    function testInFlightSettledDepositNoAdjustment() public {
+    ///  adjustment) and the next NAV evaluation clears the record.
+    function testInFlightSettledDepositClears() public {
         _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
         harness.recordAction(100e6, 1);
         _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
 
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 10e6, "Settled deposit must drop the in-flight amount");
-        assertEq(harness.lighterData().lastReqId, 1, "Record persists until the owner syncs");
-
-        harness.clearAction();
-        balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances[0].amount, 10e6);
-        assertEq(harness.lighterData().lastReqId, 0, "Sync clears the record");
+        assertEq(harness.lighterData().lastReqId, 0, "Nothing outstanding: record cleared");
     }
 
     /// @notice A partially-accepted deposit keeps the unaccepted remainder in NAV — the refund
-    ///  is in transit and sits on neither side — until the owner attests it landed (syncTransfer).
-    function testInFlightPartialDepositCarriedUntilSync() public {
+    ///  is in transit and sits on neither side — until the refund lands in the wallet.
+    function testInFlightPartialDepositUntilRefundLands() public {
         _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
+        MockERC20(USDC).mint(address(harness), 1_000e6);
         harness.recordAction(100e6, 1);
 
         _mockTxStatus(1, 1, abi.encode(uint64(40e6)));
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 70e6, "Unaccepted remainder (60e6) stays in NAV while the refund is in transit");
-        assertEq(harness.lighterData().lastReqId, 1, "Record persists until the owner syncs");
 
-        harness.clearAction();
+        MockERC20(USDC).mint(address(harness), 60e6);
         balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances[0].amount, 10e6, "Synced: collateral read alone is authoritative");
+        assertEq(balances[0].amount, 10e6, "Refund landed: collateral read is authoritative again");
+        assertEq(harness.lighterData().lastReqId, 0, "Landed leg: record cleared");
     }
 
     /// @notice A settled withdrawal is carried by the app (+amount): Core debited (the collateral
     ///  read excludes the amount) but the wallet not yet credited — exact while the delivery is in
-    ///  transit. The landing is not observable on-chain, so the carry persists (overstating once
-    ///  the delivery lands) until the owner attests it via syncTransfer; mint/burn are locked
-    ///  throughout the settled state, so the window is untradeable.
-    function testInFlightWithdrawalCarriedUntilSync() public {
+    ///  transit. Once the delivery lands in the wallet the record clears and the collateral read
+    ///  alone is authoritative.
+    function testInFlightWithdrawalUntilDeliveryLands() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
@@ -523,27 +513,21 @@ contract LighterLibTest is Test {
         balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 1000e6, "Core debited, delivery pending: the app carries the amount");
         assertEq(_nav(), 1500e6, "Exact while the delivery is in transit");
-
-        // The delivery lands in the wallet; the landing is invisible on-chain, so the app still
-        //  carries the amount (NAV overstated) — untradeable because the settled state locks
-        //  mint/burn (assertNavUnlocked).
-        MockERC20(USDC).mint(address(harness), 400e6);
-        balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances[0].amount, 1000e6, "Carry persists until the owner syncs");
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // Owner attests the delivery landed: record clears, NAV exact again.
-        harness.clearAction();
+        // The delivery lands in the wallet: record clears, NAV exact, lock lifts.
+        MockERC20(USDC).mint(address(harness), 400e6);
         balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances[0].amount, 600e6, "Synced: collateral read alone is authoritative");
+        assertEq(balances[0].amount, 600e6, "Delivered: collateral read alone is authoritative");
         assertEq(_nav(), 1500e6);
+        assertEq(harness.lighterData().lastReqId, 0, "Landed leg: record cleared");
         harness.assertNavUnlocked();
     }
 
-    /// @notice NAV across the full transfer lifecycle: exact while pending (status 0) and while a
-    ///  settled leg is in transit; after the leg lands the carry would overstate NAV, which is why
-    ///  the settled state locks mint/burn until the owner syncs. Deposits and withdrawals alike.
+    /// @notice NAV across the full transfer lifecycle: exact while pending (status 0), while a
+    ///  settled leg is in transit (carried), and after the leg lands (record cleared). The settled
+    ///  state locks mint/burn until the leg lands.
     function testNavAcrossTransferLifecycle() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
@@ -558,14 +542,12 @@ contract LighterLibTest is Test {
         assertEq(_nav(), 1500e6, "Pending deposit: the amount is added back");
         harness.assertNavUnlocked();
 
-        // Settled, fully accepted: collateral read shows the credit; no adjustment; the settled
-        //  state locks mint/burn until the owner syncs.
+        // Settled, fully accepted: collateral read shows the credit; the evaluation clears the
+        //  record, so the lock lifts in the same pass.
         _mockTxStatus(1, 1, abi.encode(uint64(300e6)));
         _mockAccountInfo(ACCOUNT, _accountInfo(1300e6));
         assertEq(_nav(), 1500e6, "Settled deposit: collateral read is authoritative");
-        vm.expectRevert(LighterLib.NavLocked.selector);
-        harness.assertNavUnlocked();
-        harness.clearAction();
+        assertEq(harness.lighterData().lastReqId, 0, "Nothing outstanding: record cleared");
         harness.assertNavUnlocked();
 
         // Withdrawal of 400e6: pending, neither side moved.
@@ -581,12 +563,11 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // Delivery lands in the wallet: invisible on-chain, carry persists (overstated) until the
-        //  owner attests — untradeable while locked.
+        // Delivery lands in the wallet: record clears and the lock lifts in the same evaluation.
         MockERC20(USDC).mint(address(harness), 400e6);
-        assertEq(_nav(), 1500e6 + 400e6, "Post-landing pre-sync: overstated, hence the lock");
-        harness.clearAction();
-        assertEq(_nav(), 1500e6, "Synced: exact without adjustment");
+        assertEq(_nav(), 1500e6, "Delivered: exact without adjustment");
+        assertEq(harness.lighterData().lastReqId, 0);
+        harness.assertNavUnlocked();
     }
 
     /// @notice wallet USDC + Lighter app balance, in 6-dec USDC.
@@ -596,18 +577,15 @@ contract LighterLibTest is Test {
         return MockERC20(USDC).balanceOf(address(harness)) + app;
     }
 
-    /// @notice A rejected withdrawal (status 2) never moved anything: no adjustment. The record
-    ///  still persists (locked) until the owner syncs — attesting that no leg is outstanding.
-    function testInFlightFailedWithdrawalNoAdjustment() public {
+    /// @notice A rejected withdrawal (status 2) never moved anything: no adjustment, and the
+    ///  record clears on the next evaluation.
+    function testInFlightFailedWithdrawalClears() public {
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
         _mockTxStatus(1, 2, abi.encode(uint32(7003)));
 
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 1000e6);
-        assertEq(harness.lighterData().lastReqId, 1);
-
-        harness.clearAction();
         assertEq(harness.lighterData().lastReqId, 0);
     }
 
@@ -626,8 +604,9 @@ contract LighterLibTest is Test {
         assertEq(data.lastReqId, 2);
     }
 
-    /// @notice NavLocked only while a settled transfer awaits the owner's sync: no record and
-    ///  pending requests never lock (exact via the in-flight amount), settled requests lock.
+    /// @notice NavLocked only while a settled transfer's leg is outstanding: no record and
+    ///  pending requests never lock (exact via the in-flight amount); settled requests lock until
+    ///  the leg lands.
     function testAssertNavUnlockedLifecycle() public {
         harness.assertNavUnlocked();
 
@@ -636,11 +615,13 @@ contract LighterLibTest is Test {
         vm.warp(block.timestamp + 1 days);
         harness.assertNavUnlocked();
 
+        MockERC20(USDC).mint(address(harness), 1_000e6);
         _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        harness.clearAction();
+        // Nothing outstanding (fully accepted): the next valuation clears the record.
+        harness.getLighterBalances(ACCOUNT);
         harness.assertNavUnlocked();
     }
 

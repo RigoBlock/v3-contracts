@@ -17,7 +17,7 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {Applications, LighterSlot, LighterViewData} from "../types/Applications.sol";
+import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
@@ -84,14 +84,6 @@ contract EApps is IEApps {
     /// @inheritdoc IEApps
     function getUniV4TokenIds() external view override returns (uint256[] memory tokenIds) {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
-    }
-
-    /// @inheritdoc IEApps
-    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        viewData.marketIds = slot.trackedMarkets;
-        viewData.inFlightAmount = slot.data.inFlightAmount;
-        viewData.lastReqId = slot.data.lastReqId;
     }
 
     /// @notice Directly retrieve balances from target application contract.

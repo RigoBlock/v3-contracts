@@ -40,6 +40,7 @@ struct HyperliquidData {
 struct LighterData {
     int128 inFlightAmount;
     uint64 lastReqId;
+    uint128 actionBaselineUsdc;
 }
 
 /// @notice Lighter perps storage: in-flight accounting plus the tracked-market registry.
@@ -60,4 +61,5 @@ struct LighterViewData {
     uint16[] marketIds;
     int128 inFlightAmount;
     uint64 lastReqId;
+    uint128 actionBaselineUsdc;
 }

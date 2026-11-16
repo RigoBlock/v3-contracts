@@ -3,10 +3,12 @@ pragma solidity 0.8.37;
 
 import {EApps} from "./EApps.sol";
 import {LighterLib} from "../libraries/LighterLib.sol";
+import {StorageLib} from "../libraries/StorageLib.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
-import {Applications} from "../types/Applications.sol";
+import {Applications, LighterSlot, LighterViewData} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
+import {IEAppsLighter} from "./adapters/interfaces/IEAppsLighter.sol";
 
 /// @title EAppsLighter - LighterEVM application view extension.
 /// @notice EApps base plus the Lighter perps branch. Kept separate from the base contract so
@@ -14,21 +16,27 @@ import {EAppsParams} from "../types/DeploymentParams.sol";
 ///  (and version bumps) on unrelated chains.
 /// @notice Owns the Lighter NAV valuation: ALighter handles Core writes, this extension reads
 ///  Core state through READ_CORE and values the pool's account over its tracked markets.
-///  See docs/lighter/INTEGRATION.md.
-contract EAppsLighter is EApps {
+contract EAppsLighter is EApps, IEAppsLighter {
     /// @param params Chain-specific addresses bundled into a single struct.
     constructor(EAppsParams memory params) EApps(params) {}
 
-    /// @dev Adds the Lighter branch; every other application is handled by the base. Pending
-    ///  transfers never lock (the in-flight amount values them exactly); a settled transfer locks
-    ///  NAV-dependent flows until the owner attests the EVM-side leg landed (syncTransfer) —
-    ///  same exempt-flag mechanism as Hyperliquid, status-driven instead of time-driven.
+    /// @inheritdoc IEAppsLighter
+    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
+        LighterSlot storage slot = StorageLib.lighterSlot();
+        viewData.marketIds = slot.trackedMarkets;
+        viewData.inFlightAmount = slot.data.inFlightAmount;
+        viewData.lastReqId = slot.data.lastReqId;
+        viewData.actionBaselineUsdc = slot.data.actionBaselineUsdc;
+    }
+
+    /// @dev Valuation runs before the lock so a landed leg clears the record and unlocks in the
+    ///  same evaluation; a settled transfer with the leg still in transit reverts here.
     function _handleApplication(Applications appType) internal override returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.LIGHTER_PERPS) {
+            balances = LighterLib.getLighterBalances(address(this));
             if (!TransientStorage.getNavLockExempt()) {
                 LighterLib.assertNavUnlocked();
             }
-            balances = LighterLib.getLighterBalances(address(this));
         } else {
             balances = super._handleApplication(appType);
         }

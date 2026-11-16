@@ -20,6 +20,7 @@
 pragma solidity 0.8.37;
 
 import {IEApps} from "../extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../extensions/adapters/interfaces/IEAppsLighter.sol";
 import {IECrosschain} from "../extensions/adapters/interfaces/IECrosschain.sol";
 import {IEERC20} from "../extensions/adapters/interfaces/IEERC20.sol";
 import {IEGmxCallback} from "../extensions/adapters/interfaces/IEGmxCallback.sol";
@@ -37,7 +38,7 @@ contract ExtensionsMap is IExtensionsMap {
     // mapped selectors. When adding a new selector, make sure its mapping to extension address is added below.
     bytes4 private constant _EAPPS_BALANCES_SELECTOR = IEApps.getAppTokenBalances.selector;
     bytes4 private constant _EAPPS_UNIV4_POSITIONS_SELECTOR = IEApps.getUniV4TokenIds.selector;
-    bytes4 private constant _EAPPS_LIGHTER_MARKETS_SELECTOR = IEApps.getLighterTrackedMarkets.selector;
+    bytes4 private constant _EAPPS_LIGHTER_MARKETS_SELECTOR = IEAppsLighter.getLighterTrackedMarkets.selector;
     bytes4 private constant _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR = IEOracle.convertBatchTokenAmounts.selector;
     bytes4 private constant _EORACLE_CONVERT_AMOUNT_SELECTOR = IEOracle.convertTokenAmount.selector;
     bytes4 private constant _EORACLE_PRICE_FEED_SELECTOR = IEOracle.hasPriceFeed.selector;
@@ -85,10 +86,7 @@ contract ExtensionsMap is IExtensionsMap {
         wrappedNative = params.wrappedNative;
 
         // validate immutable constants. Assumes deps are correctly initialized
-        assert(
-            _EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR ^ _EAPPS_LIGHTER_MARKETS_SELECTOR ==
-                type(IEApps).interfaceId
-        );
+        assert(_EAPPS_BALANCES_SELECTOR ^ _EAPPS_UNIV4_POSITIONS_SELECTOR == type(IEApps).interfaceId);
         assert(
             _EORACLE_CONVERT_BATCH_AMOUNTS_SELECTOR ^
                 _EORACLE_CONVERT_AMOUNT_SELECTOR ^

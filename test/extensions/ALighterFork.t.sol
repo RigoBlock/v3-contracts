@@ -11,6 +11,7 @@ import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
@@ -270,7 +271,7 @@ contract ALighterForkTest is Test {
         vm.stopPrank();
 
         // The traded markets are tracked for NAV valuation without any explicit tracking call.
-        LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
+        LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
         assertEq(viewData.marketIds.length, 2, "Traded markets should be auto-tracked");
         assertEq(viewData.marketIds[0], 5);
         assertEq(viewData.marketIds[1], MARKET_ID);
@@ -313,8 +314,8 @@ contract ALighterForkTest is Test {
 
     /// @notice Lock semantics around a deposit: minting works while the request is pending (also
     ///  from later blocks — the pending deposit is valued exactly, no wall-clock expiry); once
-    ///  Core settles, minting locks until the owner attests the EVM-side leg landed via
-    ///  syncTransfer.
+    ///  Core settles, minting locks until the async refund lands in the pool wallet, which clears
+    ///  the record and unlocks in the same evaluation.
     function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
@@ -338,17 +339,24 @@ contract ALighterForkTest is Test {
         IERC20(usdc).approve(pool, depositAmount);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        // Settled: locked for NAV-dependent flows.
+        // Settled with a partial acceptance: the unaccepted remainder is in transit and the
+        // settled state locks mint for NAV-dependent flows.
+        uint256 baseline = IERC20(usdc).balanceOf(pool);
         vm.roll(block.number + 1);
-        _mockAccountInfo(int128(uint128(depositAmount)));
-        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(depositAmount)));
+        _mockAccountInfo(int128(uint128(depositAmount - 1e6)));
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(depositAmount - 1e6)));
+        deal(usdc, poolOwner, depositAmount);
+        IERC20(usdc).approve(pool, depositAmount);
         vm.expectRevert(LighterLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        // Owner attests the leg landed: unlocked, collateral read authoritative.
-        IALighter(pool).syncTransfer();
-        deal(usdc, poolOwner, depositAmount);
-        IERC20(usdc).approve(pool, depositAmount);
+        // The settled observation pins the wallet baseline (the reverted mint's evaluation is
+        // rolled back, so commit it with an exempt updateUnitaryValue).
+        ISmartPoolActions(pool).updateUnitaryValue();
+
+        // The refund lands in the pool wallet (balance recovers to baseline + remainder): the
+        // mint's own evaluation clears the record and unlocks in the same pass.
+        deal(usdc, pool, baseline + 1e6);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }

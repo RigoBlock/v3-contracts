@@ -13,6 +13,7 @@ import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
@@ -202,7 +203,6 @@ contract EAppsLighterUnitTest is Test {
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.createOrder.selector, aLighter);
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.cancelOrder.selector, aLighter);
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.cancelAllOrders.selector, aLighter);
-        IAuthority(authority).addMethod(IALighter.syncTransfer.selector, aLighter);
 
         // Fund the pool and give it non-zero supply/NAV.
         MockUSDC(USDC).mint(user, 1_000_000e6);
@@ -301,17 +301,15 @@ contract EAppsLighterUnitTest is Test {
         revert("Lighter application should be returned");
     }
 
-    /// @notice Deposits USDC to Core perps through the adapter, marks the request settled
-    ///  (fully accepted) and syncs the record: NAV calls then treat the collateral read as
-    ///  authoritative and mint/burn are unlocked.
+    /// @notice Deposits USDC to Core perps through the adapter and marks the request settled
+    ///  (fully accepted): the next NAV evaluation clears the record (nothing outstanding), so
+    ///  collateral reads are authoritative and mint/burn stay unlocked.
     function _depositAndSettle(uint256 amount) internal {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, amount, LighterRouteType.Perps);
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(amount)));
-        vm.prank(poolOwner);
-        IALighter(pool).syncTransfer();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -418,8 +416,8 @@ contract EAppsLighterUnitTest is Test {
     }
 
     /// @notice Lock semantics: a pending deposit is valued through the in-flight amount with no
-    ///  lock (any block, any time); once Core settles, NAV-dependent flows lock until the owner
-    ///  attests the EVM-side leg landed via syncTransfer.
+    ///  lock (any block, any time); once Core settles, NAV-dependent flows lock until the async
+    ///  leg lands in the wallet, which clears the record and unlocks in the same evaluation.
     function testHandleApplication_LockLifecycle() public {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
@@ -436,17 +434,31 @@ contract EAppsLighterUnitTest is Test {
         );
         assertEq(lighterApp.balances[0].amount, 10_000e6, "Pending deposit must be valued, not locked");
 
-        // Settled: locked (the undetectable EVM-side leg could distort NAV either way).
+        // Fully accepted: nothing is in transit, so the evaluation clears the record and stays
+        // unlocked with the collateral read authoritative.
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(10_000e6)));
         _mockAccountInfo(pool, _accountInfo(10_000e6));
+        lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
+        assertEq(lighterApp.balances[0].amount, 10_000e6);
+
+        // Partial acceptance: the remainder stays in NAV and the settled state stays locked while
+        // the refund is in transit.
+        vm.prank(poolOwner);
+        IALighter(pool).sendToCore(3, pool, false, 10_000e6, LighterRouteType.Perps);
+        _mockTxStatusWithPayload(2, 1, abi.encode(uint64(4_000e6)));
+        _mockAccountInfo(pool, _accountInfo(14_000e6));
         vm.expectRevert(LighterLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
 
-        // Synced: unlocked, collateral read authoritative.
-        vm.prank(poolOwner);
-        IALighter(pool).syncTransfer();
+        // The settled observation pins the wallet baseline (the reverted evaluation is rolled
+        // back, so commit it with an exempt updateUnitaryValue).
+        ISmartPool(payable(pool)).updateUnitaryValue();
+
+        // The refund lands (the mock manager never pulled tokens; minting the remainder to the
+        // pool simulates it): cleared and unlocked in the same evaluation.
+        MockUSDC(USDC).mint(pool, 6_000e6);
         lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
-        assertEq(lighterApp.balances[0].amount, 10_000e6);
+        assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
     }
 
     /// @notice getLighterTrackedMarkets reports tracked markets and the in-flight ledger; a fresh
@@ -456,6 +468,16 @@ contract EAppsLighterUnitTest is Test {
         uint256 deposit = 10_000e6;
         _depositAndSettle(deposit);
 
+        // Settled, pre-evaluation: the view still reports the record; the wallet baseline pins
+        //  at the first observation of the settled state.
+        LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
+        assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
+        assertEq(viewData.lastReqId, 1, "Only transfers record an action");
+        assertEq(viewData.actionBaselineUsdc, 0, "Baseline pins at the first settled observation");
+
+        // The settled, fully-accepted deposit clears on the first NAV evaluation.
+        _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
+
         vm.startPrank(poolOwner);
         _mockMarketInfo(0, _marketInfo(500_000));
         _mockMarketInfo(2, _marketInfo(100_000));
@@ -464,18 +486,17 @@ contract EAppsLighterUnitTest is Test {
         IALighter(pool).createOrder(0, 2, 0, 0, 0, 0, 30_000, 100_000, true, false, 0);
         vm.stopPrank();
 
-        // The deposit was settled and synced by _depositAndSettle: the view is clear.
-        LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
+        viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
         assertEq(viewData.marketIds.length, 2, "Two markets should be tracked");
         assertEq(viewData.marketIds[0], 0, "ETH-PERP");
         assertEq(viewData.marketIds[1], 2, "SOL-PERP");
-        assertEq(viewData.inFlightAmount, 0, "Deposit settled and synced: no in-flight amount");
+        assertEq(viewData.inFlightAmount, 0, "Deposit settled: no in-flight amount");
         assertEq(viewData.lastReqId, 0);
 
         // A fresh pool with no Lighter activity reports the empty view.
         vm.prank(poolOwner);
         (address pool2, ) = IRigoblockPoolProxyFactory(factory).createPool("Lighter Unit 2", "LU2", USDC);
-        LighterViewData memory empty = IEApps(pool2).getLighterTrackedMarkets();
+        LighterViewData memory empty = IEAppsLighter(pool2).getLighterTrackedMarkets();
         assertEq(empty.marketIds.length, 0);
         assertEq(empty.inFlightAmount, 0);
         assertEq(empty.lastReqId, 0);

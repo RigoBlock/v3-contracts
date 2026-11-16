@@ -9,6 +9,7 @@ import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.
 import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 
 /// @title ALighterLiveTest
 /// @notice Live-RPC tests against the LighterEVM devnet: real READ_CORE precompile responses,
@@ -222,7 +223,7 @@ contract ALighterLiveTest is Test {
     ///  Core), so the only value that can change between brackets is the mark price.
     function _attemptNavComparison() internal returns (NavAttempt memory attempt) {
         LighterViewData memory viewData = abi.decode(
-            _ethCall(TESTER_POOL, abi.encodeCall(IEApps.getLighterTrackedMarkets, ())),
+            _ethCall(TESTER_POOL, abi.encodeCall(IEAppsLighter.getLighterTrackedMarkets, ())),
             (LighterViewData)
         );
 
@@ -321,20 +322,46 @@ contract ALighterLiveTest is Test {
         if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
     }
 
-    /// @dev Mirrors LighterLib._inFlightAdjustment against the view data: the tx-status read
-    ///  drives the pending/settled distinction. A settled request locks NAV-dependent flows until
-    ///  the owner syncs, so the pool's getAppTokenBalances reverts in that state — the attempt
-    ///  skips (ops duty: syncTransfer after verifying the EVM-side leg landed).
+    /// @dev Mirrors LighterLib._inFlightAdjustment against the view data: pending requests add the
+    ///  in-flight amount back; a settled request contributes nothing once its leg landed (wallet
+    ///  recovered to the pinned baseline + leg) and stays carried while the leg is in transit —
+    ///  the pool's own evaluation reverts in that state, so the attempt skips.
     function _replicateInFlightAdjustment(LighterViewData memory viewData) internal returns (int256 adjustment) {
         int256 amount = int256(viewData.inFlightAmount);
         if (viewData.lastReqId == 0 || amount == 0) return 0;
 
-        (uint8 status, ) = abi.decode(_readCore(abi.encodePacked(uint16(0x0000), viewData.lastReqId)), (uint8, bytes));
-        if (status != 0) {
-            console2.log("Skipping: settled Lighter transfer awaits the owner syncTransfer");
+        (uint8 status, bytes memory payload) = abi.decode(
+            _readCore(abi.encodePacked(uint16(0x0000), viewData.lastReqId)),
+            (uint8, bytes)
+        );
+        if (status == 0) return amount > 0 ? amount : int256(0);
+
+        uint256 baseline = uint256(viewData.actionBaselineUsdc);
+        if (amount > 0) {
+            uint256 amount256 = uint256(amount);
+            uint256 accepted = status == 1 && payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
+            uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
+            if (outstanding == 0) return 0;
+            // baseline == 0: the pin is not committed yet, so the pool's own evaluation carries
+            //  and locks; compare only once the leg has provably landed.
+            if (baseline == 0 || _usdcBalance(TESTER_POOL) < baseline + outstanding) {
+                console2.log("Skipping: settled deposit refund still in transit");
+                vm.skip(true);
+            }
+            return 0;
+        }
+        if (status == 2) return 0;
+        uint256 withdrawn = uint256(-amount);
+        if (baseline == 0 || _usdcBalance(TESTER_POOL) < baseline + withdrawn) {
+            console2.log("Skipping: settled withdrawal delivery still in transit");
             vm.skip(true);
         }
-        return amount > 0 ? amount : int256(0);
+        return 0;
+    }
+
+    /// @dev USDC balanceOf via the live RPC.
+    function _usdcBalance(address account) internal returns (uint256) {
+        return abi.decode(_ethCall(LighterConstants.USDC, abi.encodeWithSelector(0x70a08231, account)), (uint256));
     }
 
     function _within(int256 a, int256 b, uint256 tolerance) internal pure returns (bool) {

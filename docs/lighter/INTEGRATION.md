@@ -594,74 +594,64 @@ READ_CORE `0x0000` (`0` pending, `1` success, `2` failed — live-verified). Dep
 `acceptedAmount` in the success data (`abi.encode(uint64)`, possibly below the requested amount
 or zero; per the Send-to-Core Core response this write **never returns `status == 2`** —
 rejection is expressed as a partial or zero `acceptedAmount`, with the remainder refunded
-async). Transfers are **one at a time**: `recordAction` reverts `PendingRequest` while the
-previous request still reads status 0, so the tracked amount always describes exactly one
-request. Orders never call `recordAction`, so trading is never blocked by a pending transfer.
+async). Withdrawal rejections do use `status == 2` with `abi.encode(uint32 errorCode)` (e.g.
+`7003` insufficient balance). Transfers are **one at a time**: `recordAction` reverts
+`PendingRequest` while the previous request still reads status 0, so the tracked amount always
+describes exactly one request; the next transfer overwrites the record (implicit sync). Orders
+never call `recordAction`, so trading is never blocked.
 
-### Why pending needs no lock, and settled does
+**Pending (status 0) is exact at every stage, for arbitrarily long Core delays** (downtime
+included — no wall-clock window), because the wallet-side movement is already known:
 
-**Pending (status 0) is exact at every stage, for arbitrarily long Core delays** (maintenance
-downtime included — no wall-clock window), because the wallet-side movement is already known:
+| status      | Deposit (amount > 0)                                        | Withdrawal (amount < 0)      |
+| ----------- | ----------------------------------------------------------- | ---------------------------- |
+| `0` pending | `+amount` — the pool wallet was debited, Core shows nothing | `0` — neither side has moved |
 
-| Stage                   | Deposit (amount > 0)                                        | Withdrawal (amount < 0)      |
-| ----------------------- | ----------------------------------------------------------- | ---------------------------- |
-| `status == 0` (pending) | `+amount` — the pool wallet was debited, Core shows nothing | `0` — neither side has moved |
-
-**Settled (status ≠ 0) has an async EVM-side leg whose landing is not observable on-chain.**
+**Settled (status 1 or 2) has an async EVM-side leg whose landing is not observable on-chain.**
 For a deposit, Core accepted `acceptedAmount` (visible in the collateral read) and refunds
 `amount − acceptedAmount` in a separate exogenous transaction; for a withdrawal, Core debited
-and a delivery transaction credits the pool wallet later. The only on-chain signal that could
-distinguish "leg landed" from "something else moved USDC" is the pool's wallet balance — and
-it is **not a usable signal**: mints pull USDC in, burns push it out, donations and plain
-ERC-20 transfers move it with no pool code executing, and none of them can be told apart from
-the leg. We verified the consequence concretely: any balance-based "landing" check is
-gameable (an exact-size inflow clears the record early and opens an understated-NAV mint
-window), and there is no protocol read that exposes delivery status — the EvmInteropManager
-implementation's ~44 selectors are transfer paths and Config constants, READ_CORE stops at
-`0x000A`, and Lighter's own docs verify deliveries **off-chain** (the Core transaction's
-`event_info` → delivery tx receipt). Lighter's order-status work (1.2.0) shows they add such
-reads when asked — a per-request delivery read is the natural follow-up request.
+and a delivery transaction credits the pool wallet later. The pool's USDC wallet balance is
+the only available landing signal, and the settled-transfer lock is what makes it usable:
+**while a settled request is outstanding, mint/burn/donate/deposits are locked**
+(`assertNavUnlocked` in the `LIGHTER_PERPS` branch, exempt for the `updateUnitaryValue`
+self-call via the transient nav-lock-exempt flag — the Hyperliquid mechanism, status-driven).
+With every permissioned flow blocked, the only expected wallet movement is the async leg
+itself. The flow, evaluated on every NAV read (valuation runs first and clears opportunistically;
+the lock asserts after):
 
-The sound treatment: **while a settled transfer is outstanding, NAV-dependent flows (mint,
-burn, donate, deposits) are locked** (`assertNavUnlocked` in the `LIGHTER_PERPS` branch,
-exempt for the `updateUnitaryValue` self-call via the transient nav-lock-exempt flag — the
-same mechanism as Hyperliquid, but status-driven instead of time-driven). The owner, who is
-the only party that can create this state (one-at-a-time, owner-gated adapter) and who
-already must monitor deliveries operationally (a reverted delivery is never retried and the
-funds are lost per Lighter's docs), **attests the leg landed off-chain via `syncTransfer()`**
-after checking the delivery transaction's receipt. This makes the distortion untradeable:
+1. **First observation of the settled state pins the wallet baseline** (one balance snapshot).
+2. Until the wallet recovers to `baseline + leg`, the leg amount is carried in NAV (deposit:
+   `+ (amount − acceptedAmount)`; withdrawal: `+ amount`) and mint/burn stay locked.
+3. When the wallet recovers, the record clears in the same evaluation and the lock lifts.
+   Full acceptances (nothing outstanding) and failed withdrawals (nothing moved) clear at the
+   first observation, so the common cases never hold the lock beyond one evaluation.
 
-| Stage                  | Deposit (amount > 0)                                                                                                       | Withdrawal (amount < 0)                                       |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `status == 1`, settled | `+(amount − acceptedAmount)` carried until sync                                                                            | `+amount` carried until sync (Core debited, delivery pending) |
-| `status == 2` (failed) | unreachable per the Send-to-Core spec (defensive: no accepted amount → full amount carried, like a full refund in transit) | `0` — Core never debited; record awaits sync                  |
+Residual properties, stated plainly: the pin is optimistic, so if the async leg lands before
+any evaluation observes the settled state, the pinned baseline already includes the leg and the
+record carries until the next transfer overwrites it (one-at-a-time makes the next transfer the
+natural step; `updateUnitaryValue` stays available for NAV reads, and owner flows — transfers,
+orders — are never locked). Conversely, a wallet movement between the pin and the landing can
+only come from a direct ERC-20 transfer (no pool code runs, so it cannot be blocked or
+attributed); faking a landing costs the sender real funds, and the pre-pending pending window
+remains exact because pending evaluations refresh nothing the landing check relies on. If Lighter
+ships a per-request delivery read (as they did for order status in 1.2.0), the pin and lock
+degenerate to reading it and this section shrinks accordingly.
 
-Soundness properties: pending is never locked and always exact; settled is locked, so no one
-can trade on the ±leg NAV gap in either direction; the owner attesting early gains nothing
-(they hold the largest share and dilute themselves) and is already fully trusted with the
-pool's value; a rejected withdrawal (status 2, `abi.encode(uint32 errorCode)` — e.g. `7003`
-insufficient balance) moved nothing and simply awaits the same sync. The lock is also brief
-in practice: it spans only the EVM async leg (seconds under normal conditions), and the next
-`recordAction` overwrites the record (implicit sync) so consecutive transfers need no extra
-call.
-
-The 16-second lock of the 1.1.0 integration was unsound in a different way: it assumed a
-timing guarantee Axiom explicitly disclaimed, and after it expired both the adjustment and
-the protection silently vanished. Two further bugs in that lineage were found and fixed
-during this redesign: the withdrawal was _subtracted_ once settled (with the collateral read
-already reflecting the debit, NAV was understated by the full amount for the whole in-transit
-window), and an intermediate "balance-baseline auto-clear" design (4.5.2) was mint-
-exploitable as described above. The lesson, now pinned by `testNavAcrossTransferLifecycle`
-and the fork mint-lock tests: **test the invariant (wallet + app NAV exact in every
-tradeable state), not the formula.**
+History (why the design looks like this): the 1.1.0 integration used a 16-second lock that
+assumed a timing guarantee Axiom explicitly disclaimed, and subtracted settled withdrawals
+(NAV understated by the full amount in transit). A balance-baseline auto-clear without the lock
+(4.5.2) was shown mint-exploitable, and an owner-attested `syncTransfer` (4.5.3) removed the
+exploit but added a manual step. 4.5.4 keeps the lock and makes clearing automatic. The pinned
+tests assert the invariant: wallet + app NAV exact in every tradeable state, and the settled
+state provably locked while a leg is in transit.
 
 ### Cross-chain (Across) integration on LighterEVM
 
 The settled lock interacts with Across destination fills: a `donate`/`depositV3` fill that
-NAV-evaluates while a Lighter transfer is settled would revert, so the fill path must either
-be attempted after the owner syncs or the sync must be part of the transfer playbook. This is
-a design constraint for the future AIntents-on-19529 work (already a pre-mainnet item below),
-not a soundness hole: fills are operator-driven, and the locked state is owner-visible via
+NAV-evaluates while a Lighter transfer is settled would revert, so fills must land after the
+async leg cleared (seconds) or the operator sequences them around Lighter transfers. Design
+constraint for the future AIntests-on-19529 work (already a pre-mainnet item below), not a
+soundness hole: fills are operator-driven and the locked state is owner-visible via
 `getLighterTrackedMarkets`.
 
 ## EVM differences relevant to the integration
@@ -708,16 +698,15 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.3` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.3"`; the
-  `pool.VERSION()` test assertion tracks it in the same PR. 4.5.1 upgraded the integration to
-  devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time status-driven in-flight accounting,
-  TWAP guard); 4.5.3 makes the accounting sound: the settled-transfer async EVM leg is
-  undetectable on-chain (wallet-balance heuristics are mint-exploitable), so settled transfers
-  lock mint/burn until the owner attests the leg landed via the new `ALighter.syncTransfer`
-  (Authority selector `0x4c42c739`) — pending transfers never lock. `extensionsMapSalt23`
-  (4.5.1 shipped `extensionsMapSalt21`, 4.5.2 `extensionsMapSalt22`). The LighterData layout
-  changed size across those trains (devnet-only storage; the tester pool storage was reset by
-  the syncs — do not change `LighterData`'s field set without a devnet migration note). The devnet 1.1.0 reset (2026-10-26)
+- `VERSION` is `4.5.4` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.4"`. 4.5.1
+  upgraded the integration to devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time
+  status-driven in-flight accounting, TWAP guard); 4.5.4 finalizes the accounting: the
+  settled-transfer lock spans both directions, the async leg is carried until the wallet
+  recovers to the baseline pinned at the first settled observation, and clearing is fully
+  automatic (no owner step). `getLighterTrackedMarkets` moved from the base `EApps` into
+  `EAppsLighter` behind a new `IEAppsLighter` interface — it is Lighter-specific, and the
+  ExtensionsMap now routes its selector independently of the `type(IEApps).interfaceId` assert.
+  `extensionsMapSalt24` (4.5.1 shipped `extensionsMapSalt21`, 4.5.2 `22`, 4.5.3 `23`). The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
   version/salt pair: 4.5.0 / `extensionsMapSalt20`. (History: 4.6.1 = ENavView removal +
@@ -994,6 +983,21 @@ No extension/adapter storage (Rigoblock hard rule).
   deposit settled on Core (collateral 30→50) and locked mint/burn until `syncTransfer`; a 10
   USDC withdrawal showed `NavLocked` while settled, then exact NAV after sync (wallet 60,
   app 40, NAV 100 USDC throughout). The live NAV-exactness suite passes.
+- **4.5.4 automatic settled-leg clearing + redeploy (2026-11-16, deployer key `0x080f…1fA6`).**
+  Removed the owner-attested `syncTransfer`: the settled-transfer lock now makes the wallet
+  balance a usable landing signal, the baseline pins at the first settled observation, and the
+  record clears itself when the async leg lands (full acceptances clear immediately).
+  `getLighterTrackedMarkets` moved into `EAppsLighter` (`IEAppsLighter`), out of the base
+  `EApps`. Redeployed (`VERSION = "4.5.4"`, `extensionsMapSalt24`): EAppsLighter
+  `0xcD18A4C0Fe94540C1f0EA7524A8cE7E4Bd95Cf65`, ExtensionsMap
+  `0xaBa892116e2ca227CaDD6554b096bDAfb625cF4B`, SmartPool
+  `0x892207F6eB69C4a5C01A15Ea3162bD96D909709e`, ALighter
+  `0xf713b8650375B17a3B553673F149ae676d58667c`; Authority rewired (five selectors remove/re-add,
+  `syncTransfer` selector `0x4c42c739` removed, `factory.setImplementation(0x8922…)`). The tester
+  pool `0x0CD1…89adc` was upgraded and the full cycle verified live: a 10 USDC withdrawal locked
+  mint/burn while settled (`NavLocked`), the delivery landed, and a 5 USDC deposit then overwrote
+  the record (self-heal of the optimistic-pin edge) and cleared automatically at settlement
+  (NAV exact: wallet 65, core 35, NAV 100 USDC throughout). The live NAV-exactness suite passes.
 - Explorer verification: enabled with devnet 1.1.0 (Blockscout contract verification, per the
   changelog; the pre-reset build had it disabled). Hardhat 3's verify plugin (v3.1.0+) has native
   Blockscout support and does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin

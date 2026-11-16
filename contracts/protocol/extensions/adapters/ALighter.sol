@@ -24,7 +24,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.5.3";
+    string private constant _REQUIRED_VERSION = "4.5.4";
 
     address private immutable _adapter;
 
@@ -107,10 +107,9 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ILighterCoreEntrypoint
-    /// @notice Creates a perp order on LighterCore. The market is tracked automatically on first
-    ///  trade so it is always valued in NAV (see docs/lighter/API_KEYS.md for the API-key caveat).
-    /// @dev TWAP orders (orderType 6) are rejected synchronously: Core rejects them with code
-    ///  6514 asynchronously, so failing early saves a guaranteed-to-fail write.
+    /// @notice Creates a perp order on LighterCore; the market is tracked automatically on first
+    ///  trade so it is always valued in NAV.
+    /// @dev TWAP orders (orderType 6) revert synchronously (Core rejects them asynchronously).
     function createOrder(
         uint48 accountIndex,
         uint16 marketIndex,
@@ -162,22 +161,6 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     ) external override nonReentrant onlyDelegateCall returns (uint64 reqId) {
         reqId = ILighterCoreEntrypoint(LighterConstants.CORE_ENTRYPOINT).cancelAllOrders(_requireAccountIndex());
         emit OrderSent(reqId);
-    }
-
-    /// @notice Clears the settled transfer record, unlocking mint/burn after the async EVM-side leg
-    ///  (refund/delivery) has been verified off-chain to have landed (see docs/lighter/INTEGRATION.md,
-    ///  "In-flight accounting": the landing is not observable on-chain, so attestation is
-    ///  owner-gated — this method is only reachable by the pool owner via MixinFallback).
-    /// @dev Reverts PendingRequest-style semantics do not apply: while a request is still pending
-    ///  (status 0) there is nothing to sync — NAV is already exact and unlocked.
-    function syncTransfer() external nonReentrant onlyDelegateCall {
-        uint64 lastReqId = StorageLib.lighterSlot().data.lastReqId;
-        require(lastReqId != 0, NothingToSync());
-        // A pending request must not be synced: it is valued exactly by the in-flight amount and
-        //  unlocking early would drop that amount from NAV.
-        require(LighterLib.readTxStatus(lastReqId) != 0, LighterLib.PendingRequest());
-        LighterLib.clearAction();
-        emit TransferSynced();
     }
 
     /// @dev Resolves the pool's own Core account index; reverts if the pool has no Core account yet

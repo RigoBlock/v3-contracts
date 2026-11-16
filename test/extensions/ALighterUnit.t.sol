@@ -165,10 +165,6 @@ contract LighterLibHarness {
         LighterLib.recordAction(amount, reqId);
     }
 
-    function clearAction() external {
-        LighterLib.clearAction();
-    }
-
     function assertNavUnlocked() external view {
         LighterLib.assertNavUnlocked();
     }
@@ -500,26 +496,24 @@ contract ALighterUnit is Test {
 
         // Once Core processes the debit (status 1) the collateral read drops to 600e6 and the app
         // carries the undelivered 400e6, so the app still reports 1000e6 while the delivery is in
-        // transit. The settled state locks mint/burn (assertNavUnlocked) until the owner syncs.
+        // transit. The settled state locks mint/burn (assertNavUnlocked) until the leg lands.
         _mockTxStatus(1, 1);
         _mockAccountInfo(address(pool), _accountInfo(600e6));
         _useLibHarness();
         vm.expectRevert(LighterLib.NavLocked.selector);
         LighterLibHarness(address(pool)).assertNavUnlocked();
 
-        // The EVM delivery lands (mock manager never moved tokens, so minting the amount to the
-        // pool simulates it); the landing is invisible on-chain — the owner attests it via
-        // syncTransfer and the collateral read alone becomes authoritative.
-        MockERC20(_usdc).mint(address(pool), 400e6);
-        _useAdapter();
-        vm.expectEmit(true, false, false, true, address(pool));
-        emit IALighter.TransferSynced();
-        IALighter(address(pool)).syncTransfer();
+        // The settled observation pins the wallet baseline; the delivery has not landed yet.
+        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        assertEq(balances[0].amount, 1000e6, "Settled, delivery pending: the app carries the amount");
 
-        _useLibHarness();
-        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
+        // The EVM delivery lands (mock manager never moved tokens, so minting the amount to the
+        // pool simulates it): the record clears and the collateral read alone is authoritative.
+        MockERC20(_usdc).mint(address(pool), 400e6);
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
         assertEq(balances[0].amount, 600e6);
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
+        LighterLibHarness(address(pool)).assertNavUnlocked();
     }
 
     /// @notice Transfers are one at a time: a second deposit reverts while the first request is
@@ -853,8 +847,8 @@ contract ALighterUnit is Test {
 
     /// @notice In-flight tracking is driven by the transaction-status read alone: a pending
     ///  deposit applies for as long as Core takes (no wall-clock window), and a fully-accepted
-    ///  deposit stops applying the moment Core processes it. The record persists (mint/burn
-    ///  locked) until the owner syncs; recordAction overwrites a settled record, so a new
+    ///  deposit stops applying the moment Core processes it. The record clears on the next
+    ///  evaluation (nothing outstanding); recordAction overwrites a settled record, so a new
     ///  transfer can start immediately.
     function testInFlightDrivenByTxStatus() public {
         _mockAccountInfo(address(libHarness), _accountInfo(10e6));
@@ -866,15 +860,15 @@ contract ALighterUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
         assertEq(balances[0].amount, 110e6, "Pending deposit must apply as in-flight");
 
-        // Processed (status 1, fully accepted): collateral is authoritative, in-flight drops.
-        // The record persists until the owner syncs (settled state locks mint/burn).
+        // Processed (status 1, fully accepted): collateral is authoritative, in-flight drops and
+        //  the record clears (nothing outstanding).
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
         balances = libHarness.getLighterBalances(address(libHarness));
         assertEq(balances[0].amount, 10e6, "Processed deposit must drop in-flight");
-        assertEq(libHarness.lighterData().lastReqId, 1, "Record persists until the owner syncs");
+        assertEq(libHarness.lighterData().lastReqId, 0, "Nothing outstanding: record cleared");
 
-        // A new transfer can start once the previous one settled (recordAction overwrites the
-        // record, acting as an implicit sync); a rejected withdrawal (status 2) moved nothing.
+        // A new transfer can start once the previous one settled; a rejected withdrawal
+        //  (status 2) moved nothing.
         libHarness.recordAction(-50e6, 2);
         _mockTxStatus(2, 2);
         balances = libHarness.getLighterBalances(address(libHarness));
@@ -908,38 +902,12 @@ contract ALighterUnit is Test {
         assertEq(balances[0].amount, 110e6, "NAV reads must never be blocked or expire while pending");
     }
 
-    /// @notice syncTransfer: reverts with nothing to sync, reverts while the request is pending,
-    ///  and clears the record once settled (unblocking mint/burn).
-    function testSyncTransferLifecycle() public {
-        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-
-        vm.expectRevert(IALighter.NothingToSync.selector);
-        IALighter(address(pool)).syncTransfer();
-
-        IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
-        _mockTxStatus(1, 0);
-        vm.expectRevert(LighterLib.PendingRequest.selector);
-        IALighter(address(pool)).syncTransfer();
-
-        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
-        vm.expectEmit(true, false, false, true, address(pool));
-        emit IALighter.TransferSynced();
-        IALighter(address(pool)).syncTransfer();
-
-        _useLibHarness();
-        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
-
-        _useAdapter();
-        vm.expectRevert(IALighter.NothingToSync.selector);
-        IALighter(address(pool)).syncTransfer();
-    }
-
     // =========================================================================
     // Adapter metadata and access control
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.3");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.4");
     }
 
     function testDirectCallToAdapterReverts() public {

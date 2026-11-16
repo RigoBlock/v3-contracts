@@ -15,11 +15,6 @@ interface IALighter is ILighterInteropManager, ILighterCoreEntrypoint {
     event Deposited(uint256 amount);
     event Withdrawn(uint256 amount);
     event OrderSent(uint64 indexed reqId);
-    event TransferSynced();
-
-    /// @notice Rigoblock-specific (not a Lighter predeploy mirror): clears the settled transfer
-    ///  record after the owner verified the async EVM-side leg landed off-chain.
-    function syncTransfer() external;
 
     error DirectCallNotAllowed();
     error NotLighterEVM();
@@ -30,5 +25,4 @@ interface IALighter is ILighterInteropManager, ILighterCoreEntrypoint {
     error InvalidMarket();
     error InvalidOrderType();
     error AccountNotActivated();
-    error NothingToSync();
 }
