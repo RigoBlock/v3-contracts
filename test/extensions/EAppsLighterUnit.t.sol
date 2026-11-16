@@ -16,7 +16,7 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";

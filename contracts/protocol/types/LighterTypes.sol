@@ -3,9 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 /// @title LighterTypes
 /// @notice ABI layouts of the LighterCore state reads returned by the READ_CORE precompile.
-/// @dev Kept next to the Lighter predeploy interfaces so a future lighter-contracts git submodule
-///  can replace this single file as the source of truth. Every read except tx status (0x0000)
-///  returns the abi.encode(bool found, bytes data) envelope; the structs are the inner payload.
+/// @dev Every read except tx status (0x0000) returns the abi.encode(bool found, bytes data)
+///  envelope; the structs are the inner payload.
 library LighterTypes {
     /// @notice READ_CORE 0x0001 (account info). collateralBaseAmount is the shared USDC margin
     ///  (1e6 per USDC; excludes isolated margin). found=false means the account does not exist.

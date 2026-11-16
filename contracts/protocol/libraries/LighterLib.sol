@@ -6,7 +6,7 @@ import {StorageLib} from "../libraries/StorageLib.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {LighterConstants} from "../types/LighterConstants.sol";
 import {LighterSlot, LighterData} from "../types/Applications.sol";
-import {LighterTypes} from "../extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../types/LighterTypes.sol";
 
 /// @title LighterLib
 /// @notice Rigoblock-specific helpers for LighterCore perps: NAV valuation, market tracking and
@@ -187,8 +187,8 @@ library LighterLib {
         (exists, ) = _readCoreData(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false));
     }
 
-    /// @notice status: 0 pending, 1 successful, 2 failed (payload then abi.encode(uint32 errorCode)).
-    function readTxStatus(uint64 reqId) internal view returns (uint8 status, bytes memory payload) {
+    /// @dev status: 0 pending, 1 successful, 2 failed (payload then abi.encode(uint32 errorCode)).
+    function readTxStatus(uint64 reqId) private view returns (uint8 status, bytes memory payload) {
         (status, payload) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
     }
 

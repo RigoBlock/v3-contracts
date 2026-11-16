@@ -7,7 +7,7 @@ import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.so
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {IMinimumVersion} from "../../contracts/protocol/extensions/adapters/interfaces/IMinimumVersion.sol";
 import {LighterRouteType} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {Applications, LighterData, LighterSlot} from "../../contracts/protocol/types/Applications.sol";

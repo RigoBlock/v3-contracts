@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {LighterDeploymentFixture} from "../fixtures/LighterDeploymentFixture.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";

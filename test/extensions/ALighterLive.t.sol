@@ -4,7 +4,7 @@ pragma solidity 0.8.37;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";

@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {LighterSlot, LighterData} from "../../contracts/protocol/types/Applications.sol";
@@ -72,11 +72,6 @@ contract LighterLibHarness {
 
     function coreAccountExists(address account) external view returns (bool) {
         return LighterLib.coreAccountExists(account);
-    }
-
-    function readTxStatus(uint64 reqId) external view returns (uint8) {
-        (uint8 status, ) = LighterLib.readTxStatus(reqId);
-        return status;
     }
 
     function recordAction(int256 amount, uint64 reqId) external {
@@ -290,17 +285,6 @@ contract LighterLibTest is Test {
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances.length, 1, "A negative liability keeps the list non-empty");
         assertEq(balances[0].amount, -10_000_000, "Negative total must be returned as-is");
-    }
-
-    function testReadTxStatusDirectRead() public {
-        _mockTxStatus(7, 2, bytes(""));
-        assertEq(harness.readTxStatus(7), 2);
-    }
-
-    function testReadTxStatusRevertsOnFailure() public {
-        vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, uint64(7)), "");
-        vm.expectRevert(LighterLib.LighterReadFailed.selector);
-        harness.readTxStatus(7);
     }
 
     // =========================================================================
