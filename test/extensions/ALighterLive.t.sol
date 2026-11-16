@@ -336,23 +336,22 @@ contract ALighterLiveTest is Test {
         );
         if (status == 0) return amount > 0 ? amount : int256(0);
 
-        uint256 baseline = uint256(viewData.actionBaselineUsdc);
+        uint256 baseline = uint256(viewData.walletBaselineUsdc);
         if (amount > 0) {
             uint256 amount256 = uint256(amount);
             uint256 accepted = status == 1 && payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
             uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
             if (outstanding == 0) return 0;
             // baseline == 0: the pin is not committed yet, so the pool's own evaluation carries
-            //  and locks; compare only once the leg has provably landed.
-            if (baseline == 0 || _usdcBalance(TESTER_POOL) < baseline + outstanding) {
+            //  and locks; compare only once the wallet has provably increased over the pin.
+            if (baseline == 0 || _usdcBalance(TESTER_POOL) <= baseline) {
                 console2.log("Skipping: settled deposit refund still in transit");
                 vm.skip(true);
             }
             return 0;
         }
         if (status == 2) return 0;
-        uint256 withdrawn = uint256(-amount);
-        if (baseline == 0 || _usdcBalance(TESTER_POOL) < baseline + withdrawn) {
+        if (baseline == 0 || _usdcBalance(TESTER_POOL) <= baseline) {
             console2.log("Skipping: settled withdrawal delivery still in transit");
             vm.skip(true);
         }

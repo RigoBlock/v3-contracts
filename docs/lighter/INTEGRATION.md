@@ -500,6 +500,13 @@ does not implement a selector simply does not answer it — e.g. `getLighterTrac
 only meaningful where `LighterLib` is compiled in). The deploy script picks the artifact by
 `chainId` (`src/deploy/deploy_extensions.ts`).
 
+**Selector routing off-LighterEVM.** `ExtensionsMap` routes `getLighterTrackedMarkets` to
+`eApps` on every chain, but only the LighterEVM deployment (`EAppsLighter`) implements it; the
+other chains' `EApps` family has no such function and no fallback, so the delegatecall reverts
+cleanly — the same "method not supported here" signal as any unmapped selector, with no rogue
+behavior. (This is why the view moved out of the base `EApps` in 4.5.4: it is Lighter-specific,
+and the map now routes it independently of the `type(IEApps).interfaceId` assert.)
+
 **`ENavView` was removed entirely** (extension, interface, `NavView` library, `NavData` type,
 ExtensionsMap wiring, deploy steps, tests): it duplicated the NAV aggregation for a DefiLlama
 path that now reconstructs NAV manually and an SP1/zk-NAV path that was never implemented, and
@@ -620,11 +627,22 @@ itself. The flow, evaluated on every NAV read (valuation runs first and clears o
 the lock asserts after):
 
 1. **First observation of the settled state pins the wallet baseline** (one balance snapshot).
-2. Until the wallet recovers to `baseline + leg`, the leg amount is carried in NAV (deposit:
+2. Until the wallet increases over the baseline, the leg amount is carried in NAV (deposit:
    `+ (amount − acceptedAmount)`; withdrawal: `+ amount`) and mint/burn stay locked.
-3. When the wallet recovers, the record clears in the same evaluation and the lock lifts.
+3. When the wallet increases, the record clears in the same evaluation and the lock lifts.
    Full acceptances (nothing outstanding) and failed withdrawals (nothing moved) clear at the
    first observation, so the common cases never hold the lock beyond one evaluation.
+
+EVM-initiated transfers are **fee-free**: the docs state Core charges no USDC fee for
+EVM-initiated `sendToCore`/`sendToEvm`, and the delivery is exactly `baseAmount * tickSize` —
+verified live (withdrawals of 20/10/8 USDC delivered to the wei, Core debited exactly). The
+increase-over-baseline check (rather than an exact `baseline + amount` equality) is deliberate:
+it cannot be self-DoSed by any future fee deduction, and in the locked window any increase is
+the leg itself. Settlement and delivery are **not atomic**: per the docs "a successful Core
+status does not confirm delivery on EVM" — the delivery/refund is a separate exogenous
+transaction scheduled after Core executes, which is exactly the gap the carry + lock covers.
+`recordAction` resets the pinned baseline to zero so each request is measured against its own
+observation (an overwrite never inherits a previous request's baseline).
 
 Residual properties, stated plainly: the pin is optimistic, so if the async leg lands before
 any evaluation observes the settled state, the pinned baseline already includes the leg and the
@@ -698,15 +716,14 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.4` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.4"`. 4.5.1
+- `VERSION` is `4.5.5` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.5"`. 4.5.1
   upgraded the integration to devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time
-  status-driven in-flight accounting, TWAP guard); 4.5.4 finalizes the accounting: the
-  settled-transfer lock spans both directions, the async leg is carried until the wallet
-  recovers to the baseline pinned at the first settled observation, and clearing is fully
-  automatic (no owner step). `getLighterTrackedMarkets` moved from the base `EApps` into
-  `EAppsLighter` behind a new `IEAppsLighter` interface — it is Lighter-specific, and the
-  ExtensionsMap now routes its selector independently of the `type(IEApps).interfaceId` assert.
-  `extensionsMapSalt24` (4.5.1 shipped `extensionsMapSalt21`, 4.5.2 `22`, 4.5.3 `23`). The devnet 1.1.0 reset (2026-10-26)
+  status-driven in-flight accounting, TWAP guard); 4.5.4/4.5.5 finalized it: explicit per-status
+  branches, the settled-transfer lock spans both directions (pending never locks), the wallet
+  baseline pins at the first observation of settlement and the record self-clears on any wallet
+  increase (fee-robust), and `recordAction` resets the baseline per request.
+  `getLighterTrackedMarkets` lives in `EAppsLighter` (`IEAppsLighter`), not the base `EApps`.
+  `extensionsMapSalt25` (4.5.1–4.5.4 shipped salts 21–24). The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
   version/salt pair: 4.5.0 / `extensionsMapSalt20`. (History: 4.6.1 = ENavView removal +
@@ -998,6 +1015,19 @@ No extension/adapter storage (Rigoblock hard rule).
   mint/burn while settled (`NavLocked`), the delivery landed, and a 5 USDC deposit then overwrote
   the record (self-heal of the optimistic-pin edge) and cleared automatically at settlement
   (NAV exact: wallet 65, core 35, NAV 100 USDC throughout). The live NAV-exactness suite passes.
+- **4.5.5 explicit statuses + robust landing check + redeploy (2026-11-16, deployer key
+  `0x080f…1fA6`).** `_inFlightAdjustment` rewritten with explicit `status == 0 / 1 / 2` branches,
+  the landing check simplified to any wallet increase over the pinned baseline (fee-robust, and
+  exact-fee-free delivery verified live), and `recordAction` reset of the baseline fixed. Renamed
+  the `slot` parameters and the `actionBaselineUsdc` field (`walletBaselineUsdc`). Redeployed
+  (`VERSION = "4.5.5"`, `extensionsMapSalt25`): EAppsLighter `0x0A1a60a826ec486A6AD471A110E219D3d7F7cDE7`, ExtensionsMap
+  `0x8B4F7CD12aedfA3f73B9214aC7a18bB934Fe4FFb`, SmartPool `0xDe038d009519577f36812a1E8A8DB8B880f89cB0`, ALighter `0xA7d741784bd0235dB139241Fe5eF991b12778ec4`; Authority rewired (five selectors
+  remove/re-add, `factory.setImplementation(0xDe03…)`). The tester pool `0x0CD1…89adc` was
+  upgraded; an 8 USDC withdrawal locked while settled, delivered to the wei (73 = 65 + 8), and a
+  3 USDC deposit self-healed the record and cleared automatically (wallet 70, core 30, NAV 100
+  USDC throughout). Live NAV-exactness suite passes. (ALighter
+  re-pointed to `0xA7d741784bd0235dB139241Fe5eF991b12778ec4` after the 4.5.5 version-string bump — adapters are Authority-mapped, no train
+  change.)
 - Explorer verification: enabled with devnet 1.1.0 (Blockscout contract verification, per the
   changelog; the pre-reset build had it disabled). Hardhat 3's verify plugin (v3.1.0+) has native
   Blockscout support and does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin

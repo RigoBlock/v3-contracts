@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, LighterEVM devnet 1.2.0 upgrade + settled-leg pin/clear accounting: `EAppsLighter` 10 647 → 10 058 (v4.5.1) → 10 080 (v4.5.2) → 9 941 (v4.5.3) → 10 562 (v4.5.4, view moved from EApps), `EApps` 6 676 → 5 698 (view removed), `ALighter` 6 459 → 6 379 (TWAP guard), `SmartPool` 24 321 → 24 328; everything else unchanged).
+Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, LighterEVM devnet 1.2.0 upgrade + settled-leg pin/clear accounting: `EAppsLighter` 10 647 → 10 058 (v4.5.1) → 10 080 (v4.5.2) → 9 941 (v4.5.3) → 10 562 (v4.5.4) → 10 557 (v4.5.5, explicit status branches), `EApps` 6 676 → 5 698 (v4.5.4, view removed), `ALighter` 6 459 → 6 379 (v4.5.4) → 6 405 (v4.5.5), `SmartPool` 24 321 → 24 328; everything else unchanged).
 
 ### Implementation and factory
 
@@ -61,7 +61,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, Lighte
 | Contract         | Size (bytes) | Headroom | % of limit |
 | ---------------- | -----------: | -------: | ---------: |
 | EAppsArbitrum    |        20620 |     3956 |     83.90% |
-| EAppsLighter     |        10562 |    14014 |     42.98% |
+| EAppsLighter     |        10557 |    14019 |     42.96% |
 | EAppsHyperliquid |        10130 |    14446 |     41.22% |
 | EApps            |         5698 |    18878 |     23.19% |
 | EGmxCallback     |         6227 |    18349 |     25.34% |
@@ -84,7 +84,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, Lighte
 | AGmxV2          |        17768 |     6808 |     72.30% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
-| ALighter        |         6379 |    18197 |     25.96% |
+| ALighter        |         6405 |    18171 |     26.06% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |

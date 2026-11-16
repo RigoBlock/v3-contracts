@@ -90,50 +90,62 @@ library LighterLib {
         pendingFunding = numerator / 1e6;
         if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
     }
+
     /// @dev Status-driven adjustment for the one outstanding transfer. Pending requests are valued
-    ///  exactly and never lock. A settled request pins the wallet baseline at its first observation
-    ///  and carries the async leg (refund/delivery) until the wallet recovers to baseline + leg;
-    ///  while the leg is in transit mint/burn are locked (assertNavUnlocked), so the observed
-    ///  movement is attributable to the leg itself. A landed or empty leg clears the record.
-    function _inFlightAdjustment(LighterSlot storage slot) private returns (int256) {
-        LighterData memory data = slot.data;
+    ///  exactly and never lock. A settled request pins the pool's USDC wallet balance at its first
+    ///  observation and carries the async EVM-side leg (deposit refund / withdrawal delivery) until
+    ///  the wallet increases; while the leg is in transit mint/burn are locked (assertNavUnlocked),
+    ///  so the increase is attributable to the leg itself. A landed or empty leg clears the record.
+    function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256) {
+        LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
         if (data.lastReqId == 0 || amount == 0) return 0;
 
         (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
         if (status == 0) {
+            // pending: the deposit amount left the wallet and is not on Core yet; a withdrawal has
+            //  moved neither side
             return amount > 0 ? amount : int256(0);
-        }
-        if (data.actionBaselineUsdc == 0) {
-            slot.data.actionBaselineUsdc = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
-            data.actionBaselineUsdc = slot.data.actionBaselineUsdc;
-        }
-        if (amount > 0) {
-            // deposit settled: acceptedAmount is on Core; the remainder is refunded async
-            uint256 amount256 = uint256(amount);
-            uint256 accepted = status == 1 && payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
-            uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
-            if (outstanding == 0 || _legLanded(data.actionBaselineUsdc, outstanding)) {
-                delete slot.data;
-                return 0;
+        } else {
+            if (data.walletBaselineUsdc == 0) {
+                lighterSlot.data.walletBaselineUsdc = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
+                data.walletBaselineUsdc = lighterSlot.data.walletBaselineUsdc;
             }
-            return int256(outstanding);
+            if (status == 1) {
+                if (amount > 0) {
+                    // deposit accepted, possibly partially: acceptedAmount is on Core and the
+                    //  unaccepted remainder is refunded async
+                    uint256 amount256 = uint256(amount);
+                    uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
+                    uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
+                    if (outstanding == 0 || _legLanded(data.walletBaselineUsdc)) {
+                        delete lighterSlot.data;
+                        return 0;
+                    }
+                    return int256(outstanding);
+                } else {
+                    // withdrawal accepted: Core debited and the delivery to the wallet is async
+                    if (_legLanded(data.walletBaselineUsdc)) {
+                        delete lighterSlot.data;
+                        return 0;
+                    }
+                    return int256(uint256(-amount));
+                }
+            } else if (status == 2) {
+                // rejected on Core (deposits never fail per spec): nothing is in transit
+                delete lighterSlot.data;
+                return 0;
+            } else {
+                // unknown future status: conservatively carry the amount and stay locked
+                return amount > 0 ? amount : int256(0);
+            }
         }
-        if (status == 2) {
-            delete slot.data;
-            return 0;
-        }
-        uint256 amount256 = uint256(-amount);
-        if (_legLanded(data.actionBaselineUsdc, amount256)) {
-            delete slot.data;
-            return 0;
-        }
-        return int256(amount256);
     }
 
-    /// @dev True when the wallet recovered to the pinned baseline plus the expected leg amount.
-    function _legLanded(uint128 baseline, uint256 expected) private view returns (bool) {
-        return IERC20(LighterConstants.USDC).balanceOf(address(this)) >= uint256(baseline) + expected;
+    /// @dev True once the wallet increased over the pinned baseline. EVM-initiated transfers carry
+    ///  no fee, and the settled lock blocks every other flow, so any increase is the async leg.
+    function _legLanded(uint128 baseline) private view returns (bool) {
+        return IERC20(LighterConstants.USDC).balanceOf(address(this)) > baseline;
     }
 
     function recordAction(int256 amount, uint64 reqId) internal {
@@ -145,6 +157,7 @@ library LighterLib {
         }
         data.inFlightAmount = int128(amount);
         data.lastReqId = reqId;
+        data.walletBaselineUsdc = 0;
     }
 
     ///  lock: they are valued exactly by the in-flight amount.
@@ -171,16 +184,16 @@ library LighterLib {
         markets.push(marketId);
     }
 
-    function _untrackMarket(LighterSlot storage slot, uint16 marketId, uint256 listIndex) private {
-        uint16[] storage markets = slot.trackedMarkets;
+    function _untrackMarket(LighterSlot storage lighterSlot, uint16 marketId, uint256 listIndex) private {
+        uint16[] storage markets = lighterSlot.trackedMarkets;
         uint256 lastIndex = markets.length - 1;
         uint16 lastMarket = markets[lastIndex];
         markets[listIndex] = lastMarket;
         markets.pop();
         if (lastMarket != marketId) {
-            slot.marketIndex[lastMarket] = listIndex + 1;
+            lighterSlot.marketIndex[lastMarket] = listIndex + 1;
         }
-        delete slot.marketIndex[marketId];
+        delete lighterSlot.marketIndex[marketId];
     }
 
     function coreAccountExists(address account) internal view returns (bool exists) {
