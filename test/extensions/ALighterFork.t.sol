@@ -6,17 +6,17 @@ import {Test} from "forge-std/Test.sol";
 import {LighterDeploymentFixture} from "../fixtures/LighterDeploymentFixture.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
-import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/IEOracle.sol";
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
-import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @title ALighterForkTest
@@ -32,7 +32,7 @@ contract ALighterForkTest is Test {
     address internal aLighter;
     address internal usdc;
 
-    // Mocked perp market: ETH-PERP (market 0, size_decimals 4, price_decimals 2 per LighterConstants).
+    // Mocked perp market: ETH-PERP (market 0, quoteMultiplier 1 as verified live on devnet 1.2.0).
     uint16 internal constant MARKET_ID = 0;
 
     function setUp() public {
@@ -103,6 +103,15 @@ contract ALighterForkTest is Test {
         );
     }
 
+    /// @notice Tx status with a success payload (a deposit's abi.encode(uint64 acceptedAmount)).
+    function _mockTxStatusWithPayload(uint64 reqId, uint8 status, bytes memory payload) internal {
+        vm.mockCall(
+            address(0x6600000000000000000000000000000000000000),
+            abi.encodePacked(uint16(0x0000), reqId),
+            abi.encode(status, payload)
+        );
+    }
+
     function _mockMarketInfo(uint16 marketId, uint64 markPrice) internal {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
@@ -120,7 +129,11 @@ contract ALighterForkTest is Test {
                         minQuoteAmount: 0,
                         liquidationFee: 0,
                         indexPrice: markPrice,
-                        markPrice: markPrice
+                        markPrice: markPrice,
+                        // Devnet 1.2.0: quoteMultiplier 1 (verified live on all devnet perp markets).
+                        quoteMultiplier: 1,
+                        fundingRatePrefixSum: 0,
+                        lastFundingRoundTimestamp: 0
                     })
                 )
             )
@@ -159,13 +172,13 @@ contract ALighterForkTest is Test {
     ///  predeploy applies Core's order admission checks (account must exist on Core with
     ///  collateral), which a forked pool can never satisfy — the order-write tests assert the
     ///  adapter's calldata and auto-tracking instead of executing real Core admission. Selector
-    ///  prefix match covers every argument combination; per the 1.1.0 changelog a successful
-    ///  void write returns abi.encode(0).
+    ///  prefix match covers every argument combination; per the 1.2.0 spec a successful
+    ///  createOrder returns abi.encode(uint64 orderIndex).
     function _mockCreateOrder() internal {
         vm.mockCall(
             LighterConstants.CORE_ENTRYPOINT,
             abi.encodePacked(ILighterCoreEntrypoint.createOrder.selector),
-            abi.encode(0)
+            abi.encode(uint64(1))
         );
     }
 
@@ -230,10 +243,13 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice createOrder auto-tracks the traded market: no separate tracking step is needed.
+    ///  Since devnet 1.2.0 any Core perp market can be traded (the on-chain quoteMultiplier
+    ///  replaced the release-time decimals table).
     /// @dev The final createOrder hits the real Core entrypoint predeploy; order parameters may need
     ///  adjustment once devnet RPC access allows validating them against the live predeploy.
     function testFork_CreateOrderAutoTracksMarket() public {
         _mockMarketInfo(MARKET_ID, 100_00);
+        _mockMarketInfo(5, 100_00);
         _mockEvmAccountIndex(1);
         // createOrder requires an activated Core account (checked after the market gates).
         _mockAccountInfo(0);
@@ -245,17 +261,16 @@ contract ALighterForkTest is Test {
         vm.expectRevert(IALighter.InvalidMarket.selector);
         IALighter(pool).createOrder(0, 2048, 1, 0, 0, 0, 1, 100_00, true, false, 0);
 
-        // Markets outside the LighterConstants decimals table can never be traded.
-        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(5)));
+        // A previously untracked perp market trades and is auto-tracked.
         IALighter(pool).createOrder(0, 5, 1, 0, 0, 0, 1, 100_00, true, false, 0);
-
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
 
-        // The traded market is tracked for NAV valuation without any explicit tracking call.
-        LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
-        assertEq(viewData.marketIds.length, 1, "Traded market should be auto-tracked");
-        assertEq(viewData.marketIds[0], MARKET_ID);
+        // The traded markets are tracked for NAV valuation without any explicit tracking call.
+        uint16[] memory marketIds = IEAppsLighter(pool).getLighterTrackedMarkets();
+        assertEq(marketIds.length, 2, "Traded markets should be auto-tracked");
+        assertEq(marketIds[0], 5);
+        assertEq(marketIds[1], MARKET_ID);
     }
 
     /// @notice NAV valuation reads collateral plus tracked positions from (mocked) Core state.
@@ -268,9 +283,9 @@ contract ALighterForkTest is Test {
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
 
-        // 10 base units long (size_decimals 4 => raw amount 100_000), entry notional
-        // 10 * 100.0 = 1_000 USDC in Core USDC base units, mark 101.0 (price_decimals 2):
-        // markValue = 100_000 * 101_00 * 1e6 / 10^(4+2) = 1_010e6; pnl = 1_010e6 - 1_000e6 = 10e6.
+        // 10 base units long, entry notional 10 * 100.0 = 1_000 USDC in Core USDC base units,
+        // mark 101.0 with quoteMultiplier 1: markValue = 100_000 * 101_00 = 1_010e6;
+        // pnl = 1_010e6 - 1_000e6 = 10e6.
         _mockAccountInfo(1_000e6);
         _mockPosition(
             MARKET_ID,
@@ -281,7 +296,8 @@ contract ALighterForkTest is Test {
                 totalOrderCount: 0,
                 totalPositionTiedOrderCount: 0,
                 marginMode: 0,
-                allocatedMargin: 0
+                allocatedMargin: 0,
+                lastFundingRatePrefixSum: 0
             })
         );
 
@@ -292,8 +308,11 @@ contract ALighterForkTest is Test {
         assertEq(lighterApp.balances[0].amount, 1_010e6, "Balance should be collateral plus position PnL");
     }
 
-    /// @notice Minting is settlement-locked after a deposit and works again after the window.
-    function testFork_MintLockedDuringSettlementWindow() public {
+    /// @notice Lock semantics around a deposit: from the request until the async refund lands,
+    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact);
+    ///  once the refund lands in the pool wallet, the mint's own evaluation clears the record and
+    ///  unlocks in the same pass.
+    function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
 
@@ -302,24 +321,29 @@ contract ALighterForkTest is Test {
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, depositAmount, LighterRouteType.Perps);
 
-        // Same block: allowed (in-flight covers the lagging Core read).
-        _mockAccountInfo(0);
+        // Pending: locked.
         deal(usdc, poolOwner, depositAmount);
         vm.startPrank(poolOwner);
-        IERC20(usdc).approve(pool, depositAmount);
-        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
-
-        // Next block within the window: locked.
-        vm.roll(block.number + 1);
-        _mockAccountInfo(0);
-        deal(usdc, poolOwner, depositAmount);
         IERC20(usdc).approve(pool, depositAmount);
         vm.expectRevert(LighterLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        // After the window: allowed again.
-        vm.warp(block.timestamp + 17 seconds);
-        _mockAccountInfo(int128(uint128(depositAmount)));
+        // Settled with a partial acceptance: the unaccepted remainder is in transit and the lock
+        // holds (the reverted mint's evaluation is rolled back, so commit the record with an
+        // exempt updateUnitaryValue).
+        uint256 snapshot = IERC20(usdc).balanceOf(pool);
+        vm.roll(block.number + 1);
+        _mockAccountInfo(int128(uint128(depositAmount - 1e6)));
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(depositAmount - 1e6)));
+        deal(usdc, poolOwner, depositAmount);
+        IERC20(usdc).approve(pool, depositAmount);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
+        ISmartPoolActions(pool).updateUnitaryValue();
+
+        // The refund lands in the pool wallet (balance increases over the request-time snapshot):
+        // the mint's own evaluation clears the record and unlocks in the same pass.
+        deal(usdc, pool, snapshot + 1e6);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }

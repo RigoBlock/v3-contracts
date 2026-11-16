@@ -13,9 +13,10 @@ import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
+import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
-import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
@@ -23,7 +24,7 @@ import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IR
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
@@ -252,11 +253,16 @@ contract EAppsLighterUnitTest is Test {
         vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, reqId), abi.encode(status, bytes("")));
     }
 
+    /// @dev Tx status with a success payload (a deposit's abi.encode(uint64 acceptedAmount)).
+    function _mockTxStatusWithPayload(uint64 reqId, uint8 status, bytes memory payload) internal {
+        vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, reqId), abi.encode(status, payload));
+    }
+
     function _mockMarketInfo(uint16 marketId, LighterTypes.MarketInfo memory info) internal {
         vm.mockCall(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_MARKET_INFO, marketId), _wrap(abi.encode(info)));
     }
 
-    /// @dev Perp market (marketType 0) with indexPrice == markPrice.
+    /// @dev Perp market (marketType 0) with indexPrice == markPrice, quoteMultiplier 1.
     function _marketInfo(uint64 markPrice) internal pure returns (LighterTypes.MarketInfo memory) {
         return
             LighterTypes.MarketInfo({
@@ -269,7 +275,10 @@ contract EAppsLighterUnitTest is Test {
                 minQuoteAmount: 0,
                 liquidationFee: 0,
                 indexPrice: markPrice,
-                markPrice: markPrice
+                markPrice: markPrice,
+                quoteMultiplier: 1,
+                fundingRatePrefixSum: 0,
+                lastFundingRoundTimestamp: 0
             });
     }
 
@@ -292,15 +301,15 @@ contract EAppsLighterUnitTest is Test {
         revert("Lighter application should be returned");
     }
 
-    /// @notice Deposits USDC to Core perps through the adapter and settles the window.
+    /// @notice Deposits USDC to Core perps through the adapter and marks the request settled
+    ///  (fully accepted): the next NAV evaluation clears the record (nothing outstanding), so
+    ///  collateral reads are authoritative and mint/burn stay unlocked.
     function _depositAndSettle(uint256 amount) internal {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, amount, LighterRouteType.Perps);
-        // Exit the settlement window so NAV reads are allowed and in-flight drops out.
-        vm.roll(block.number + 1);
-        vm.warp(block.timestamp + 17 seconds);
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(amount)));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -334,10 +343,73 @@ contract EAppsLighterUnitTest is Test {
         assertEq(_findLighterApp(apps).balances[0].amount, int256(deposit));
     }
 
+    /// @dev Position builder for the 1.2.0 tuple (size, entryQuote, orders, tiedOrders, marginMode).
+    function _position(
+        int64 size,
+        uint56 entryQuote,
+        uint64 orders,
+        uint64 tiedOrders,
+        uint8 marginMode
+    ) internal pure returns (LighterTypes.Position memory) {
+        return
+            LighterTypes.Position({
+                size: size,
+                entryQuote: entryQuote,
+                initialMarginFraction: 0,
+                totalOrderCount: orders,
+                totalPositionTiedOrderCount: tiedOrders,
+                marginMode: marginMode,
+                allocatedMargin: 0,
+                lastFundingRatePrefixSum: 0
+            });
+    }
+
+    /// @notice Regression (audit: same-block prune of a freshly tracked market). Pruning is
+    ///  operator-gated: a permissionless NAV evaluation triggered in the same block as
+    ///  createOrder (stale parent-Core snapshot, no position yet) keeps the market tracked, so
+    ///  the live position is valued once Core reflects it; only an operator evaluation prunes.
+    function testFreshTrackedMarketSurvivesPermissionlessSameBlockNavEval() public {
+        _depositAndSettle(10_000e6);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(10_000e6))));
+
+        vm.prank(poolOwner);
+        _mockMarketInfo(0, _marketInfo(500_000));
+        _mockEvmAccountIndex(pool, 7);
+        IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 1);
+
+        // The order is not visible in the parent Core snapshot yet. A permissionless evaluation
+        //  (any account, here a different prank) must not prune the freshly tracked market.
+        _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        vm.prank(user);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        assertEq(
+            IEAppsLighter(pool).getLighterTrackedMarkets().length,
+            1,
+            "Permissionless same-block NAV eval must not prune the freshly tracked market"
+        );
+
+        // Core now reflects the position; it stays tracked and is valued.
+        vm.roll(block.number + 1);
+        _mockPosition(pool, 0, _position(20_000, 10_000e6, 0, 0, 0));
+        _mockMarketInfo(0, _marketInfo(750_000));
+        ExternalApp memory lighterApp = _findLighterApp(
+            IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
+        );
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 1);
+        assertEq(lighterApp.balances[0].amount, 15_000e6, "Position valued once Core reflects it");
+
+        // An operator evaluation with the position closed prunes it.
+        _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        vm.prank(poolOwner);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 0, "Operator eval prunes the empty market");
+    }
+
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.
-    /// @dev Mirrors the live-verified formula in LighterLib._positionValueUsdc: a 2.0-lot long
-    ///  (size 20_000 at sizeDecimals 4) entered at $5_000 (entryQuote 10_000e6) marked at $6_000
-    ///  (markPrice 600_000 at priceDecimals 2) is worth 12_000e6, i.e. +2_000e6 PnL.
+    /// @dev Mirrors the live-verified formula in LighterLib._positionValueUsdc: a long of size
+    ///  20_000 entered at entryQuote 10_000e6, marked at 600_000 with quoteMultiplier 1 is worth
+    ///  20_000 * 600_000 = 12_000e6, i.e. +2_000e6 PnL.
     function testHandleApplication_ValuesTrackedPositionPnl() public {
         uint256 deposit = 10_000e6;
         _depositAndSettle(deposit);
@@ -349,19 +421,17 @@ contract EAppsLighterUnitTest is Test {
         vm.stopPrank();
 
         _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit))));
-        _mockPosition(
-            pool,
-            0,
-            LighterTypes.Position({
-                size: 20_000,
-                entryQuote: 10_000e6,
-                initialMarginFraction: 0,
-                totalOrderCount: 0,
-                totalPositionTiedOrderCount: 0,
-                marginMode: 0,
-                allocatedMargin: 0
-            })
-        );
+        LighterTypes.Position memory position = LighterTypes.Position({
+            size: 20_000,
+            entryQuote: 10_000e6,
+            initialMarginFraction: 0,
+            totalOrderCount: 0,
+            totalPositionTiedOrderCount: 0,
+            marginMode: 0,
+            allocatedMargin: 0,
+            lastFundingRatePrefixSum: 0
+        });
+        _mockPosition(pool, 0, position);
 
         ExternalApp memory lighterApp = _findLighterApp(
             IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
@@ -369,39 +439,91 @@ contract EAppsLighterUnitTest is Test {
         assertEq(lighterApp.balances[0].amount, 12_000e6, "Balance should be collateral plus mark-to-market PnL");
     }
 
-    /// @notice NAV reads revert inside the settlement window and succeed after it.
-    function testHandleApplication_SettlementLock() public {
+    /// @notice Pending funding is part of NAV: Core settles funding into collateral only when a
+    ///  transaction next touches the position, so the collateral read lags the accrued amount.
+    function testHandleApplication_IncludesPendingFunding() public {
+        uint256 deposit = 10_000e6;
+        _depositAndSettle(deposit);
+
+        vm.startPrank(poolOwner);
+        LighterTypes.MarketInfo memory marketInfo = _marketInfo(500_000);
+        marketInfo.fundingRatePrefixSum = 1_000_000;
+        _mockMarketInfo(0, marketInfo);
+        _mockEvmAccountIndex(pool, 7);
+        IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
+        vm.stopPrank();
+
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit))));
+        // Mark equals entry (zero PnL); funding moved 900_000 against the position since it was
+        //  last settled: pendingFunding = 20_000 * (100_000 - 1_000_000) / 1e6 = -18_000.
+        LighterTypes.Position memory position = LighterTypes.Position({
+            size: 20_000,
+            entryQuote: 10_000e6,
+            initialMarginFraction: 0,
+            totalOrderCount: 0,
+            totalPositionTiedOrderCount: 0,
+            marginMode: 0,
+            allocatedMargin: 0,
+            lastFundingRatePrefixSum: 100_000
+        });
+        _mockPosition(pool, 0, position);
+
+        ExternalApp memory lighterApp = _findLighterApp(
+            IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
+        );
+        assertEq(
+            lighterApp.balances[0].amount,
+            int256(deposit) - 18_000,
+            "Balance should include the pending funding accrual"
+        );
+    }
+
+    /// @notice Lock semantics: from the request until the async leg lands, NAV-dependent flows
+    ///  are locked (pending included — the lock keeps the request-time snapshot exact). Nothing
+    ///  outstanding (full acceptance) or rejected clears in the same evaluation; a partial
+    ///  acceptance carries the remainder until the refund lands, then clears and unlocks.
+    function testHandleApplication_LockLifecycle() public {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, 10_000e6, LighterRouteType.Perps);
 
-        // Same block: allowed (in-flight covers the lagging Core read); the write is
-        //  successful, so the in-flight amount is not added back.
-        _mockAccountInfo(pool, _accountInfo(0));
-        _mockTxStatus(1, 1);
-        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
-
-        // Next block within the window: locked.
-        vm.roll(block.number + 1);
-        _mockAccountInfo(pool, _accountInfo(0));
+        // Pending: locked (valued exactly, but mint/burn wait for the transfer to complete).
+        _mockTxStatus(1, 0);
         vm.expectRevert(LighterLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
 
-        // After the window: allowed again.
-        vm.warp(block.timestamp + 17 seconds);
+        // Fully accepted: nothing is in transit, so the evaluation clears the record and unlocks.
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(10_000e6)));
         _mockAccountInfo(pool, _accountInfo(10_000e6));
         ExternalApp memory lighterApp = _findLighterApp(
             IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
         );
         assertEq(lighterApp.balances[0].amount, 10_000e6);
+
+        // Partial acceptance: the remainder is carried and the lock holds while the refund is in
+        // transit (the reverted evaluation is rolled back, so commit the record with an exempt
+        // updateUnitaryValue before simulating the refund).
+        vm.prank(poolOwner);
+        IALighter(pool).sendToCore(3, pool, false, 10_000e6, LighterRouteType.Perps);
+        _mockTxStatusWithPayload(2, 1, abi.encode(uint64(4_000e6)));
+        _mockAccountInfo(pool, _accountInfo(14_000e6));
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        ISmartPool(payable(pool)).updateUnitaryValue();
+        MockUSDC(USDC).mint(pool, 6_000e6);
+        lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
+        assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
     }
 
-    /// @notice getLighterTrackedMarkets reports tracked markets, their release-time decimal
-    ///  scales, and the in-flight ledger; a fresh pool reports an empty view.
+    /// @notice getLighterTrackedMarkets reports the tracked market ids; a fresh pool reports an
+    ///  empty list.
     function testGetLighterTrackedMarkets() public {
         uint256 deposit = 10_000e6;
         _depositAndSettle(deposit);
+
+        // The settled, fully-accepted deposit clears on the first NAV evaluation.
+        _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
 
         vm.startPrank(poolOwner);
         _mockMarketInfo(0, _marketInfo(500_000));
@@ -411,25 +533,14 @@ contract EAppsLighterUnitTest is Test {
         IALighter(pool).createOrder(0, 2, 0, 0, 0, 0, 30_000, 100_000, true, false, 0);
         vm.stopPrank();
 
-        LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
-        assertEq(viewData.marketIds.length, 2, "Two markets should be tracked");
-        assertEq(viewData.marketIds[0], 0, "ETH-PERP");
-        assertEq(viewData.marketIds[1], 2, "SOL-PERP");
-        assertEq(viewData.sizeDecimals[0], 4, "ETH-PERP sizeDecimals from LighterConstants table");
-        assertEq(viewData.priceDecimals[0], 2, "ETH-PERP priceDecimals from LighterConstants table");
-        assertEq(viewData.sizeDecimals[1], 3, "SOL-PERP sizeDecimals from LighterConstants table");
-        assertEq(viewData.priceDecimals[1], 3, "SOL-PERP priceDecimals from LighterConstants table");
-        assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
-        assertEq(viewData.lastReqId, 1, "Only transfers record an action; the two orders do not");
-        assertTrue(viewData.lastActionTimestamp > 0, "Action timestamp recorded");
+        uint16[] memory marketIds = IEAppsLighter(pool).getLighterTrackedMarkets();
+        assertEq(marketIds.length, 2, "Two markets should be tracked");
+        assertEq(marketIds[0], 0, "ETH-PERP");
+        assertEq(marketIds[1], 2, "SOL-PERP");
 
-        // A fresh pool with no Lighter activity reports the empty view.
+        // A fresh pool with no Lighter activity reports the empty list.
         vm.prank(poolOwner);
         (address pool2, ) = IRigoblockPoolProxyFactory(factory).createPool("Lighter Unit 2", "LU2", USDC);
-        LighterViewData memory empty = IEApps(pool2).getLighterTrackedMarkets();
-        assertEq(empty.marketIds.length, 0);
-        assertEq(empty.inFlightAmount, 0);
-        assertEq(empty.lastReqId, 0);
-        assertEq(empty.lastActionTimestamp, 0);
+        assertEq(IEAppsLighter(pool2).getLighterTrackedMarkets().length, 0);
     }
 }

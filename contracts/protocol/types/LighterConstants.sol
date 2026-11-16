@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
-error UnknownMarket(uint16 marketId);
-
 /// @title LighterConstants
 /// @notice Predeploy addresses and protocol constants for the LighterEVM integration.
-/// @dev The market-decimals table's provenance and the reason decimals cannot be read on-chain
-///  are documented in docs/lighter/INTEGRATION.md ("Market decimals"); new markets are added at
-///  release time. The USDC token address and asset index are devnet values.
 library LighterConstants {
     /// @notice LighterEVM chain ID (19_529 = 0x4C49 = "LI").
     uint256 internal constant LIGHTEREVM_CHAIN_ID = 19_529;
@@ -38,14 +33,4 @@ library LighterConstants {
 
     /// @notice Maximum number of perp markets tracked in pool storage for NAV valuation.
     uint256 internal constant MAX_TRACKED_MARKETS = 32;
-
-    /// @notice Returns the (sizeDecimals, priceDecimals) scale of a whitelisted perp market;
-    ///  reverts UnknownMarket for any other id.
-    function marketDecimals(uint16 marketId) internal pure returns (uint8 sizeDecimals, uint8 priceDecimals) {
-        if (marketId == 0) return (4, 2); // ETH-PERP
-        if (marketId == 1) return (5, 1); // BTC-PERP
-        if (marketId == 2) return (3, 3); // SOL-PERP
-        if (marketId == 3) return (0, 6); // DOGE-PERP
-        revert UnknownMarket(marketId);
-    }
 }
