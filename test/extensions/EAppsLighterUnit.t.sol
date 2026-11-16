@@ -466,7 +466,7 @@ contract EAppsLighterUnitTest is Test {
         assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
         assertEq(viewData.lastReqId, 1, "Only transfers record an action");
         assertEq(
-            viewData.usdcSnapshotAtRequest,
+            viewData.balanceSnapshot,
             MockUSDC(USDC).balanceOf(pool),
             "Snapshot captured when the request is recorded"
         );

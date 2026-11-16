@@ -14,7 +14,6 @@ import {LighterTypes} from "../extensions/adapters/interfaces/lighter/LighterTyp
 library LighterLib {
     error NavLocked();
     error PendingRequest();
-    error InvalidAmount();
     error MaxTrackedMarketsReached();
     error InvalidMarket();
     error LighterReadFailed();
@@ -126,7 +125,7 @@ library LighterLib {
                 //  inFlightAmount is negative, the app carries the undelivered amount
                 adjustment = -amount;
             }
-            if (adjustment == 0 || _legLanded(data.usdcSnapshotAtRequest)) {
+            if (adjustment == 0 || _legLanded(data.balanceSnapshot)) {
                 delete lighterSlot.data;
                 adjustment = 0;
             }
@@ -147,7 +146,9 @@ library LighterLib {
     }
 
     function recordAction(int256 amount, uint64 reqId) internal {
-        if (amount == 0) revert InvalidAmount();
+        // a zero amount records nothing and disturbs no existing record (only nonzero transfers
+        //  are ever tracked)
+        if (amount == 0) return;
         LighterData storage data = StorageLib.lighterSlot().data;
         uint64 lastReqId = data.lastReqId;
         if (lastReqId != 0) {
@@ -156,7 +157,7 @@ library LighterLib {
         }
         data.inFlightAmount = int128(amount);
         data.lastReqId = reqId;
-        data.usdcSnapshotAtRequest = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
+        data.balanceSnapshot = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
     }
 
     ///  lock: they are valued exactly by the in-flight amount.

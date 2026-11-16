@@ -625,7 +625,7 @@ The rules the accounting follows (violations of any of these are bugs, not trade
   price of guaranteed exactness. With any permissioned flow able to move USDC during pending, a
   request-time snapshot can be polluted (4.5.6 pinned at settle-observation instead, which
   trapped pools on idle chains — see R5). Orders record no action and are never blocked.
-- **R3 — snapshot at request, exactly once.** `usdcSnapshotAtRequest` is captured in
+- **R3 — snapshot at request, exactly once.** `balanceSnapshot` is captured in
   `recordAction`. It provably predates the async leg: Core schedules the refund/delivery only
   after processing the request, so `wallet > snapshot` becomes true exactly when the leg lands —
   whether that is the next block or hours later. No evaluation cadence is assumed; there is no
@@ -752,18 +752,16 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.8` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.8"`. 4.5.1
-  upgraded the integration to devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time
-  status-driven in-flight accounting, TWAP guard); 4.5.4–4.5.7 iterated the transfer accounting
-  to its final form: sequential per-status handling (`0`/`1`/`2`/unknown), the lock spanning
-  request-to-landing in both directions (pending included — the lock is what makes the
-  request-time snapshot exact), `usdcSnapshotAtRequest` captured in `recordAction` with clearing
-  on any wallet increase, and the signed `inFlightAmount` as the direction flag. The 4.5.6
-  settle-observation pin was found to trap idle pools (snapshot taken after a leg that landed
-  between evaluations) and was replaced. `getLighterTrackedMarkets` lives in `EAppsLighter`
-  (`IEAppsLighter`). `extensionsMapSalt28` (4.5.1–4.5.7 shipped salts 21–27). 4.5.8 adds the
-  `recordAction` zero-amount guard and the edge-case suite: short status payload, unknown
-  future status, overwrite of a settled-unlanded record, and direct-transfer early clear. The devnet 1.1.0 reset (2026-10-26)
+- `VERSION` is `4.5.0` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.0"`;
+  `extensionsMapSalt20`. The devnet 1.2.0 integration was iterated through review-only numbers
+  (4.5.1–4.5.8) that were burned without ever leaving the resettable devnet; per the
+  unreleased-train rule the shipped train keeps the accepted 4.5.0/salt20 pair, so the PR shows
+  no version/salt change against `development`. Final shape: sequential per-status handling
+  (`0`/`1`/`2`/unknown), one transfer at a time, the lock spanning request-to-landing in both
+  directions (pending included — orders and `updateUnitaryValue` never blocked), and
+  `balanceSnapshot` (the pool's USDC balance captured when the request is recorded; it provably
+  predates the async leg, so clearing on any wallet increase is exact whenever observed).
+  `getLighterTrackedMarkets` lives in `EAppsLighter` (`IEAppsLighter`). The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
   version/salt pair: 4.5.0 / `extensionsMapSalt20`. (History: 4.6.1 = ENavView removal +
@@ -1059,7 +1057,7 @@ No extension/adapter storage (Rigoblock hard rule).
   `0x080f…1fA6`).** `_inFlightAdjustment` rewritten with explicit `status == 0 / 1 / 2` branches,
   the landing check simplified to any wallet increase over the pinned baseline (fee-robust, and
   exact-fee-free delivery verified live), and `recordAction` reset of the baseline fixed. Renamed
-  the `slot` parameters and the `usdcSnapshotAtRequest` field (`usdcSnapshotAtRequest`). Redeployed
+  the `slot` parameters and the `balanceSnapshot` field (`balanceSnapshot`). Redeployed
   (`VERSION = "4.5.5"`, `extensionsMapSalt25`): EAppsLighter `0x0A1a60a826ec486A6AD471A110E219D3d7F7cDE7`, ExtensionsMap
   `0x8B4F7CD12aedfA3f73B9214aC7a18bB934Fe4FFb`, SmartPool `0xDe038d009519577f36812a1E8A8DB8B880f89cB0`, ALighter `0xA7d741784bd0235dB139241Fe5eF991b12778ec4`; Authority rewired (five selectors
   remove/re-add, `factory.setImplementation(0xDe03…)`). The tester pool `0x0CD1…89adc` was
@@ -1071,7 +1069,7 @@ No extension/adapter storage (Rigoblock hard rule).
 - **4.5.6 sequential statuses + withdrawal-carry fix + redeploy (2026-11-16, deployer key
   `0x080f…1fA6`).** `_inFlightAdjustment` rewritten as a flat `status == 0 / 1 / 2 / unknown`
   chain writing a single return variable; fixed the confirmed-withdrawal carry sign; renamed the
-  snapshot field to `usdcSnapshotAtRequest`; added a moving-mark conservation test (positions
+  snapshot field to `balanceSnapshot`; added a moving-mark conservation test (positions
   revalue freely during pending and settled-in-transit windows — `testNavExactWhilePositionsMoveDuringTransfer`).
   Redeployed (`VERSION = "4.5.6"`, `extensionsMapSalt26`): EAppsLighter `0x2Ed167C39818479073fDE526645da6f4165AE26D`, SmartPool
   `0xf3DFc970B55329A45D27E9e10D5553501D46abBf`, ALighter `0xe01FA2d4d91C8cC6259b285F7fC40E5782333fc9`; Authority rewired. Tester pool upgraded; a 4 USDC deposit
@@ -1098,6 +1096,14 @@ No extension/adapter storage (Rigoblock hard rule).
   (`VERSION = "4.5.8"`, `extensionsMapSalt28`): EAppsLighter `0xf0795a6cc2600B31fA80C5D4d3Fcea7F4880A9F9`, ExtensionsMap `0xC68e53f8bf0F8Fa2D28f08d3169c23D635f3F751`,
   SmartPool `0x54B03A2449ceA5ae995BB38A6d2dB53D6C69336C`, ALighter `0x2bfd2ae3FC508BD33eF97AB398ddEda67A8781eF`; Authority rewired; tester pool upgraded. Live
   NAV-exactness suite passes.
+- **Final devnet-1.2.0 train at the accepted 4.5.0/salt20 (2026-11-16, deployer key
+  `0x080f…1fA6`).** One clean deployment after the review iteration (the intermediate 4.5.1–4.5.8
+  numbers were devnet-only and are superseded): EAppsLighter `0x3B276a6ab9048266099Ac0776e803A4aa922D94a`, ExtensionsMap `0xAD4A98813179A735df746D23e19eDC6aAfe68097`,
+  SmartPool `0x2CA927Cb8B42dE5F056460037F3396245c3D73b4`, ALighter `0x7CecD54b58cA3748a27B35bEd00CeF9d2C626145`; Authority selectors re-pointed,
+  `factory.setImplementation(0x2CA9…)`. Tester pool `0x0CD1…89adc` upgraded and answers
+  `VERSION() = "4.5.0"`; live NAV-exactness and format suites pass. **No further redeploys:** all
+  ongoing work runs on Foundry/anvil forks of the devnet (`anvil --fork-url $LIGHTER_DEVNET_RPC_URL`),
+  with READ_CORE mocked; only read-only `eth_call` format checks touch the live RPC.
 - Explorer verification: enabled with devnet 1.1.0 (Blockscout contract verification, per the
   changelog; the pre-reset build had it disabled). Hardhat 3's verify plugin (v3.1.0+) has native
   Blockscout support and does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin

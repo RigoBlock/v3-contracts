@@ -635,12 +635,17 @@ contract LighterLibTest is Test {
         harness.assertNavUnlocked();
     }
 
-    /// @notice A zero-amount action would create a record that can never clear (the adjustment
-    ///  early-returns on amount == 0): recordAction rejects it outright.
-    function testRecordActionRevertsZeroAmount() public {
-        vm.expectRevert(LighterLib.InvalidAmount.selector);
+    /// @notice A zero amount records nothing: with no record it is a pure no-op, and it never
+    ///  disturbs an outstanding record.
+    function testRecordActionZeroAmountIsNoOp() public {
         harness.recordAction(0, 1);
-        assertEq(harness.lighterData().lastReqId, 0, "No record may exist");
+        assertEq(harness.lighterData().lastReqId, 0, "No record created");
+
+        harness.recordAction(100e6, 1);
+        harness.recordAction(0, 2);
+        LighterData memory data = harness.lighterData();
+        assertEq(data.lastReqId, 1, "Outstanding record untouched");
+        assertEq(data.inFlightAmount, 100e6);
     }
 
     /// @notice recordAction overwrites a settled-but-unlanded record: the previous transfer's
@@ -666,7 +671,7 @@ contract LighterLibTest is Test {
         LighterData memory data = harness.lighterData();
         assertEq(data.lastReqId, 2);
         assertEq(data.inFlightAmount, 100e6);
-        assertEq(data.usdcSnapshotAtRequest, 500e6, "Fresh snapshot at the new request");
+        assertEq(data.balanceSnapshot, 500e6, "Fresh snapshot at the new request");
         balances = harness.getLighterBalances(ACCOUNT);
         assertEq(balances[0].amount, 700e6, "New pending deposit added back; old carry gone");
     }
