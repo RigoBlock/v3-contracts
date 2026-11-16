@@ -135,6 +135,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
             reduceOnly,
             triggerPrice
         );
+        LighterLib.recordOrderReq(marketIndex, reqId);
         emit OrderSent(reqId);
     }
 

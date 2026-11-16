@@ -692,21 +692,16 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     /// @dev Fills the pool's tracked-market registry to MAX_TRACKED_MARKETS via the lib harness
-    ///  (bypassing the Core validation), confirms each market with a non-empty observation, then
-    ///  fails every position read: the markets are confirmed-empty, i.e. stale and prunable.
+    ///  (bypassing the Core validation) and fails every position read: a failed read is a zeroed
+    ///  position, i.e. an empty (stale) market. Seeded markets carry no order reqId, so they are
+    ///  prunable.
     function _seedPoolRegistryToCap() internal {
         _useLibHarness();
         LighterLibHarness harness = LighterLibHarness(address(pool));
-        _mockAccountInfo(address(pool), _accountInfo(0));
         for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
             uint16 marketId = 100 + uint16(i);
             harness.seedTrackedMarket(marketId);
-            _mockMarketInfo(marketId, _marketInfo(0, 0, 500_0000));
-            _mockPosition(address(pool), marketId, _position(100, 0, 0, 0));
-        }
-        harness.getLighterBalances(address(pool));
-        for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
-            _mockPositionNotFound(100 + uint16(i));
+            _mockPositionNotFound(marketId);
         }
         assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
     }

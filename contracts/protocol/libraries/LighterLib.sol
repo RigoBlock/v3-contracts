@@ -38,17 +38,22 @@ library LighterLib {
             uint16 marketId = marketIds[i - 1];
             LighterTypes.Position memory position = readPosition(account, marketId);
             if (position.size == 0 && position.totalOrderCount == 0 && position.totalPositionTiedOrderCount == 0) {
-                // an empty market is pruned only once its position or orders have been observed on
-                //  Core: right after tracking, the parent-Core snapshot cannot yet show them, and
-                //  pruning on that stale read would hide a live position from NAV
-                if (slot.marketConfirmations[marketId] != 0) {
+                // prune only once the market's latest order write has a non-pending status: a
+                //  pending write may still appear on Core (pruning would hide it from NAV), a
+                //  failed one never will, and a processed one is reflected in this same snapshot
+                uint64 orderReqId = slot.marketOrderReqIds[marketId];
+                if (orderReqId == 0) {
+                    _untrackMarket(slot, marketId, i - 1);
+                    continue;
+                }
+                (uint8 orderStatus, ) = readTxStatus(orderReqId);
+                if (orderStatus != 0) {
                     _untrackMarket(slot, marketId, i - 1);
                     continue;
                 }
                 hasActiveMarkets = true;
                 continue;
             }
-            slot.marketConfirmations[marketId] = block.number;
             hasActiveMarkets = true;
             totalUsdcValue += _positionValueUsdc(position, marketId);
         }
@@ -179,6 +184,11 @@ library LighterLib {
         markets.push(marketId);
     }
 
+    /// @notice Records the reqId of a market's latest createOrder write; drives the prune gate.
+    function recordOrderReq(uint16 marketId, uint64 reqId) internal {
+        StorageLib.lighterSlot().marketOrderReqIds[marketId] = reqId;
+    }
+
     function _untrackMarket(LighterSlot storage lighterSlot, uint16 marketId, uint256 listIndex) private {
         uint16[] storage markets = lighterSlot.trackedMarkets;
         uint256 lastIndex = markets.length - 1;
@@ -189,7 +199,7 @@ library LighterLib {
             lighterSlot.marketIndex[lastMarket] = listIndex + 1;
         }
         delete lighterSlot.marketIndex[marketId];
-        delete lighterSlot.marketConfirmations[marketId];
+        delete lighterSlot.marketOrderReqIds[marketId];
     }
 
     function coreAccountExists(address account) internal view returns (bool exists) {

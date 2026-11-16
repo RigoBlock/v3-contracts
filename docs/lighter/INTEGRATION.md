@@ -700,9 +700,10 @@ reqId, understating NAV by `min(D, W)` with a same-block lock exemption that let
 mint price off it. The current rules eliminate all three: one request at a time (a batched
 second leg reverts `PendingRequest`, atomically rolling back a multicall), no wall-clock
 window, and the request-to-landing lock with no exemptions. A second audited finding — the same-block prune of a freshly auto-tracked market — is fixed
-by the `marketConfirmations` gate above (regression tests:
-`testFreshMarketSurvivesStaleEmptyReadUntilConfirmed`,
-`testFreshTrackedMarketSurvivesSameBlockNavEval`). The mixed-batch netting report needed no
+by the `marketOrderReqIds` gate above (regression tests:
+`testFreshMarketSurvivesStaleEmptyReadUntilOrderSettles`,
+`testFreshTrackedMarketSurvivesSameBlockNavEval`, covering the pending, failed and
+instantly-filled cases). The mixed-batch netting report needed no
 code change: one-request-at-a-time plus the request-to-landing lock remove the accumulator it
 exploited (regression tests: `testMixedBatchRevertsAtomically`,
 `testMixedBatchSeparateTransactionsReverts`). A balance-baseline auto-clear without the lock

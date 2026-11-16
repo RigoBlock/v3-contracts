@@ -372,14 +372,20 @@ contract EAppsLighterUnitTest is Test {
         _depositAndSettle(10_000e6);
         _mockAccountInfo(pool, _accountInfo(int128(uint128(10_000e6))));
 
+        // The deposit consumed reqId 1 on the manager mock; advance the (separate) entrypoint
+        ///  mock counter so the order gets its own reqId, as the global messenger counter would.
+        vm.store(ENTRYPOINT, bytes32(uint256(0)), bytes32(uint256(1)));
         vm.prank(poolOwner);
         _mockMarketInfo(0, _marketInfo(500_000));
         _mockEvmAccountIndex(pool, 7);
-        IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
+        uint64 orderReqId = IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
+        assertEq(orderReqId, 2);
         assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
 
-        // The order is not visible in the parent Core snapshot yet: this stale read must keep
-        // the market tracked (any account may trigger the evaluation).
+        // The order is not visible in the parent Core snapshot yet and its write is still
+        //  pending: this stale read must keep the market tracked (any account may trigger the
+        //  evaluation).
+        _mockTxStatus(orderReqId, 0);
         _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
         assertEq(
@@ -390,6 +396,7 @@ contract EAppsLighterUnitTest is Test {
 
         // Core now reflects the position; it stays tracked and is valued.
         vm.roll(block.number + 1);
+        _mockTxStatusWithPayload(orderReqId, 1, abi.encode(uint64(1)));
         _mockPosition(pool, 0, _position(20_000, 10_000e6, 0, 0, 0));
         _mockMarketInfo(0, _marketInfo(750_000));
         ExternalApp memory lighterApp = _findLighterApp(
@@ -397,6 +404,11 @@ contract EAppsLighterUnitTest is Test {
         );
         assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
         assertEq(lighterApp.balances[0].amount, 15_000e6, "Position valued once Core reflects it");
+
+        // Position closed and the write settled: the market prunes normally.
+        _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 0, "Settled and empty: pruned");
     }
 
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.

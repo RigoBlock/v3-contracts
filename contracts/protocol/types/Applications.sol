@@ -45,9 +45,11 @@ struct LighterSlot {
     LighterData data;
     uint16[] trackedMarkets;
     mapping(uint16 marketId => uint256 index) marketIndex;
-    /// @notice Block at which the market was last observed holding a position or orders; 0 means
-    ///  never observed (a freshly tracked market is not prunable until Core reflects it).
-    mapping(uint16 marketId => uint256 confirmedBlock) marketConfirmations;
+    /// @notice Latest createOrder write per market. An empty market is pruned only once this
+    ///  write has a non-pending status: right after createOrder the parent-Core snapshot cannot
+    ///  yet show the position (pruning then would hide it from NAV), while a failed write means
+    ///  nothing will ever appear.
+    mapping(uint16 marketId => uint64 latestOrderReqId) marketOrderReqIds;
 }
 
 /// @notice Pool-storage view of the Lighter slot, returned by EAppsLighter.getLighterTrackedMarkets.
