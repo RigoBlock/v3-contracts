@@ -14,6 +14,7 @@ import {LighterTypes} from "../extensions/adapters/interfaces/lighter/LighterTyp
 library LighterLib {
     error NavLocked();
     error PendingRequest();
+    error InvalidAmount();
     error MaxTrackedMarketsReached();
     error InvalidMarket();
     error LighterReadFailed();
@@ -146,6 +147,7 @@ library LighterLib {
     }
 
     function recordAction(int256 amount, uint64 reqId) internal {
+        if (amount == 0) revert InvalidAmount();
         LighterData storage data = StorageLib.lighterSlot().data;
         uint64 lastReqId = data.lastReqId;
         if (lastReqId != 0) {

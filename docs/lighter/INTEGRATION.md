@@ -645,6 +645,22 @@ Settlement is observed lazily: any on-chain evaluation (or `eth_call`) of the Li
 reads the tx-status precompile for the recorded reqId; the first non-zero read is the
 observation; anyone can force one via `updateUnitaryValue`.
 
+**Known limitations (the complete list of non-exact or locked behaviors):**
+
+1. **A leg that never lands** (delivery/refund transaction reverted — never retried, funds lost
+   per Lighter's docs): the record stays unresolved and mint/burn stay locked until the owner
+   initiates the next transfer, which overwrites the record; NAV is exact afterwards because the
+   carry stops counting the lost funds. This is the only lock with no automatic resolution, and
+   it is unambiguous: the delivery receipt is verifiable off-chain (Lighter docs, `event_info`).
+2. **A plain ERC-20 transfer into the pool while a leg is outstanding** (no pool code runs, so
+   it cannot be blocked or attributed) clears the record early if it increases the wallet; it
+   costs the sender real funds, and between the early clear and the actual landing NAV
+   understates by at most the leg amount. Direct transfers are donations: they raise true NAV
+   by the same amount, so no value extraction is possible from the clear itself.
+3. **Pending and in-transit windows block mint/burn/donate/deposits** by design (R2); the lock
+   lifts automatically the moment the leg lands. Orders, transfers, and `updateUnitaryValue`
+   are never blocked.
+
 **Settled (status 1 or 2) has an async EVM-side leg whose landing is not observable on-chain.**
 For a deposit, Core accepted `acceptedAmount` (visible in the collateral read) and refunds
 `amount − acceptedAmount` in a separate exogenous transaction; for a withdrawal, Core debited
@@ -736,7 +752,7 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.7` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.7"`. 4.5.1
+- `VERSION` is `4.5.8` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.8"`. 4.5.1
   upgraded the integration to devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time
   status-driven in-flight accounting, TWAP guard); 4.5.4–4.5.7 iterated the transfer accounting
   to its final form: sequential per-status handling (`0`/`1`/`2`/unknown), the lock spanning
@@ -745,7 +761,9 @@ No extension/adapter storage (Rigoblock hard rule).
   on any wallet increase, and the signed `inFlightAmount` as the direction flag. The 4.5.6
   settle-observation pin was found to trap idle pools (snapshot taken after a leg that landed
   between evaluations) and was replaced. `getLighterTrackedMarkets` lives in `EAppsLighter`
-  (`IEAppsLighter`). `extensionsMapSalt27` (4.5.1–4.5.6 shipped salts 21–26). The devnet 1.1.0 reset (2026-10-26)
+  (`IEAppsLighter`). `extensionsMapSalt28` (4.5.1–4.5.7 shipped salts 21–27). 4.5.8 adds the
+  `recordAction` zero-amount guard and the edge-case suite: short status payload, unknown
+  future status, overwrite of a settled-unlanded record, and direct-transfer early clear. The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
   version/salt pair: 4.5.0 / `extensionsMapSalt20`. (History: 4.6.1 = ENavView removal +
@@ -1070,6 +1088,15 @@ No extension/adapter storage (Rigoblock hard rule).
   SmartPool `0x8FDB277326BB6a07010B09bDdbE70DFDae4CA862`, ALighter `0x330DA2Cd4930862d945DadF9c4c9DA6F4aD22528`; Authority rewired. Tester pool upgraded; the trap
   scenario verified live — an observation 12 s after a 5 USDC withdrawal had fully settled and
   delivered (no intermediate evaluation) cleared and unlocked instead of trapping; live
+  NAV-exactness suite passes.
+- **4.5.8 edge-case hardening + redeploy (2026-11-16, deployer key `0x080f…1fA6`).**
+  `recordAction` rejects a zero amount (a zero record could never clear and would lock mint/burn
+  forever). Edge tests added: confirmed deposit with a malformed status payload (full amount
+  carried, never-revert), unknown future status (conservative carry + lock), overwrite of a
+  settled-unlanded record (fresh snapshot; the recovery path for a never-landing leg), and a
+  direct ERC-20 transfer clearing the record early (the documented R3 residual). Redeployed
+  (`VERSION = "4.5.8"`, `extensionsMapSalt28`): EAppsLighter `0xf0795a6cc2600B31fA80C5D4d3Fcea7F4880A9F9`, ExtensionsMap `0xC68e53f8bf0F8Fa2D28f08d3169c23D635f3F751`,
+  SmartPool `0x54B03A2449ceA5ae995BB38A6d2dB53D6C69336C`, ALighter `0x2bfd2ae3FC508BD33eF97AB398ddEda67A8781eF`; Authority rewired; tester pool upgraded. Live
   NAV-exactness suite passes.
 - Explorer verification: enabled with devnet 1.1.0 (Blockscout contract verification, per the
   changelog; the pre-reset build had it disabled). Hardhat 3's verify plugin (v3.1.0+) has native

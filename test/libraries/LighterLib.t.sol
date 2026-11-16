@@ -610,6 +610,85 @@ contract LighterLibTest is Test {
         assertEq(harness.lighterData().lastReqId, 0);
     }
 
+    /// @notice A confirmed deposit whose status payload is shorter than a word decodes to
+    ///  accepted = 0: the full amount is treated as an outstanding refund (never-revert policy).
+    function testDepositShortStatusPayloadCarriesFullAmount() public {
+        _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
+        harness.recordAction(100e6, 1);
+        _mockTxStatus(1, 1, new bytes(16));
+
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances[0].amount, 110e6, "Malformed accepted payload: full amount stays in NAV");
+        assertEq(harness.lighterData().lastReqId, 1, "Record stays unresolved (locked)");
+    }
+
+    /// @notice An unknown future status conservatively carries the amount and stays locked
+    ///  (fail-closed), never reverting the NAV read.
+    function testUnknownStatusCarriesAndLocks() public {
+        _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
+        harness.recordAction(100e6, 1);
+        _mockTxStatus(1, 3, bytes(""));
+
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances[0].amount, 110e6, "Unknown status: conservative carry");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+    }
+
+    /// @notice A zero-amount action would create a record that can never clear (the adjustment
+    ///  early-returns on amount == 0): recordAction rejects it outright.
+    function testRecordActionRevertsZeroAmount() public {
+        vm.expectRevert(LighterLib.InvalidAmount.selector);
+        harness.recordAction(0, 1);
+        assertEq(harness.lighterData().lastReqId, 0, "No record may exist");
+    }
+
+    /// @notice recordAction overwrites a settled-but-unlanded record: the previous transfer's
+    ///  leg is abandoned (its carry stops applying) and the new request starts with a fresh
+    ///  snapshot — the recovery path for a leg that never lands.
+    function testRecordActionOverwritesSettledRecord() public {
+        MockERC20(USDC).mint(address(harness), 500e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
+        harness.recordAction(-400e6, 1);
+        _mockTxStatus(1, 1, bytes(""));
+        _mockAccountInfo(ACCOUNT, _accountInfo(600e6));
+
+        // Settled, delivery in transit: carried, locked.
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances[0].amount, 1000e6, "Settled withdrawal carried");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // A new request overwrites the record (previous reqId is settled): fresh snapshot, the
+        //  old leg's carry no longer applies.
+        _mockTxStatus(2, 0, bytes(""));
+        harness.recordAction(100e6, 2);
+        LighterData memory data = harness.lighterData();
+        assertEq(data.lastReqId, 2);
+        assertEq(data.inFlightAmount, 100e6);
+        assertEq(data.usdcSnapshotAtRequest, 500e6, "Fresh snapshot at the new request");
+        balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances[0].amount, 700e6, "New pending deposit added back; old carry gone");
+    }
+
+    /// @notice A plain ERC-20 transfer into the pool while a leg is outstanding clears the
+    ///  record early (R3 residual: no code path can attribute or block it; documented).
+    function testDirectTransferClearsEarly() public {
+        MockERC20(USDC).mint(address(harness), 500e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
+        harness.recordAction(-400e6, 1);
+        _mockTxStatus(1, 1, bytes(""));
+        harness.getLighterBalances(ACCOUNT);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // A direct transfer of the leg amount (no pool code involved) reads as the landing.
+        MockERC20(USDC).mint(address(harness), 400e6);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances[0].amount, 1000e6);
+        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the wallet increase");
+    }
+
     /// @notice wallet USDC + Lighter app balance, in 6-dec USDC.
     function _nav() internal returns (uint256) {
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
