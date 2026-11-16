@@ -693,8 +693,14 @@ transaction scheduled after Core executes, which is exactly the gap the carry + 
 observation (an overwrite never inherits a previous request's baseline).
 
 History (why the design looks like this): the 1.1.0 integration used a 16-second lock that
-assumed a timing guarantee Axiom explicitly disclaimed, and subtracted settled withdrawals
-(NAV understated by the full amount in transit). A balance-baseline auto-clear without the lock
+assumed a timing guarantee Axiom explicitly disclaimed, subtracted settled withdrawals (NAV
+understated by the full amount in transit), and — per an external audit report — netted
+same-block mixed deposit+withdrawal batches into one signed amount evaluated against a single
+reqId, understating NAV by `min(D, W)` with a same-block lock exemption that let a back-running
+mint price off it. The current rules eliminate all three: one request at a time (a batched
+second leg reverts `PendingRequest`, atomically rolling back a multicall), no wall-clock
+window, and the request-to-landing lock with no exemptions. Regression tests:
+`testMixedBatchRevertsAtomically`, `testMixedBatchSeparateTransactionsReverts`. A balance-baseline auto-clear without the lock
 (4.5.2) was shown mint-exploitable, and an owner-attested `syncTransfer` (4.5.3) removed the
 exploit but added a manual step. 4.5.4 keeps the lock and makes clearing automatic. The pinned
 tests assert the invariant: wallet + app NAV exact in every tradeable state, and the settled

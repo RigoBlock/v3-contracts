@@ -879,6 +879,45 @@ contract ALighterUnit is Test {
         libHarness.getLighterBalances(address(libHarness));
     }
 
+    /// @notice Regression (audit: mixed-batch netting). Batching a deposit and a withdrawal in
+    ///  one transaction is impossible: the second recordAction reverts PendingRequest while the
+    ///  first request is pending, and the atomic revert rolls the first leg back too — no
+    ///  netting, no understated NAV, no same-block mint window.
+    function testMixedBatchRevertsAtomically() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        _mockTxStatus(1, 0);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        this._mixedBatch();
+        _useLibHarness();
+        assertEq(
+            LighterLibHarness(address(pool)).lighterData().lastReqId,
+            0,
+            "The atomic revert must roll the deposit record back: no batch, no netting"
+        );
+    }
+
+    /// @dev Executes both legs in a single transaction (helper call = one tx).
+    function _mixedBatch() external {
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+        IALighter(address(pool)).sendToEvm(0, 3, address(pool), LighterRouteType.Perps, 60e6);
+    }
+
+    /// @notice Regression (audit: mixed-batch netting), reverse order and separate transactions:
+    ///  withdrawal first, then a deposit in the same block — the deposit reverts while the
+    ///  withdrawal is pending.
+    function testMixedBatchSeparateTransactionsReverts() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        IALighter(address(pool)).sendToEvm(0, 3, address(pool), LighterRouteType.Perps, 60e6);
+        _mockTxStatus(1, 0);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+
+        // Once the first request settles, the next transfer starts normally (overwrite).
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(60e6)));
+        uint64 reqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+        assertEq(reqId, 2);
+    }
+
     /// @notice The lock spans the whole transfer lifecycle: a pending deposit is included in NAV
     ///  exactly, but mint/burn stay locked until the leg lands — the lock is what keeps the
     ///  request-time snapshot exact. Orders are unaffected (they record no action).
