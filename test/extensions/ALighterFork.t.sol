@@ -8,7 +8,6 @@ import {LighterRouteType, ILighterInteropManager} from "../../contracts/protocol
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
-import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
@@ -32,7 +31,7 @@ contract ALighterForkTest is Test {
     address internal aLighter;
     address internal usdc;
 
-    // Mocked perp market: ETH-PERP (market 0, size_decimals 4, price_decimals 2 per LighterConstants).
+    // Mocked perp market: ETH-PERP (market 0, quoteMultiplier 1 as verified live on devnet 1.2.0).
     uint16 internal constant MARKET_ID = 0;
 
     function setUp() public {
@@ -103,6 +102,15 @@ contract ALighterForkTest is Test {
         );
     }
 
+    /// @notice Tx status with a success payload (a deposit's abi.encode(uint64 acceptedAmount)).
+    function _mockTxStatusWithPayload(uint64 reqId, uint8 status, bytes memory payload) internal {
+        vm.mockCall(
+            address(0x6600000000000000000000000000000000000000),
+            abi.encodePacked(uint16(0x0000), reqId),
+            abi.encode(status, payload)
+        );
+    }
+
     function _mockMarketInfo(uint16 marketId, uint64 markPrice) internal {
         vm.mockCall(
             address(0x6600000000000000000000000000000000000000),
@@ -120,7 +128,11 @@ contract ALighterForkTest is Test {
                         minQuoteAmount: 0,
                         liquidationFee: 0,
                         indexPrice: markPrice,
-                        markPrice: markPrice
+                        markPrice: markPrice,
+                        // Devnet 1.2.0: quoteMultiplier 1 (verified live on all devnet perp markets).
+                        quoteMultiplier: 1,
+                        fundingRatePrefixSum: 0,
+                        lastFundingRoundTimestamp: 0
                     })
                 )
             )
@@ -159,13 +171,13 @@ contract ALighterForkTest is Test {
     ///  predeploy applies Core's order admission checks (account must exist on Core with
     ///  collateral), which a forked pool can never satisfy — the order-write tests assert the
     ///  adapter's calldata and auto-tracking instead of executing real Core admission. Selector
-    ///  prefix match covers every argument combination; per the 1.1.0 changelog a successful
-    ///  void write returns abi.encode(0).
+    ///  prefix match covers every argument combination; per the 1.2.0 spec a successful
+    ///  createOrder returns abi.encode(uint64 orderIndex).
     function _mockCreateOrder() internal {
         vm.mockCall(
             LighterConstants.CORE_ENTRYPOINT,
             abi.encodePacked(ILighterCoreEntrypoint.createOrder.selector),
-            abi.encode(0)
+            abi.encode(uint64(1))
         );
     }
 
@@ -230,10 +242,13 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice createOrder auto-tracks the traded market: no separate tracking step is needed.
+    ///  Since devnet 1.2.0 any Core perp market can be traded (the on-chain quoteMultiplier
+    ///  replaced the release-time decimals table).
     /// @dev The final createOrder hits the real Core entrypoint predeploy; order parameters may need
     ///  adjustment once devnet RPC access allows validating them against the live predeploy.
     function testFork_CreateOrderAutoTracksMarket() public {
         _mockMarketInfo(MARKET_ID, 100_00);
+        _mockMarketInfo(5, 100_00);
         _mockEvmAccountIndex(1);
         // createOrder requires an activated Core account (checked after the market gates).
         _mockAccountInfo(0);
@@ -245,17 +260,20 @@ contract ALighterForkTest is Test {
         vm.expectRevert(IALighter.InvalidMarket.selector);
         IALighter(pool).createOrder(0, 2048, 1, 0, 0, 0, 1, 100_00, true, false, 0);
 
-        // Markets outside the LighterConstants decimals table can never be traded.
-        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(5)));
-        IALighter(pool).createOrder(0, 5, 1, 0, 0, 0, 1, 100_00, true, false, 0);
+        // TWAP orders (orderType 6) are rejected synchronously (Core code 6514).
+        vm.expectRevert(IALighter.InvalidOrderType.selector);
+        IALighter(pool).createOrder(0, MARKET_ID, 1, 6, 0, 0, 1, 100_00, true, false, 0);
 
+        // A previously untracked perp market trades and is auto-tracked.
+        IALighter(pool).createOrder(0, 5, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
 
-        // The traded market is tracked for NAV valuation without any explicit tracking call.
+        // The traded markets are tracked for NAV valuation without any explicit tracking call.
         LighterViewData memory viewData = IEApps(pool).getLighterTrackedMarkets();
-        assertEq(viewData.marketIds.length, 1, "Traded market should be auto-tracked");
-        assertEq(viewData.marketIds[0], MARKET_ID);
+        assertEq(viewData.marketIds.length, 2, "Traded markets should be auto-tracked");
+        assertEq(viewData.marketIds[0], 5);
+        assertEq(viewData.marketIds[1], MARKET_ID);
     }
 
     /// @notice NAV valuation reads collateral plus tracked positions from (mocked) Core state.
@@ -268,9 +286,9 @@ contract ALighterForkTest is Test {
         IALighter(pool).createOrder(0, MARKET_ID, 1, 0, 0, 0, 1, 100_00, true, false, 0);
         vm.stopPrank();
 
-        // 10 base units long (size_decimals 4 => raw amount 100_000), entry notional
-        // 10 * 100.0 = 1_000 USDC in Core USDC base units, mark 101.0 (price_decimals 2):
-        // markValue = 100_000 * 101_00 * 1e6 / 10^(4+2) = 1_010e6; pnl = 1_010e6 - 1_000e6 = 10e6.
+        // 10 base units long, entry notional 10 * 100.0 = 1_000 USDC in Core USDC base units,
+        // mark 101.0 with quoteMultiplier 1: markValue = 100_000 * 101_00 = 1_010e6;
+        // pnl = 1_010e6 - 1_000e6 = 10e6.
         _mockAccountInfo(1_000e6);
         _mockPosition(
             MARKET_ID,
@@ -281,7 +299,8 @@ contract ALighterForkTest is Test {
                 totalOrderCount: 0,
                 totalPositionTiedOrderCount: 0,
                 marginMode: 0,
-                allocatedMargin: 0
+                allocatedMargin: 0,
+                lastFundingRatePrefixSum: 0
             })
         );
 
@@ -292,8 +311,11 @@ contract ALighterForkTest is Test {
         assertEq(lighterApp.balances[0].amount, 1_010e6, "Balance should be collateral plus position PnL");
     }
 
-    /// @notice Minting is settlement-locked after a deposit and works again after the window.
-    function testFork_MintLockedDuringSettlementWindow() public {
+    /// @notice Lock semantics around a deposit: minting works while the request is pending (also
+    ///  from later blocks — the pending deposit is valued exactly, no wall-clock expiry); once
+    ///  Core settles, minting locks until the owner attests the EVM-side leg landed via
+    ///  syncTransfer.
+    function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
 
@@ -302,24 +324,31 @@ contract ALighterForkTest is Test {
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, depositAmount, LighterRouteType.Perps);
 
-        // Same block: allowed (in-flight covers the lagging Core read).
+        // Pending: mint allowed (in-flight covers the lagging Core read), same and later blocks.
         _mockAccountInfo(0);
         deal(usdc, poolOwner, depositAmount);
         vm.startPrank(poolOwner);
         IERC20(usdc).approve(pool, depositAmount);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        // Next block within the window: locked.
         vm.roll(block.number + 1);
         _mockAccountInfo(0);
+        _mockTxStatus(1, 0);
         deal(usdc, poolOwner, depositAmount);
         IERC20(usdc).approve(pool, depositAmount);
+        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
+
+        // Settled: locked for NAV-dependent flows.
+        vm.roll(block.number + 1);
+        _mockAccountInfo(int128(uint128(depositAmount)));
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(depositAmount)));
         vm.expectRevert(LighterLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        // After the window: allowed again.
-        vm.warp(block.timestamp + 17 seconds);
-        _mockAccountInfo(int128(uint128(depositAmount)));
+        // Owner attests the leg landed: unlocked, collateral read authoritative.
+        IALighter(pool).syncTransfer();
+        deal(usdc, poolOwner, depositAmount);
+        IERC20(usdc).approve(pool, depositAmount);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }

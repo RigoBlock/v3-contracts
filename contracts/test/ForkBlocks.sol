@@ -38,10 +38,11 @@ library ForkBlocks {
     /// @notice HyperEVM block number for fork tests (2026-10, ~48.9M)
     uint256 internal constant HYPEREVM_BLOCK = 48_900_000;
 
-    /// @notice LighterEVM devnet block number for fork tests (2026-10-27, post-reset chain, tip ~53k)
-    /// @dev Pinned below latest for RPC/archive stability. Devnet state evolves quickly and can be
-    ///      wiped entirely (the fixture skips gracefully when the predeploys have no code);
-    ///      bump at every branch creation like the other pins. The Lighter fork tests skip
-    ///      themselves while LIGHTER_DEVNET_RPC_URL is unset.
-    uint256 internal constant LIGHTER_BLOCK = 51_000;
+    /// @notice LighterEVM devnet block number for fork tests (2026-11-16, post devnet-1.2.0 reset,
+    ///      tip ~397k). Pinned ~2h below latest for RPC/archive stability on a 1-second-block
+    ///      devnet; the pin ages quickly and must be bumped at every branch creation like the
+    ///      other pins. Devnet state can be wiped entirely — after a wipe, bump to a block from
+    ///      after Lighter's redeploy (see docs/lighter/INTEGRATION.md "Devnet-reset hazard").
+    ///      The Lighter fork tests fail loudly while LIGHTER_DEVNET_RPC_URL is unset.
+    uint256 internal constant LIGHTER_BLOCK = 390_000;
 }

@@ -10,9 +10,8 @@ import {LighterRouteType} from "../../contracts/protocol/extensions/adapters/int
 import {LighterTypes} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/LighterTypes.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
-import {Applications, LighterData, LighterSlot, TrackedMarket} from "../../contracts/protocol/types/Applications.sol";
+import {Applications, LighterData, LighterSlot} from "../../contracts/protocol/types/Applications.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
-import {UnknownMarket} from "../../contracts/protocol/types/LighterConstants.sol";
 import {AppTokenBalance} from "../../contracts/protocol/types/ExternalApp.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
 
@@ -162,12 +161,16 @@ contract LighterLibHarness {
         return LighterLib.getLighterBalances(account);
     }
 
-    function assertNavUnlocked() external view {
-        LighterLib.assertNavUnlocked();
-    }
-
     function recordAction(int256 amount, uint64 reqId) external {
         LighterLib.recordAction(amount, reqId);
+    }
+
+    function clearAction() external {
+        LighterLib.clearAction();
+    }
+
+    function assertNavUnlocked() external view {
+        LighterLib.assertNavUnlocked();
     }
 
     function trackMarket(uint16 marketId) external {
@@ -175,12 +178,10 @@ contract LighterLibHarness {
     }
 
     /// @notice Seeds a tracked-market entry directly into the pool's Lighter slot, bypassing
-    ///  the Core validation and the release-time decimals table, so the at-cap sweep can be
-    ///  exercised with more markets than the table whitelists.
-    function seedTrackedMarket(uint16 marketId, uint8 sizeDecimals, uint8 priceDecimals) external {
+    ///  the Core validation, so the at-cap behavior can be exercised with any market ids.
+    function seedTrackedMarket(uint16 marketId) external {
         LighterSlot storage slot = StorageLib.lighterSlot();
         slot.marketIndex[marketId] = slot.trackedMarkets.length + 1;
-        slot.markets[marketId] = TrackedMarket({sizeDecimals: sizeDecimals, priceDecimals: priceDecimals});
         slot.trackedMarkets.push(marketId);
     }
 
@@ -306,6 +307,11 @@ contract ALighterUnit is Test {
         vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, reqId), abi.encode(status, bytes("")));
     }
 
+    /// @notice Tx status with a success payload (e.g. a deposit's abi.encode(uint64 acceptedAmount)).
+    function _mockTxStatusWithPayload(uint64 reqId, uint8 status, bytes memory payload) private {
+        vm.mockCall(_readCore, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, reqId), abi.encode(status, payload));
+    }
+
     function _mockEvmAccountIndex(address account, uint48 accountIndex) private {
         vm.mockCall(
             _readCore,
@@ -352,7 +358,10 @@ contract ALighterUnit is Test {
                 minQuoteAmount: 0,
                 liquidationFee: 0,
                 indexPrice: markPrice,
-                markPrice: markPrice
+                markPrice: markPrice,
+                quoteMultiplier: 1,
+                fundingRatePrefixSum: 0,
+                lastFundingRoundTimestamp: 0
             });
     }
 
@@ -370,14 +379,15 @@ contract ALighterUnit is Test {
                 totalOrderCount: 0,
                 totalPositionTiedOrderCount: 0,
                 marginMode: marginMode,
-                allocatedMargin: allocatedMargin
+                allocatedMargin: allocatedMargin,
+                lastFundingRatePrefixSum: 0
             });
     }
 
     /// @notice Tracks a market in the pool's storage via the lib harness with a valid mocked
-    ///  Core market info.
-    /// @dev Perps carry quoteAssetId == 0 on Core (docs + live devnet verification). The decimal
-    ///  scales come from the LighterConstants table, never from calldata.
+    ///  Core market info (perp, quoteMultiplier 1).
+    /// @dev Perps carry quoteAssetId == 0 on Core (docs + live devnet verification). Since
+    ///  devnet 1.2.0 the on-chain quoteMultiplier replaced the release-time decimals table.
     function _trackMarket(uint16 marketId) private {
         _mockMarketInfo(marketId, _marketInfo(0, 0, 500_0000));
         _useLibHarness();
@@ -415,8 +425,6 @@ contract ALighterUnit is Test {
         // balance includes it (tokens left the wallet, Core still reports zero collateral).
         _useLibHarness();
         LighterData memory data = LighterLibHarness(address(pool)).lighterData();
-        assertEq(data.lastActionBlock, block.number);
-        assertEq(data.lastActionTimestamp, block.timestamp);
         assertEq(data.inFlightAmount, int128(100e6));
         assertEq(data.lastReqId, 1);
 
@@ -490,11 +498,44 @@ contract ALighterUnit is Test {
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 1000e6);
 
-        // Once Core processes the debit (status 1) but before EVM delivery lands, the withdrawn
-        // amount is subtracted as in-flight.
+        // Once Core processes the debit (status 1) the collateral read drops to 600e6 and the app
+        // carries the undelivered 400e6, so the app still reports 1000e6 while the delivery is in
+        // transit. The settled state locks mint/burn (assertNavUnlocked) until the owner syncs.
         _mockTxStatus(1, 1);
+        _mockAccountInfo(address(pool), _accountInfo(600e6));
+        _useLibHarness();
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        LighterLibHarness(address(pool)).assertNavUnlocked();
+
+        // The EVM delivery lands (mock manager never moved tokens, so minting the amount to the
+        // pool simulates it); the landing is invisible on-chain — the owner attests it via
+        // syncTransfer and the collateral read alone becomes authoritative.
+        MockERC20(_usdc).mint(address(pool), 400e6);
+        _useAdapter();
+        vm.expectEmit(true, false, false, true, address(pool));
+        emit IALighter.TransferSynced();
+        IALighter(address(pool)).syncTransfer();
+
+        _useLibHarness();
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
         assertEq(balances[0].amount, 600e6);
+    }
+
+    /// @notice Transfers are one at a time: a second deposit reverts while the first request is
+    ///  still pending on Core and succeeds once it settled.
+    function testSendToCoreRevertsWhilePreviousTransferPending() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        uint64 firstReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+        assertEq(firstReqId, 1);
+
+        _mockTxStatus(1, 0);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
+
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
+        uint64 secondReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
+        assertEq(secondReqId, 2);
     }
 
     function testSendToEvmRevertsForWrongAsset() public {
@@ -538,12 +579,25 @@ contract ALighterUnit is Test {
         IALighter(address(pool)).createOrder(0, 2048, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
     }
 
-    /// @notice Markets absent from the LighterConstants release-time decimals table revert
-    ///  UnknownMarket before any Core read.
-    function testCreateOrderRevertsForUnknownMarket() public {
+    /// @notice Since devnet 1.2.0 any Core perp market can be traded: the on-chain
+    ///  quoteMultiplier replaced the release-time decimals table, so previously "unknown" market
+    ///  ids track and trade fine when Core reports a perp.
+    function testCreateOrderTradesPreviouslyUntrackedMarket() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        vm.expectRevert(abi.encodeWithSelector(UnknownMarket.selector, uint16(5)));
-        IALighter(address(pool)).createOrder(0, 5, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
+        _mockMarketInfo(5, _marketInfo(0, 0, 500_0000));
+        uint64 reqId = IALighter(address(pool)).createOrder(0, 5, 0, 0, 0, 0, 100, 500_0000, true, false, 0);
+        assertEq(reqId, 1);
+
+        _useLibHarness();
+        assertGt(LighterLibHarness(address(pool)).marketIndex(5), 0);
+    }
+
+    /// @notice TWAP orders (orderType 6) are rejected synchronously (Core code 6514).
+    function testCreateOrderRevertsForTwapOrderType() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        _mockMarketInfo(0, _marketInfo(0, 0, 500_0000));
+        vm.expectRevert(IALighter.InvalidOrderType.selector);
+        IALighter(address(pool)).createOrder(0, 0, 0, 6, 0, 0, 100, 500_0000, true, false, 0);
     }
 
     /// @notice A market that does not exist on Core reports found=false on the auto-track
@@ -652,14 +706,14 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     /// @dev Fills the pool's tracked-market registry to MAX_TRACKED_MARKETS via the lib harness
-    ///  (bypassing the decimals table) and fails every position read: a failed read is a zeroed
+    ///  (bypassing the Core validation) and fails every position read: a failed read is a zeroed
     ///  position, i.e. an empty (stale) market.
     function _seedPoolRegistryToCap() internal {
         _useLibHarness();
         LighterLibHarness harness = LighterLibHarness(address(pool));
         for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
             uint16 marketId = 100 + uint16(i);
-            harness.seedTrackedMarket(marketId, 4, 2);
+            harness.seedTrackedMarket(marketId);
             _mockPositionNotFound(marketId);
         }
         assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
@@ -729,15 +783,15 @@ contract ALighterUnit is Test {
     }
 
     function testGetLighterBalancesLongProfit() public {
-        // Market 0 (ETH-PERP): size_decimals 4, price_decimals 2 (LighterConstants table).
+        // quoteMultiplier 1 (mocked market info): markValue = size * markPrice.
         _mockMarketInfo(0, _marketInfo(0, 0, 51_00));
         libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(1_000_000e6));
-        // 100 base units long; entry notional 100 * 50.0 = 5000 USDC = 5e9 (Core USDC base units).
+        // 1_000_000 size units long; entry notional 5000 USDC = 5e9 (Core USDC base units).
         _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 0, 0));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
-        // markValue = 100_0000 * 51_00 * 1e6 / 10^(4+2) = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
+        // markValue = 1_000_000 * 51_00 = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, int256(1_000_000e6) + 100e6);
     }
@@ -782,7 +836,7 @@ contract ALighterUnit is Test {
         _mockMarketInfo(0, _marketInfo(0, 0, 51_00));
         libHarness.trackMarket(0);
         _mockAccountInfo(address(libHarness), _accountInfo(0));
-        // Mark 51.0, entry notional equal: markValue = 100_0000 * 51_00 * 1e6 / 10^(4+2) = 5100e6.
+        // Mark equals entry: markValue = 1_000_000 * 51_00 = 5100e6 = entry notional.
         _mockPosition(address(libHarness), 0, _position(100_0000, 5_100_000_000, 0, 0));
 
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
@@ -797,9 +851,11 @@ contract ALighterUnit is Test {
         assertEq(balances.length, 0);
     }
 
-    /// @notice In-flight tracking is driven by the transaction-status read, not block numbers:
-    ///  a deposit applies while its reqId is pending and drops the moment Core processes it,
-    ///  even within the same EVM block.
+    /// @notice In-flight tracking is driven by the transaction-status read alone: a pending
+    ///  deposit applies for as long as Core takes (no wall-clock window), and a fully-accepted
+    ///  deposit stops applying the moment Core processes it. The record persists (mint/burn
+    ///  locked) until the owner syncs; recordAction overwrites a settled record, so a new
+    ///  transfer can start immediately.
     function testInFlightDrivenByTxStatus() public {
         _mockAccountInfo(address(libHarness), _accountInfo(10e6));
 
@@ -810,33 +866,23 @@ contract ALighterUnit is Test {
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
         assertEq(balances[0].amount, 110e6, "Pending deposit must apply as in-flight");
 
-        // Processed (status 1): collateral is authoritative, in-flight drops — same block or not.
-        _mockTxStatus(1, 1);
+        // Processed (status 1, fully accepted): collateral is authoritative, in-flight drops.
+        // The record persists until the owner syncs (settled state locks mint/burn).
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
         balances = libHarness.getLighterBalances(address(libHarness));
         assertEq(balances[0].amount, 10e6, "Processed deposit must drop in-flight");
+        assertEq(libHarness.lighterData().lastReqId, 1, "Record persists until the owner syncs");
 
-        // Failed (status 2): same as processed for the in-flight purpose.
-        _mockTxStatus(1, 2);
-        libHarness.recordAction(50e6, 2);
+        // A new transfer can start once the previous one settled (recordAction overwrites the
+        // record, acting as an implicit sync); a rejected withdrawal (status 2) moved nothing.
+        libHarness.recordAction(-50e6, 2);
         _mockTxStatus(2, 2);
         balances = libHarness.getLighterBalances(address(libHarness));
-        assertEq(balances[0].amount, 10e6, "Failed write must not keep in-flight");
+        assertEq(balances[0].amount, 10e6, "Failed withdrawal must not keep in-flight");
     }
 
-    function testInFlightExpiresWithSettlementWindow() public {
-        _mockAccountInfo(address(libHarness), _accountInfo(10e6));
-
-        libHarness.recordAction(100e6, 1);
-        _mockTxStatus(1, 0);
-
-        // Beyond the settlement window the pending amount is dropped regardless of status.
-        vm.warp(block.timestamp + 17 seconds);
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
-        assertEq(balances[0].amount, 10e6, "In-flight must expire with the settlement window");
-    }
-
-    /// @notice A failed tx-status read propagates as LighterReadFailed: within the settlement
-    ///  window the status is authoritative and must not be silently dropped.
+    /// @notice A failed tx-status read propagates as LighterReadFailed: the status is
+    ///  authoritative and must not be silently dropped.
     function testInFlightReadFailureReverts() public {
         _mockAccountInfo(address(libHarness), _accountInfo(0));
 
@@ -847,21 +893,45 @@ contract ALighterUnit is Test {
         libHarness.getLighterBalances(address(libHarness));
     }
 
-    function testAssertNavUnlockedSettlementWindow() public {
-        // No action recorded yet: unlocked.
-        libHarness.assertNavUnlocked();
+    /// @notice No lock while a transfer is pending — NAV reads stay exact for arbitrarily long
+    ///  Core processing delays (a pending deposit is included in NAV instead of blocking reads).
+    ///  The lock engages only for the settled→synced window (the undetectable EVM-side leg).
+    function testNoLockWhilePending() public {
+        _mockAccountInfo(address(libHarness), _accountInfo(10e6));
+        libHarness.recordAction(100e6, 1);
+        _mockTxStatus(1, 0);
 
-        libHarness.recordAction(0, 0);
-        libHarness.assertNavUnlocked();
-
-        // From the next EVM block on, within the 16-second window, NAV reads must revert.
         vm.roll(block.number + 1);
-        vm.expectRevert(LighterLib.NavLocked.selector);
+        vm.warp(block.timestamp + 1 days);
         libHarness.assertNavUnlocked();
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        assertEq(balances[0].amount, 110e6, "NAV reads must never be blocked or expire while pending");
+    }
 
-        // Exactly at the window boundary the lock expires.
-        vm.warp(block.timestamp + 16 seconds);
-        libHarness.assertNavUnlocked();
+    /// @notice syncTransfer: reverts with nothing to sync, reverts while the request is pending,
+    ///  and clears the record once settled (unblocking mint/burn).
+    function testSyncTransferLifecycle() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+
+        vm.expectRevert(IALighter.NothingToSync.selector);
+        IALighter(address(pool)).syncTransfer();
+
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+        _mockTxStatus(1, 0);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        IALighter(address(pool)).syncTransfer();
+
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
+        vm.expectEmit(true, false, false, true, address(pool));
+        emit IALighter.TransferSynced();
+        IALighter(address(pool)).syncTransfer();
+
+        _useLibHarness();
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
+
+        _useAdapter();
+        vm.expectRevert(IALighter.NothingToSync.selector);
+        IALighter(address(pool)).syncTransfer();
     }
 
     // =========================================================================
@@ -869,7 +939,7 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.0");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.3");
     }
 
     function testDirectCallToAdapterReverts() public {

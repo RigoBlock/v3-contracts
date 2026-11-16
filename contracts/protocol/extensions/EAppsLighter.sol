@@ -19,9 +19,10 @@ contract EAppsLighter is EApps {
     /// @param params Chain-specific addresses bundled into a single struct.
     constructor(EAppsParams memory params) EApps(params) {}
 
-    /// @dev Adds the Lighter branch; every other application is handled by the base.
-    ///  Same settlement-lock semantics as Hyperliquid, adapted to LighterEVM's block-pinned
-    ///  READ_CORE reads; see docs/lighter/INTEGRATION.md.
+    /// @dev Adds the Lighter branch; every other application is handled by the base. Pending
+    ///  transfers never lock (the in-flight amount values them exactly); a settled transfer locks
+    ///  NAV-dependent flows until the owner attests the EVM-side leg landed (syncTransfer) —
+    ///  same exempt-flag mechanism as Hyperliquid, status-driven instead of time-driven.
     function _handleApplication(Applications appType) internal override returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.LIGHTER_PERPS) {
             if (!TransientStorage.getNavLockExempt()) {

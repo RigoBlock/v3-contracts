@@ -14,6 +14,7 @@ import {EERC20} from "../../contracts/protocol/extensions/EERC20.sol";
 import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.sol";
 import {ILighterInteropManager} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterInteropManager.sol";
 import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapters/interfaces/lighter/ILighterCoreEntrypoint.sol";
+import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
 import {IAuthority} from "../../contracts/protocol/interfaces/IAuthority.sol";
 import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IRigoblockPoolProxyFactory.sol";
 import {IPoolRegistry} from "../../contracts/protocol/interfaces/IPoolRegistry.sol";
@@ -210,6 +211,7 @@ contract LighterDeploymentFixture is Test {
         _addOrReplaceMethod(ILighterCoreEntrypoint.createOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelAllOrders.selector, aLighter);
+        _addOrReplaceMethod(IALighter.syncTransfer.selector, aLighter);
 
         vm.stopPrank();
 

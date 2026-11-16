@@ -20,18 +20,14 @@ import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IE
 ///  pointing at the wrong chain fails the setUp chainid guard — the suite never runs against
 ///  an unintended LighterEVM deployment (e.g. a mainnet endpoint swapped into the CI secret
 ///  without updating the devnet chainid pinned here).
-/// @dev testLive_NavExactness compares against "latest" state and is skipped inside the
-///  16-second settlement window after a Core write; see its @dev for the bracketed-price
-///  retry policy and the observed-skew fallback bound.
+/// @dev testLive_NavExactness compares against "latest" state; see its @dev for the
+///  bracketed-price retry policy and the observed-skew fallback bound.
 contract ALighterLiveTest is Test {
     /// @notice A live funded Rigoblock pool on LighterEVM devnet (chain 19529) with a Core
     ///  account and an open perp position. Re-created after the devnet 1.1.0 reset (create tx
     ///  0xf336c9335af1236291b319120c1470e664b39b5e1adb9dbd5075ab45033ddf4a); the NAV exactness
     ///  test skips while the pool controls no Core account (i.e. until it is funded with USDC).
     address internal constant TESTER_POOL = 0x0CD1eb6ACc12F24aD190a2708a7FEe3f23389adc;
-
-    /// @notice The post-action settlement window, mirroring LighterLib._SETTLEMENT_WINDOW.
-    uint256 internal constant _SETTLEMENT_WINDOW = 16 seconds;
 
     function setUp() public {
         // Chain guard: this suite is written against the LighterEVM devnet (chain 19529). A
@@ -89,27 +85,6 @@ contract ALighterLiveTest is Test {
         return found;
     }
 
-    /// @notice Timestamp of the devnet's latest block. The object result of
-    ///  eth_getBlockByNumber arrives ABI-encoded from vm.rpc with each hex-string field as a
-    ///  dynamic bytes element; the timestamp is the only 4-byte value in the plausible epoch
-    ///  range, stored left-aligned after its length word.
-    function _latestTimestamp() internal returns (uint256 timestamp) {
-        bytes memory res = vm.rpc("lighter", "eth_getBlockByNumber", '["latest",false]');
-        for (uint256 i = 1; i < res.length / 32; ++i) {
-            bytes32 word;
-            bytes32 prev;
-            for (uint256 j; j < 32; ++j) {
-                word |= bytes32(uint256(uint8(res[i * 32 + j]))) << (8 * (31 - j));
-                prev |= bytes32(uint256(uint8(res[i * 32 + j - 32]))) << (8 * (31 - j));
-            }
-            if (prev == bytes32(uint256(4))) {
-                uint256 candidate = uint256(word) >> 224;
-                if (candidate > 1_600_000_000 && candidate < 2_100_000_000) return candidate;
-            }
-        }
-        revert("timestamp not found");
-    }
-
     /*//////////////////////////////////////////////////////////////
                                   TESTS
     //////////////////////////////////////////////////////////////*/
@@ -127,10 +102,14 @@ contract ALighterLiveTest is Test {
         address asset = abi.decode(_readCoreData(abi.encodePacked(uint16(0x0004), uint32(3))), (address));
         assertEq(asset, LighterConstants.USDC);
 
-        // 0x0005 market info: market 0 is a perp with a positive mark price.
+        // 0x0005 market info: market 0 is a perp with a positive mark price, quoteMultiplier in
+        //  the documented [1, 10000] perp range and an hourly funding round timestamp.
         LighterTypes.MarketInfo memory market = _readMarketInfo(0);
         assertEq(market.marketType, 0);
         assertGt(market.markPrice, 0);
+        assertGe(market.quoteMultiplier, 1);
+        assertLe(market.quoteMultiplier, 10_000);
+        assertGt(market.lastFundingRoundTimestamp, 0);
 
         // 0x0000 tx status: an unknown reqId reads as pending (status 0); the read never fails.
         (uint8 status, ) = abi.decode(_readCore(abi.encodePacked(uint16(0x0000), uint64(999_999_999))), (uint8, bytes));
@@ -160,10 +139,13 @@ contract ALighterLiveTest is Test {
 
     /// @notice Independently recomputes the tester pool's Lighter NAV from live precompile reads
     ///  and asserts it equals the pool's on-chain getAppTokenBalances valuation.
-    /// @dev The formula mirrors LighterLib: collateral plus per-market PnL (mark value minus the
-    ///  signed entry notional, isolated margin added back at 1e6) — see LighterTypes for the
-    ///  field scales. Outside the settlement window the in-flight term is zero on both sides,
-    ///  so it is omitted here.
+    /// @dev The formula mirrors LighterLib (devnet 1.2.0): collateral plus per-market unrealized
+    ///  PnL (size * quoteMultiplier * markPrice minus the signed entry notional), pending funding
+    ///  (size * quoteMultiplier * (lastFundingRatePrefixSum - fundingRatePrefixSum) / 1e6, rounded
+    ///  toward negative infinity) and isolated margin added back at 1e6 — see LighterTypes for the
+    ///  field scales. The in-flight term is replicated from the view data exactly as LighterLib
+    ///  computes it (status read + acceptedAmount + balance baseline), so a settled-but-undelivered
+    ///  transfer is compared like-for-like.
     /// @dev Race: each eth_call resolves "latest" independently, the devnet produces blocks
     ///  fast enough that almost every attempt straddles a Core snapshot boundary, and the devnet
     ///  RPC rejects pinned-block eth_call ("live Core only serves blocks on the chain tip"), so
@@ -179,8 +161,8 @@ contract ALighterLiveTest is Test {
     ///  between the attempt's two bracket reads (up to 2 raw price units of bracket
     ///  oscillation), so per tracked market with nonzero size the diff is bounded by
     ///  (deltaTicks_i + 2) * contribution_i + 1, where deltaTicks_i is the observed raw
-    ///  mark-price movement between the brackets and contribution_i = |size_i| * 1e6 /
-    ///  10^scale_i is the per-raw-unit NAV sensitivity.
+    ///  mark-price movement between the brackets and contribution_i = |size_i| * quoteMultiplier_i
+    ///  is the per-raw-unit NAV sensitivity.
     function testLive_NavExactness() public {
         if (!_poolHasCoreAccount()) {
             console2.log("Skipping: tester pool has no Core account (fund it with a deposit first)");
@@ -244,27 +226,17 @@ contract ALighterLiveTest is Test {
             (LighterViewData)
         );
 
-        if (_latestTimestamp() < uint256(viewData.lastActionTimestamp) + _SETTLEMENT_WINDOW) {
-            console2.log("Skipping: pool is inside the settlement window of a recent Core write");
-            vm.skip(true);
-        }
-
         uint256 marketCount = viewData.marketIds.length;
         LighterTypes.Position[] memory positions = new LighterTypes.Position[](marketCount);
-        uint64[] memory markBefore = new uint64[](marketCount);
-        uint256[] memory contribution = new uint256[](marketCount);
-        uint8[] memory scale = new uint8[](marketCount);
+        LighterTypes.MarketInfo[] memory marketsBefore = new LighterTypes.MarketInfo[](marketCount);
+        uint64[] memory markAfter = new uint64[](marketCount);
 
         int256 collateral = int256(_readAccountInfo(TESTER_POOL).collateralBaseAmount);
+        int256 inFlight = _replicateInFlightAdjustment(viewData);
 
         for (uint256 i; i < marketCount; ++i) {
             positions[i] = _readPosition(TESTER_POOL, viewData.marketIds[i]);
-            markBefore[i] = _readMarketInfo(viewData.marketIds[i]).markPrice;
-            scale[i] = viewData.sizeDecimals[i] + viewData.priceDecimals[i];
-            uint256 absSize = positions[i].size < 0
-                ? uint256(-int256(positions[i].size))
-                : uint256(int256(positions[i].size));
-            contribution[i] = (absSize * 1e6) / (10 ** scale[i]);
+            marketsBefore[i] = _readMarketInfo(viewData.marketIds[i]);
         }
 
         // Issued immediately after the bracket above; the second bracket follows immediately.
@@ -276,37 +248,14 @@ contract ALighterLiveTest is Test {
             (ExternalApp[])
         );
 
-        uint64[] memory markAfter = new uint64[](marketCount);
         for (uint256 i; i < marketCount; ++i) {
             markAfter[i] = _readMarketInfo(viewData.marketIds[i]).markPrice;
         }
 
-        attempt.expectedBefore = collateral;
-        attempt.expectedAfter = collateral;
+        attempt.expectedBefore = collateral + inFlight;
+        attempt.expectedAfter = collateral + inFlight;
         for (uint256 i; i < marketCount; ++i) {
-            LighterTypes.Position memory position = positions[i];
-            if (position.size == 0) continue;
-            attempt.nonzeroMarkets++;
-            int256 entryValue = position.size > 0
-                ? int256(uint256(position.entryQuote))
-                : -int256(uint256(position.entryQuote));
-            // Devnet 1.1.0: allocatedMargin is already Core USDC base units (1e6 per USDC).
-            int256 isolated = position.marginMode == 1 ? int256(position.allocatedMargin) : int256(0);
-            attempt.expectedBefore +=
-                ((int256(position.size) * int256(uint256(markBefore[i])) * 1e6) / int256(10 ** scale[i])) -
-                entryValue +
-                isolated;
-            attempt.expectedAfter +=
-                ((int256(position.size) * int256(uint256(markAfter[i])) * 1e6) / int256(10 ** scale[i])) -
-                entryValue +
-                isolated;
-
-            uint256 deltaTicks = markAfter[i] >= markBefore[i]
-                ? uint256(markAfter[i] - markBefore[i])
-                : uint256(markBefore[i] - markAfter[i]);
-            // The pool's mark sits between the brackets up to 2 raw units of oscillation;
-            // truncation toward zero adds at most 1 unit on top.
-            attempt.skewBound += contribution[i] * (deltaTicks + 2) + 1;
+            _accumulateMarket(attempt, positions[i], marketsBefore[i], markAfter[i]);
         }
 
         bool found;
@@ -319,6 +268,73 @@ contract ALighterLiveTest is Test {
             }
         }
         assertTrue(found, "Lighter application should be returned");
+    }
+
+    /// @dev Accumulates one tracked market into an attempt: the expected valuation at both
+    ///  bracket mark prices and the observed-skew fallback bound. Funding rounds are hourly, so
+    ///  the prefix sum is constant across an attempt; it is read once with the first bracket and
+    ///  applied to both expectations.
+    function _accumulateMarket(
+        NavAttempt memory attempt,
+        LighterTypes.Position memory position,
+        LighterTypes.MarketInfo memory marketInfo,
+        uint64 markAfter
+    ) internal pure {
+        if (position.size == 0) return;
+        attempt.nonzeroMarkets++;
+        int256 quoteMultiplier = int256(uint256(marketInfo.quoteMultiplier));
+        int256 entryValue = position.size > 0
+            ? int256(uint256(position.entryQuote))
+            : -int256(uint256(position.entryQuote));
+        // Devnet 1.2.0: allocatedMargin is already Core USDC base units (1e6 per USDC).
+        int256 isolated = position.marginMode == 1 ? int256(position.allocatedMargin) : int256(0);
+        int256 pendingFunding = _pendingFunding(position, quoteMultiplier, marketInfo.fundingRatePrefixSum);
+        attempt.expectedBefore +=
+            (int256(position.size) * quoteMultiplier * int256(uint256(marketInfo.markPrice))) -
+            entryValue +
+            isolated +
+            pendingFunding;
+        attempt.expectedAfter +=
+            (int256(position.size) * quoteMultiplier * int256(uint256(markAfter))) -
+            entryValue +
+            isolated +
+            pendingFunding;
+
+        uint256 absSize = position.size < 0 ? uint256(-int256(position.size)) : uint256(int256(position.size));
+        uint256 deltaTicks = markAfter >= marketInfo.markPrice
+            ? uint256(markAfter - marketInfo.markPrice)
+            : uint256(marketInfo.markPrice - markAfter);
+        // The pool's mark sits between the brackets up to 2 raw units of oscillation;
+        // truncation toward zero adds at most 1 unit on top.
+        attempt.skewBound += absSize * uint256(marketInfo.quoteMultiplier) * (deltaTicks + 2) + 1;
+    }
+
+    /// @dev Mirrors LighterLib._pendingFunding: rounds toward negative infinity like Core.
+    function _pendingFunding(
+        LighterTypes.Position memory position,
+        int256 quoteMultiplier,
+        int64 fundingRatePrefixSum
+    ) internal pure returns (int256 pendingFunding) {
+        int256 fundingDelta = int256(position.lastFundingRatePrefixSum) - int256(fundingRatePrefixSum);
+        int256 numerator = int256(position.size) * quoteMultiplier * fundingDelta;
+        pendingFunding = numerator / 1e6;
+        if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
+    }
+
+    /// @dev Mirrors LighterLib._inFlightAdjustment against the view data: the tx-status read
+    ///  drives the pending/settled distinction. A settled request locks NAV-dependent flows until
+    ///  the owner syncs, so the pool's getAppTokenBalances reverts in that state — the attempt
+    ///  skips (ops duty: syncTransfer after verifying the EVM-side leg landed).
+    function _replicateInFlightAdjustment(LighterViewData memory viewData) internal returns (int256 adjustment) {
+        int256 amount = int256(viewData.inFlightAmount);
+        if (viewData.lastReqId == 0 || amount == 0) return 0;
+
+        (uint8 status, ) = abi.decode(_readCore(abi.encodePacked(uint16(0x0000), viewData.lastReqId)), (uint8, bytes));
+        if (status != 0) {
+            console2.log("Skipping: settled Lighter transfer awaits the owner syncTransfer");
+            vm.skip(true);
+        }
+        return amount > 0 ? amount : int256(0);
     }
 
     function _within(int256 a, int256 b, uint256 tolerance) internal pure returns (bool) {

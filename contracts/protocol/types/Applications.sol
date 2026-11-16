@@ -30,25 +30,16 @@ struct HyperliquidData {
 }
 
 /// @notice Packed Lighter in-flight accounting. Unlike Hyperliquid there is no L1-block precompile:
-///  the in-flight window aligns with LighterEVM block production, as READ_CORE reads are pinned to
-///  the parent Core block snapshot and never reflect same-block Core writes. `lastReqId` is the
-///  Core request of the latest deposit/withdrawal (0 = none/orders only): the transaction-status
-///  read drives the exact in-flight adjustment while it is pending. Only the latest reqId is
-///  tracked — batching a deposit and a withdrawal in one block loses per-request granularity.
+///  pending requests are valued exactly by the transaction-status read (status 0), while a settled
+///  request (status != 0) has an async EVM-side leg (refund/delivery) whose landing is not
+///  observable on-chain — the pool's USDC wallet balance is not a reliable signal, since mints,
+///  donations and plain transfers move it indistinguishably from the leg itself. Settled requests
+///  therefore lock NAV-dependent flows until the owner attests the leg landed via
+///  LighterLib.clearAction (ALighter.syncTransfer), verified off-chain per Lighter's docs.
+///  Transfers are one-at-a-time: recordAction requires the previous request to be settled.
 struct LighterData {
-    uint48 lastActionBlock;
     int128 inFlightAmount;
-    uint48 lastActionTimestamp;
     uint64 lastReqId;
-}
-
-/// @notice Decimal scaling of a tracked Lighter perp market. Values are copied from the
-///  LighterConstants.marketDecimals release-time table at track time (the READ_CORE market info
-///  does not expose them): `position * markPrice / 10^(sizeDecimals + priceDecimals)` yields
-///  quote whole units; the NAV formula is documented in LighterLib._positionValueUsdc.
-struct TrackedMarket {
-    uint8 sizeDecimals;
-    uint8 priceDecimals;
 }
 
 /// @notice Lighter perps storage: in-flight accounting plus the tracked-market registry.
@@ -60,18 +51,13 @@ struct LighterSlot {
     LighterData data;
     uint16[] trackedMarkets;
     mapping(uint16 marketId => uint256 index) marketIndex;
-    mapping(uint16 marketId => TrackedMarket market) markets;
 }
 
 /// @notice Pool-storage view of the Lighter slot, returned by EApps.getLighterTrackedMarkets as a
-///  client/test view. The decimal scales are release-time protocol constants copied from
-///  LighterConstants.marketDecimals at track time (never caller input). See
-///  docs/lighter/INTEGRATION.md.
+///  client/test view. Since devnet 1.2.0 no per-market constants are stored: position values use
+///  the on-chain quoteMultiplier. See docs/lighter/INTEGRATION.md.
 struct LighterViewData {
     uint16[] marketIds;
-    uint8[] sizeDecimals;
-    uint8[] priceDecimals;
     int128 inFlightAmount;
-    uint48 lastActionTimestamp;
     uint64 lastReqId;
 }

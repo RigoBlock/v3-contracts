@@ -38,6 +38,11 @@ function safeSingletonFactoryDeployment(chainId: number): ChainUserConfig {
   if (!info)
     throw new Error(`No Safe singleton factory info for chain ${chainId}`);
   return {
+    // The LighterEVM devnet is resettable (state wipes ship with devnet releases), so a
+    // genesis-hash mismatch must drop the stale deployment artifacts instead of failing.
+    ...(chainId === 19_529
+      ? { deleteDeploymentsIfDifferentGenesisHash: true }
+      : {}),
     deterministicDeployment: {
       factory: info.address as `0x${string}`,
       deployer: info.signerAddress as `0x${string}`,
