@@ -157,8 +157,8 @@ contract MockCoreEntrypoint {
 ///  called directly on the harness it values the harness's storage; delegatecalled through the
 ///  PoolHarness (after _useLibHarness) it values the pool's storage.
 contract LighterLibHarness {
-    function getLighterBalances(address account) external returns (AppTokenBalance[] memory) {
-        return LighterLib.getLighterBalances(account);
+    function getLighterBalances(address account, bool canPrune) external returns (AppTokenBalance[] memory) {
+        return LighterLib.getLighterBalances(account, canPrune);
     }
 
     function recordAction(int256 amount, uint64 reqId) external {
@@ -426,7 +426,7 @@ contract ALighterUnit is Test {
 
         // Pending status (0): the in-flight deposit applies.
         _mockTxStatus(1, 0);
-        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances.length, 1);
         assertEq(balances[0].token, LighterConstants.USDC);
         assertEq(balances[0].amount, 100e6);
@@ -490,7 +490,7 @@ contract ALighterUnit is Test {
         // wallet has moved: no adjustment, the balance is the raw collateral.
         _useLibHarness();
         _mockTxStatus(1, 0);
-        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 1000e6);
 
@@ -504,13 +504,13 @@ contract ALighterUnit is Test {
         LighterLibHarness(address(pool)).assertNavUnlocked();
 
         // The settled observation pins the wallet baseline; the delivery has not landed yet.
-        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 1000e6, "Settled, delivery pending: the app carries the amount");
 
         // The EVM delivery lands (mock manager never moved tokens, so minting the amount to the
         // pool simulates it): the record clears and the collateral read alone is authoritative.
         MockERC20(_usdc).mint(address(pool), 400e6);
-        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 600e6);
         assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
         LighterLibHarness(address(pool)).assertNavUnlocked();
@@ -626,7 +626,7 @@ contract ALighterUnit is Test {
         _mockPosition(address(pool), 0, _position(100_0000, 5_000_000_000, 0, 0));
 
         _useLibHarness();
-        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool));
+        AppTokenBalance[] memory balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         // markValue = 100_0000 * 51_00 * 1e6 / 10^(4+2) = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, int256(1_000_000e6) + 100e6);
@@ -741,7 +741,7 @@ contract ALighterUnit is Test {
 
         _useLibHarness();
         LighterLibHarness harness = LighterLibHarness(address(pool));
-        AppTokenBalance[] memory balances = harness.getLighterBalances(address(pool));
+        AppTokenBalance[] memory balances = harness.getLighterBalances(address(pool), true);
         assertEq(balances.length, 0, "Pruned registry with zero collateral: purgeable empty list");
         assertEq(harness.trackedMarkets().length, 0, "NAV loop must prune the stale registry");
 
@@ -763,7 +763,7 @@ contract ALighterUnit is Test {
     function testGetLighterBalancesCollateralOnly() public {
         _mockAccountInfo(address(libHarness), _accountInfo(750e6));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances.length, 1);
         assertEq(balances[0].token, LighterConstants.USDC);
         assertEq(balances[0].amount, 750e6);
@@ -777,7 +777,7 @@ contract ALighterUnit is Test {
         // 1_000_000 size units long; entry notional 5000 USDC = 5e9 (Core USDC base units).
         _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 0, 0));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         // markValue = 1_000_000 * 51_00 = 5100e6; pnl = 5100e6 - 5000e6 = 100e6.
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, int256(1_000_000e6) + 100e6);
@@ -790,7 +790,7 @@ contract ALighterUnit is Test {
         // A short (negative position) loses when the mark price rises above the entry notional.
         _mockPosition(address(libHarness), 0, _position(-100_0000, 5_000_000_000, 0, 0));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, int256(1_000_000e6) - 100e6);
     }
@@ -802,7 +802,7 @@ contract ALighterUnit is Test {
         _mockAccountInfo(address(libHarness), _accountInfo(100e6));
         _mockPosition(address(libHarness), 0, _position(100_0000, 5_000_000_000, 1, 500e6));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         // Devnet 1.1.0: allocatedMargin is already USDC base units (1e6 per USDC).
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 600e6);
@@ -813,7 +813,7 @@ contract ALighterUnit is Test {
     function testGetLighterBalancesZeroWithoutCorePosition() public {
         _mockAccountInfo(address(libHarness), _accountInfo(0));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances.length, 0);
     }
 
@@ -826,7 +826,7 @@ contract ALighterUnit is Test {
         // Mark equals entry: markValue = 1_000_000 * 51_00 = 5100e6 = entry notional.
         _mockPosition(address(libHarness), 0, _position(100_0000, 5_100_000_000, 0, 0));
 
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 1, "Zero-PnL open position keeps the dust value");
     }
@@ -834,7 +834,7 @@ contract ALighterUnit is Test {
     function testGetLighterBalancesEmptyWithoutCoreAccount() public {
         _mockNoAccount(address(libHarness));
         // No Core account: nothing to value, so the library reports an empty balance list.
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances.length, 0);
     }
 
@@ -850,13 +850,13 @@ contract ALighterUnit is Test {
         _mockTxStatus(1, 0);
 
         // Pending: in-flight applies on top of the Core collateral.
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances[0].amount, 110e6, "Pending deposit must apply as in-flight");
 
         // Processed (status 1, fully accepted): collateral is authoritative, in-flight drops and
         //  the record clears (nothing outstanding).
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(100e6)));
-        balances = libHarness.getLighterBalances(address(libHarness));
+        balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances[0].amount, 10e6, "Processed deposit must drop in-flight");
         assertEq(libHarness.lighterData().lastReqId, 0, "Nothing outstanding: record cleared");
 
@@ -864,7 +864,7 @@ contract ALighterUnit is Test {
         //  (status 2) moved nothing.
         libHarness.recordAction(-50e6, 2);
         _mockTxStatus(2, 2);
-        balances = libHarness.getLighterBalances(address(libHarness));
+        balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances[0].amount, 10e6, "Failed withdrawal must not keep in-flight");
     }
 
@@ -877,7 +877,7 @@ contract ALighterUnit is Test {
         // Per the Lighter docs the read fails (reverts) for an unknown request.
         vm.mockCallRevert(_readCore, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, uint64(1)), "");
         vm.expectRevert(LighterLib.LighterReadFailed.selector);
-        libHarness.getLighterBalances(address(libHarness));
+        libHarness.getLighterBalances(address(libHarness), true);
     }
 
     /// @notice Regression (audit: mixed-batch netting). Batching a deposit and a withdrawal in
@@ -931,7 +931,7 @@ contract ALighterUnit is Test {
         vm.warp(block.timestamp + 1 days);
         vm.expectRevert(LighterLib.NavLocked.selector);
         libHarness.assertNavUnlocked();
-        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
+        AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness), true);
         assertEq(balances[0].amount, 110e6, "Pending deposit still valued exactly");
     }
 

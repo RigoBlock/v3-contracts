@@ -50,8 +50,8 @@ contract MockERC20 {
 contract LighterLibHarness {
     address internal constant USDC = LighterConstants.USDC;
 
-    function getLighterBalances(address account) external returns (AppTokenBalance[] memory) {
-        return LighterLib.getLighterBalances(account);
+    function getLighterBalances(address account, bool canPrune) external returns (AppTokenBalance[] memory) {
+        return LighterLib.getLighterBalances(account, canPrune);
     }
 
     function trackMarket(uint16 marketId) external {
@@ -76,10 +76,6 @@ contract LighterLibHarness {
 
     function recordAction(int256 amount, uint64 reqId) external {
         LighterLib.recordAction(amount, reqId);
-    }
-
-    function recordOrderReq(uint16 marketId, uint64 reqId) external {
-        LighterLib.recordOrderReq(marketId, reqId);
     }
 
     function assertNavUnlocked() external view {
@@ -247,41 +243,32 @@ contract LighterLibTest is Test {
         harness.readPosition(ACCOUNT, 1);
     }
 
-    /// @notice Regression (audit: same-block prune of a freshly tracked market). A market with a
-    ///  pending order write is not prunable: right after createOrder, the parent-Core snapshot
-    ///  cannot yet show the position or orders, and pruning on that stale read would hide a live
-    ///  position from NAV. Once the write's status is non-pending, the market prunes if the
-    ///  snapshot shows nothing held — a failed order (status 2) prunes just like an instantly
-    ///  filled one (status 1, empty position).
-    function testFreshMarketSurvivesStaleEmptyReadUntilOrderSettles() public {
+    /// @notice Regression (audit: same-block prune of a freshly tracked market). Pruning is
+    ///  operator-gated: a permissionless evaluation reading the stale parent-Core snapshot (no
+    ///  position yet) keeps the market tracked, so the live position is valued once Core
+    ///  reflects it; only an operator evaluation prunes, which is self-harm and out of scope.
+    function testFreshMarketSurvivesStaleEmptyReadWhenEvalIsPermissionless() public {
         _track(1);
-        harness.recordOrderReq(1, 5);
         _mockPositionNotFound(ACCOUNT, 1);
         _mockAccountInfo(ACCOUNT, _accountInfo(0));
 
-        // Same-block and later-block stale reads keep the market tracked while the write pends.
-        _mockTxStatus(5, 0, bytes(""));
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(harness.trackedMarkets().length, 1, "Pending order write: market must survive the stale read");
+        // Permissionless evaluations (canPrune = false), same block and later: never pruned.
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, false);
+        assertEq(harness.trackedMarkets().length, 1, "Permissionless eval must not prune");
         vm.roll(block.number + 1);
-        balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(harness.trackedMarkets().length, 1, "Still pending: not pruned in a later block");
+        balances = harness.getLighterBalances(ACCOUNT, false);
+        assertEq(harness.trackedMarkets().length, 1, "Still not pruned by a later permissionless eval");
 
-        // The write settles and the snapshot shows nothing held: pruned.
-        _mockTxStatus(5, 1, abi.encode(uint64(1)));
-        balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances.length, 0, "Settled and empty: purgeable empty list");
-        assertEq(harness.trackedMarkets().length, 0, "NAV loop prunes the settled dead market");
-        assertEq(harness.marketIndex(1), 0);
+        // Core reflects the position: valued, still tracked.
+        _mockPosition(ACCOUNT, 1, _position(100, 1, 0));
+        balances = harness.getLighterBalances(ACCOUNT, false);
+        assertEq(harness.trackedMarkets().length, 1);
 
-        // Same sequence with a FAILED order (status 2): pruned as well, so failed first orders
-        //  never occupy the tracked list indefinitely.
-        _track(1);
-        harness.recordOrderReq(1, 6);
+        // An operator evaluation on a stale empty snapshot prunes (documented self-harm).
         _mockPositionNotFound(ACCOUNT, 1);
-        _mockTxStatus(6, 2, abi.encode(uint32(6514)));
-        balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(harness.trackedMarkets().length, 0, "Failed order: market prunes, no zombie slot");
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(harness.trackedMarkets().length, 0, "Operator-gated eval prunes the empty market");
+        assertEq(harness.marketIndex(1), 0);
     }
 
     /// @notice A zero-PnL open position keeps a dust value so the position stays valued and the
@@ -294,7 +281,7 @@ contract LighterLibTest is Test {
         position.entryQuote = 500_000_000;
         _mockPosition(ACCOUNT, 1, position);
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances.length, 1);
         assertEq(balances[0].amount, 1, "Zero-PnL open position keeps the dust value");
     }
@@ -311,7 +298,7 @@ contract LighterLibTest is Test {
         position.entryQuote = 500_000_000;
         _mockPosition(ACCOUNT, 1, position);
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances.length, 1, "A negative liability keeps the list non-empty");
         assertEq(balances[0].amount, -10_000_000, "Negative total must be returned as-is");
     }
@@ -421,7 +408,7 @@ contract LighterLibTest is Test {
         position.entryQuote = 900_000_000;
         _mockPosition(ACCOUNT, 1, position);
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 100_000_000);
     }
 
@@ -439,7 +426,7 @@ contract LighterLibTest is Test {
         _mockPosition(ACCOUNT, 1, position);
 
         // numerator = 100_000 * 1 * (100_000 - 1_100_000) = -100_000_000_000 → /1e6 = -100_000.
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, -100_000, "Pending funding must be included in NAV");
     }
 
@@ -456,7 +443,7 @@ contract LighterLibTest is Test {
 
         // numerator = 100_000 * (0 - 1_999_999) = -199_999_900_000: truncating division yields
         //  -199_999; Core rounds down to -200_000.
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, -200_000);
     }
 
@@ -473,7 +460,7 @@ contract LighterLibTest is Test {
         _mockTxStatus(1, 0, bytes(""));
 
         vm.warp(block.timestamp + 1 days);
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 110e6, "Pending deposit must apply as in-flight, indefinitely");
     }
 
@@ -484,7 +471,7 @@ contract LighterLibTest is Test {
         harness.recordAction(100e6, 1);
         _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 10e6, "Settled deposit must drop the in-flight amount");
         assertEq(harness.lighterData().lastReqId, 0, "Nothing outstanding: record cleared");
     }
@@ -497,11 +484,11 @@ contract LighterLibTest is Test {
         harness.recordAction(100e6, 1);
 
         _mockTxStatus(1, 1, abi.encode(uint64(40e6)));
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 70e6, "Unaccepted remainder (60e6) stays in NAV while the refund is in transit");
 
         MockERC20(USDC).mint(address(harness), 60e6);
-        balances = harness.getLighterBalances(ACCOUNT);
+        balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 10e6, "Refund landed: collateral read is authoritative again");
         assertEq(harness.lighterData().lastReqId, 0, "Landed leg: record cleared");
     }
@@ -516,7 +503,7 @@ contract LighterLibTest is Test {
         harness.recordAction(-400e6, 1);
 
         _mockTxStatus(1, 0, bytes(""));
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6, "Pending withdrawal: no adjustment");
         assertEq(_nav(), 1500e6);
 
@@ -524,7 +511,7 @@ contract LighterLibTest is Test {
         //  undelivered 400e6, so wallet + app NAV is conserved while the delivery is in transit.
         _mockTxStatus(1, 1, bytes(""));
         _mockAccountInfo(ACCOUNT, _accountInfo(600e6));
-        balances = harness.getLighterBalances(ACCOUNT);
+        balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6, "Core debited, delivery pending: the app carries the amount");
         assertEq(_nav(), 1500e6, "Exact while the delivery is in transit");
         vm.expectRevert(LighterLib.NavLocked.selector);
@@ -532,7 +519,7 @@ contract LighterLibTest is Test {
 
         // The delivery lands in the wallet: record clears, NAV exact, lock lifts.
         MockERC20(USDC).mint(address(harness), 400e6);
-        balances = harness.getLighterBalances(ACCOUNT);
+        balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 600e6, "Delivered: collateral read alone is authoritative");
         assertEq(_nav(), 1500e6);
         assertEq(harness.lighterData().lastReqId, 0, "Landed leg: record cleared");
@@ -631,7 +618,7 @@ contract LighterLibTest is Test {
         harness.recordAction(100e6, 1);
         _mockTxStatus(1, 1, new bytes(16));
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 110e6, "Malformed accepted payload: full amount stays in NAV");
         assertEq(harness.lighterData().lastReqId, 1, "Record stays unresolved (locked)");
     }
@@ -660,7 +647,7 @@ contract LighterLibTest is Test {
         _mockAccountInfo(ACCOUNT, _accountInfo(600e6));
 
         // Settled, delivery in transit: carried, locked.
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6, "Settled withdrawal carried");
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
@@ -673,7 +660,7 @@ contract LighterLibTest is Test {
         assertEq(data.lastReqId, 2);
         assertEq(data.inFlightAmount, 100e6);
         assertEq(data.balanceSnapshot, 500e6, "Fresh snapshot at the new request");
-        balances = harness.getLighterBalances(ACCOUNT);
+        balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 700e6, "New pending deposit added back; old carry gone");
     }
 
@@ -684,20 +671,20 @@ contract LighterLibTest is Test {
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
         _mockTxStatus(1, 1, bytes(""));
-        harness.getLighterBalances(ACCOUNT);
+        harness.getLighterBalances(ACCOUNT, true);
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
         // A direct transfer of the leg amount (no pool code involved) reads as the landing.
         MockERC20(USDC).mint(address(harness), 400e6);
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6);
         assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the wallet increase");
     }
 
     /// @notice wallet USDC + Lighter app balance, in 6-dec USDC.
     function _nav() internal returns (uint256) {
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         uint256 app = balances.length == 0 ? 0 : uint256(balances[0].amount);
         return MockERC20(USDC).balanceOf(address(harness)) + app;
     }
@@ -709,7 +696,7 @@ contract LighterLibTest is Test {
         harness.recordAction(-400e6, 1);
         _mockTxStatus(1, 2, abi.encode(uint32(7003)));
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6);
         assertEq(harness.lighterData().lastReqId, 0);
     }
@@ -745,7 +732,7 @@ contract LighterLibTest is Test {
 
         // Nothing outstanding (fully accepted): the next valuation clears the record.
         _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
-        harness.getLighterBalances(ACCOUNT);
+        harness.getLighterBalances(ACCOUNT, true);
         harness.assertNavUnlocked();
     }
 
@@ -756,7 +743,7 @@ contract LighterLibTest is Test {
         harness.recordAction(100e6, 1);
         vm.mockCallRevert(READ_CORE, abi.encodePacked(LighterLib._SELECTOR_TX_STATUS, uint64(1)), "");
         vm.expectRevert(LighterLib.LighterReadFailed.selector);
-        harness.getLighterBalances(ACCOUNT);
+        harness.getLighterBalances(ACCOUNT, true);
     }
 
     // =========================================================================
@@ -782,7 +769,7 @@ contract LighterLibTest is Test {
         _track(1);
         _mockPosition(ACCOUNT, 1, _position(0, 0, 0));
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
 
         assertEq(balances.length, 0, "Zero collateral and no active market: purgeable empty list");
         assertEq(harness.trackedMarkets().length, 0, "Stale market must be pruned by the NAV loop");
@@ -798,7 +785,7 @@ contract LighterLibTest is Test {
         _mockPosition(ACCOUNT, 115, _position(0, 0, 1));
         _mockMarketInfoWithPrice(105, 500_0000, 1);
 
-        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
 
         assertEq(balances.length, 1, "A surviving position keeps the list non-empty");
         uint16[] memory markets = harness.trackedMarkets();
@@ -829,7 +816,7 @@ contract LighterLibTest is Test {
     function testTrackSucceedsAtCapAfterNavLoopPruned() public {
         _seedFullRegistry(ACCOUNT);
 
-        harness.getLighterBalances(ACCOUNT);
+        harness.getLighterBalances(ACCOUNT, true);
         assertEq(harness.trackedMarkets().length, 0, "NAV loop must prune the stale registry");
 
         _mockMarketInfo(1, 0, 0, 1);

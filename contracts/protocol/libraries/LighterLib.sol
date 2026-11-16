@@ -24,7 +24,12 @@ library LighterLib {
     uint16 internal constant _SELECTOR_POSITION = 0x0007;
     uint16 internal constant _SELECTOR_EVM_ACCOUNT_INDEX = 0x0009;
 
-    function getLighterBalances(address account) internal returns (AppTokenBalance[] memory balances) {
+    /// @param canPrune Permission to untrack dead markets during the loop. Pruning mutates the
+    ///  tracked set, so it is operator-gated by the caller: a permissionless NAV evaluation
+    ///  computes the same balances but leaves the set untouched (a stale-snapshot prune would
+    ///  hide a freshly opened position from NAV; an operator pruning their own market is
+    ///  self-harm, out of the threat model).
+    function getLighterBalances(address account, bool canPrune) internal returns (AppTokenBalance[] memory balances) {
         if (!coreAccountExists(account)) return balances;
 
         LighterSlot storage slot = StorageLib.lighterSlot();
@@ -38,16 +43,9 @@ library LighterLib {
             uint16 marketId = marketIds[i - 1];
             LighterTypes.Position memory position = readPosition(account, marketId);
             if (position.size == 0 && position.totalOrderCount == 0 && position.totalPositionTiedOrderCount == 0) {
-                // prune only once the market's latest order write has a non-pending status: a
-                //  pending write may still appear on Core (pruning would hide it from NAV), a
-                //  failed one never will, and a processed one is reflected in this same snapshot
-                uint64 orderReqId = slot.marketOrderReqIds[marketId];
-                if (orderReqId == 0) {
-                    _untrackMarket(slot, marketId, i - 1);
-                    continue;
-                }
-                (uint8 orderStatus, ) = readTxStatus(orderReqId);
-                if (orderStatus != 0) {
+                // empty markets leave the tracked set only via an operator-gated evaluation;
+                //  a market kept by a permissionless evaluation still pins the app valued
+                if (canPrune) {
                     _untrackMarket(slot, marketId, i - 1);
                     continue;
                 }
@@ -184,11 +182,6 @@ library LighterLib {
         markets.push(marketId);
     }
 
-    /// @notice Records the reqId of a market's latest createOrder write; drives the prune gate.
-    function recordOrderReq(uint16 marketId, uint64 reqId) internal {
-        StorageLib.lighterSlot().marketOrderReqIds[marketId] = reqId;
-    }
-
     function _untrackMarket(LighterSlot storage lighterSlot, uint16 marketId, uint256 listIndex) private {
         uint16[] storage markets = lighterSlot.trackedMarkets;
         uint256 lastIndex = markets.length - 1;
@@ -199,7 +192,6 @@ library LighterLib {
             lighterSlot.marketIndex[lastMarket] = listIndex + 1;
         }
         delete lighterSlot.marketIndex[marketId];
-        delete lighterSlot.marketOrderReqIds[marketId];
     }
 
     function coreAccountExists(address account) internal view returns (bool exists) {

@@ -30,10 +30,12 @@ contract EAppsLighter is EApps, IEAppsLighter {
     }
 
     /// @dev Valuation must run before the lock check: it is what clears a landed leg from the
-    ///  record, so the mint that observes the landing succeeds in the same evaluation.
+    ///  record, so the mint that observes the landing succeeds in the same evaluation. Pruning
+    ///  dead markets is operator-gated (msg.sender is the pool caller): permissionless
+    ///  evaluations compute the same balances without mutating the tracked set.
     function _handleApplication(Applications appType) internal override returns (AppTokenBalance[] memory balances) {
         if (appType == Applications.LIGHTER_PERPS) {
-            balances = LighterLib.getLighterBalances(address(this));
+            balances = LighterLib.getLighterBalances(address(this), msg.sender == StorageLib.pool().owner);
             if (!TransientStorage.getNavLockExempt()) {
                 LighterLib.assertNavUnlocked();
             }

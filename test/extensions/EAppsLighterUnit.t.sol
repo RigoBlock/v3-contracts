@@ -364,39 +364,33 @@ contract EAppsLighterUnitTest is Test {
             });
     }
 
-    /// @notice Regression (audit: same-block prune of a freshly tracked market). createOrder
-    ///  auto-tracks the market before Core can reflect the order; a same-block NAV evaluation
-    ///  must not prune it (the stale snapshot shows no position yet), otherwise a live position
-    ///  would be hidden from NAV and mintable against.
-    function testFreshTrackedMarketSurvivesSameBlockNavEval() public {
+    /// @notice Regression (audit: same-block prune of a freshly tracked market). Pruning is
+    ///  operator-gated: a permissionless NAV evaluation triggered in the same block as
+    ///  createOrder (stale parent-Core snapshot, no position yet) keeps the market tracked, so
+    ///  the live position is valued once Core reflects it; only an operator evaluation prunes.
+    function testFreshTrackedMarketSurvivesPermissionlessSameBlockNavEval() public {
         _depositAndSettle(10_000e6);
         _mockAccountInfo(pool, _accountInfo(int128(uint128(10_000e6))));
 
-        // The deposit consumed reqId 1 on the manager mock; advance the (separate) entrypoint
-        ///  mock counter so the order gets its own reqId, as the global messenger counter would.
-        vm.store(ENTRYPOINT, bytes32(uint256(0)), bytes32(uint256(1)));
         vm.prank(poolOwner);
         _mockMarketInfo(0, _marketInfo(500_000));
         _mockEvmAccountIndex(pool, 7);
-        uint64 orderReqId = IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
-        assertEq(orderReqId, 2);
+        IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
         assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
 
-        // The order is not visible in the parent Core snapshot yet and its write is still
-        //  pending: this stale read must keep the market tracked (any account may trigger the
-        //  evaluation).
-        _mockTxStatus(orderReqId, 0);
+        // The order is not visible in the parent Core snapshot yet. A permissionless evaluation
+        //  (any account, here a different prank) must not prune the freshly tracked market.
         _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        vm.prank(user);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
         assertEq(
             IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length,
             1,
-            "Same-block NAV eval must not prune the freshly tracked market"
+            "Permissionless same-block NAV eval must not prune the freshly tracked market"
         );
 
         // Core now reflects the position; it stays tracked and is valued.
         vm.roll(block.number + 1);
-        _mockTxStatusWithPayload(orderReqId, 1, abi.encode(uint64(1)));
         _mockPosition(pool, 0, _position(20_000, 10_000e6, 0, 0, 0));
         _mockMarketInfo(0, _marketInfo(750_000));
         ExternalApp memory lighterApp = _findLighterApp(
@@ -405,10 +399,15 @@ contract EAppsLighterUnitTest is Test {
         assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
         assertEq(lighterApp.balances[0].amount, 15_000e6, "Position valued once Core reflects it");
 
-        // Position closed and the write settled: the market prunes normally.
+        // An operator evaluation with the position closed prunes it.
         _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        vm.prank(poolOwner);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
-        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 0, "Settled and empty: pruned");
+        assertEq(
+            IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length,
+            0,
+            "Operator eval prunes the empty market"
+        );
     }
 
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.
