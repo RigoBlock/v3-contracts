@@ -415,47 +415,39 @@ contract EAppsLighterUnitTest is Test {
         );
     }
 
-    /// @notice Lock semantics: a pending deposit is valued through the in-flight amount with no
-    ///  lock (any block, any time); once Core settles, NAV-dependent flows lock until the async
-    ///  leg lands in the wallet, which clears the record and unlocks in the same evaluation.
+    /// @notice Lock semantics: from the request until the async leg lands, NAV-dependent flows
+    ///  are locked (pending included — the lock keeps the request-time snapshot exact). Nothing
+    ///  outstanding (full acceptance) or rejected clears in the same evaluation; a partial
+    ///  acceptance carries the remainder until the refund lands, then clears and unlocks.
     function testHandleApplication_LockLifecycle() public {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, 10_000e6, LighterRouteType.Perps);
 
-        // Pending: valued, unlocked — at any later time (no wall-clock expiry).
-        vm.roll(block.number + 1);
-        vm.warp(block.timestamp + 1 days);
-        _mockAccountInfo(pool, _accountInfo(0));
+        // Pending: locked (valued exactly, but mint/burn wait for the transfer to complete).
         _mockTxStatus(1, 0);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+
+        // Fully accepted: nothing is in transit, so the evaluation clears the record and unlocks.
+        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(10_000e6)));
+        _mockAccountInfo(pool, _accountInfo(10_000e6));
         ExternalApp memory lighterApp = _findLighterApp(
             IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
         );
-        assertEq(lighterApp.balances[0].amount, 10_000e6, "Pending deposit must be valued, not locked");
-
-        // Fully accepted: nothing is in transit, so the evaluation clears the record and stays
-        // unlocked with the collateral read authoritative.
-        _mockTxStatusWithPayload(1, 1, abi.encode(uint64(10_000e6)));
-        _mockAccountInfo(pool, _accountInfo(10_000e6));
-        lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
         assertEq(lighterApp.balances[0].amount, 10_000e6);
 
-        // Partial acceptance: the remainder stays in NAV and the settled state stays locked while
-        // the refund is in transit.
+        // Partial acceptance: the remainder is carried and the lock holds while the refund is in
+        // transit (the reverted evaluation is rolled back, so commit the record with an exempt
+        // updateUnitaryValue before simulating the refund).
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, 10_000e6, LighterRouteType.Perps);
         _mockTxStatusWithPayload(2, 1, abi.encode(uint64(4_000e6)));
         _mockAccountInfo(pool, _accountInfo(14_000e6));
         vm.expectRevert(LighterLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
-
-        // The settled observation pins the wallet baseline (the reverted evaluation is rolled
-        // back, so commit it with an exempt updateUnitaryValue).
         ISmartPool(payable(pool)).updateUnitaryValue();
-
-        // The refund lands (the mock manager never pulled tokens; minting the remainder to the
-        // pool simulates it): cleared and unlocked in the same evaluation.
         MockUSDC(USDC).mint(pool, 6_000e6);
         lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
         assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
@@ -468,12 +460,16 @@ contract EAppsLighterUnitTest is Test {
         uint256 deposit = 10_000e6;
         _depositAndSettle(deposit);
 
-        // Settled, pre-evaluation: the view still reports the record; the wallet baseline pins
-        //  at the first observation of the settled state.
+        // Pre-evaluation: the view reports the record and the request-time wallet snapshot (the
+        //  mock manager pulls no tokens, so it equals the pool balance).
         LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
         assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
         assertEq(viewData.lastReqId, 1, "Only transfers record an action");
-        assertEq(viewData.usdcSnapshotAtSettle, 0, "Baseline pins at the first settled observation");
+        assertEq(
+            viewData.usdcSnapshotAtRequest,
+            MockUSDC(USDC).balanceOf(pool),
+            "Snapshot captured when the request is recorded"
+        );
 
         // The settled, fully-accepted deposit clears on the first NAV evaluation.
         _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));

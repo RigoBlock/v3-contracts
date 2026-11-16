@@ -535,11 +535,12 @@ contract LighterLibTest is Test {
         // Initial: wallet 500e6, collateral 1000e6 → NAV 1500e6.
         assertEq(_nav(), 1500e6);
 
-        // Full deposit of 300e6: wallet debited, request pending — added back, no lock.
+        // Full deposit of 300e6: wallet debited, request pending — added back, locked.
         harness.transferUsdc(address(0xdead), 300e6);
         harness.recordAction(300e6, 1);
         _mockTxStatus(1, 0, bytes(""));
         assertEq(_nav(), 1500e6, "Pending deposit: the amount is added back");
+        vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
         // Settled, fully accepted: collateral read shows the credit; the evaluation clears the
@@ -554,6 +555,8 @@ contract LighterLibTest is Test {
         harness.recordAction(-400e6, 2);
         _mockTxStatus(2, 0, bytes(""));
         assertEq(_nav(), 1500e6, "Pending withdrawal: no adjustment");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
 
         // Settled: Core debited (collateral 900e6); the app carries the undelivered 400e6 — exact
         //  while the delivery is in transit, locked for mint/burn.
@@ -641,23 +644,22 @@ contract LighterLibTest is Test {
         assertEq(data.lastReqId, 2);
     }
 
-    /// @notice NavLocked only while a settled transfer's leg is outstanding: no record and
-    ///  pending requests never lock (exact via the in-flight amount); settled requests lock until
-    ///  the leg lands.
+    /// @notice NavLocked whenever a transfer record is unresolved: from the request until the
+    ///  leg lands; clearing (valuation) unlocks.
     function testAssertNavUnlockedLifecycle() public {
         harness.assertNavUnlocked();
 
         harness.recordAction(100e6, 1);
-        _mockTxStatus(1, 0, bytes(""));
-        vm.warp(block.timestamp + 1 days);
+        vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        MockERC20(USDC).mint(address(harness), 1_000e6);
-        _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
+        _mockTxStatus(1, 0, bytes(""));
+        vm.warp(block.timestamp + 1 days);
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
         // Nothing outstanding (fully accepted): the next valuation clears the record.
+        _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
         harness.getLighterBalances(ACCOUNT);
         harness.assertNavUnlocked();
     }

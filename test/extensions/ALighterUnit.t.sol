@@ -887,19 +887,20 @@ contract ALighterUnit is Test {
         libHarness.getLighterBalances(address(libHarness));
     }
 
-    /// @notice No lock while a transfer is pending — NAV reads stay exact for arbitrarily long
-    ///  Core processing delays (a pending deposit is included in NAV instead of blocking reads).
-    ///  The lock engages only for the settled→synced window (the undetectable EVM-side leg).
-    function testNoLockWhilePending() public {
+    /// @notice The lock spans the whole transfer lifecycle: a pending deposit is included in NAV
+    ///  exactly, but mint/burn stay locked until the leg lands — the lock is what keeps the
+    ///  request-time snapshot exact. Orders are unaffected (they record no action).
+    function testLockWhilePending() public {
         _mockAccountInfo(address(libHarness), _accountInfo(10e6));
         libHarness.recordAction(100e6, 1);
         _mockTxStatus(1, 0);
 
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 1 days);
+        vm.expectRevert(LighterLib.NavLocked.selector);
         libHarness.assertNavUnlocked();
         AppTokenBalance[] memory balances = libHarness.getLighterBalances(address(libHarness));
-        assertEq(balances[0].amount, 110e6, "NAV reads must never be blocked or expire while pending");
+        assertEq(balances[0].amount, 110e6, "Pending deposit still valued exactly");
     }
 
     // =========================================================================
@@ -907,7 +908,7 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.6");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.7");
     }
 
     function testDirectCallToAdapterReverts() public {

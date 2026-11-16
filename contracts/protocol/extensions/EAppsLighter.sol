@@ -26,7 +26,7 @@ contract EAppsLighter is EApps, IEAppsLighter {
         viewData.marketIds = slot.trackedMarkets;
         viewData.inFlightAmount = slot.data.inFlightAmount;
         viewData.lastReqId = slot.data.lastReqId;
-        viewData.usdcSnapshotAtSettle = slot.data.usdcSnapshotAtSettle;
+        viewData.usdcSnapshotAtRequest = slot.data.usdcSnapshotAtRequest;
     }
 
     /// @dev Valuation runs before the lock so a landed leg clears the record and unlocks in the

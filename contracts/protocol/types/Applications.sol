@@ -40,7 +40,7 @@ struct HyperliquidData {
 struct LighterData {
     int128 inFlightAmount;
     uint64 lastReqId;
-    uint128 usdcSnapshotAtSettle; // pool USDC balance captured when the settled state is first observed
+    uint128 usdcSnapshotAtRequest; // pool USDC balance captured when the transfer request is recorded
 }
 
 /// @notice Lighter perps storage: in-flight accounting plus the tracked-market registry.
@@ -61,5 +61,5 @@ struct LighterViewData {
     uint16[] marketIds;
     int128 inFlightAmount;
     uint64 lastReqId;
-    uint128 usdcSnapshotAtSettle;
+    uint128 usdcSnapshotAtRequest;
 }

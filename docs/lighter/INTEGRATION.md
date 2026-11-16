@@ -617,24 +617,32 @@ included — no wall-clock window), because the wallet-side movement is already 
 The rules the accounting follows (violations of any of these are bugs, not trade-offs):
 
 - **R1 — one transfer at a time.** `recordAction` reverts `PendingRequest` while the previous
-  reqId reads status 0; the next transfer overwrites the record (implicit sync).
-- **R2 — pending never locks and is always exact.** Interleaved mints/burns/donations move the
-  wallet and NAV equally, so computed NAV stays exact no matter how many occur — and the USDC
-  snapshot does not exist yet, so nothing can pollute it.
-- **R3 — snapshot exactly once.** `usdcSnapshotAtSettle` is captured in the first NAV evaluation
-  that observes a non-pending status; from that instant every permissioned flow reverts, so
-  between snapshot and landing the wallet can only move via the async leg itself (or a plain
-  ERC-20 transfer — no code path exists to block it; documented residual, at the sender's cost).
-- **R4 — landing = wallet > snapshot.** On landing (or when nothing is outstanding) the record
-  clears and the lock lifts in the same evaluation.
-- **R5 — the only non-exact stored state.** If the leg lands before any evaluation observes
-  settlement (fast chains; verified live), the snapshot includes the leg and the record carries
-  (overstating) until the next transfer overwrites it. Untradeable while it lasts; owner flows
-  and `updateUnitaryValue` stay available; a delivery that reverted (never retried, funds lost
-  per Lighter's docs) resolves the same way — the carry simply stops counting lost funds.
+  reqId reads status 0; the next transfer overwrites the record (implicit sync, and the only
+  recovery from a leg that never lands — a reverted delivery is never retried and the funds are
+  lost per Lighter's docs, so the carry simply stops counting them).
+- **R2 — the lock spans the whole transfer: from request to landing, both directions.** Pending
+  is valued exactly by formula, but mint/burn/donate/deposits are locked throughout: this is the
+  price of guaranteed exactness. With any permissioned flow able to move USDC during pending, a
+  request-time snapshot can be polluted (4.5.6 pinned at settle-observation instead, which
+  trapped pools on idle chains — see R5). Orders record no action and are never blocked.
+- **R3 — snapshot at request, exactly once.** `usdcSnapshotAtRequest` is captured in
+  `recordAction`. It provably predates the async leg: Core schedules the refund/delivery only
+  after processing the request, so `wallet > snapshot` becomes true exactly when the leg lands —
+  whether that is the next block or hours later. No evaluation cadence is assumed; there is no
+  window in which anything can pollute the measurement except a plain ERC-20 transfer (no code
+  path exists to block it; documented residual, at the sender's cost).
+- **R4 — the lock reverts only on unresolved records, and runs after the valuation.**
+  `assertNavUnlocked` reverts whenever a record exists; the NAV valuation executes first and
+  clears landed, empty (full acceptance) and rejected legs in the same evaluation, so the revert
+  fires only while a leg is genuinely outstanding. `updateUnitaryValue` is exempt (it must be
+  able to commit the clearing observation).
+- **R5 — no trap states.** Because the snapshot predates the leg, clearing is eventual whenever
+  the leg lands; because the record is overwritten per request, a never-landing leg (lost
+  delivery) is absorbed by the next transfer. Verified live: an observation taken long after
+  settle + delivery completed (the 4.5.6 trap scenario) clears and unlocks.
 
 Settlement is observed lazily: any on-chain evaluation (or `eth_call`) of the Lighter branch
-reads the tx-status precompile for the recorded reqId, and the first non-zero read is the
+reads the tx-status precompile for the recorded reqId; the first non-zero read is the
 observation; anyone can force one via `updateUnitaryValue`.
 
 **Settled (status 1 or 2) has an async EVM-side leg whose landing is not observable on-chain.**
@@ -666,17 +674,6 @@ status does not confirm delivery on EVM" — the delivery/refund is a separate e
 transaction scheduled after Core executes, which is exactly the gap the carry + lock covers.
 `recordAction` resets the pinned baseline to zero so each request is measured against its own
 observation (an overwrite never inherits a previous request's baseline).
-
-Residual properties, stated plainly: the pin is optimistic, so if the async leg lands before
-any evaluation observes the settled state, the pinned baseline already includes the leg and the
-record carries until the next transfer overwrites it (one-at-a-time makes the next transfer the
-natural step; `updateUnitaryValue` stays available for NAV reads, and owner flows — transfers,
-orders — are never locked). Conversely, a wallet movement between the pin and the landing can
-only come from a direct ERC-20 transfer (no pool code runs, so it cannot be blocked or
-attributed); faking a landing costs the sender real funds, and the pre-pending pending window
-remains exact because pending evaluations refresh nothing the landing check relies on. If Lighter
-ships a per-request delivery read (as they did for order status in 1.2.0), the pin and lock
-degenerate to reading it and this section shrinks accordingly.
 
 History (why the design looks like this): the 1.1.0 integration used a 16-second lock that
 assumed a timing guarantee Axiom explicitly disclaimed, and subtracted settled withdrawals
@@ -739,15 +736,16 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.6` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.6"`. 4.5.1
+- `VERSION` is `4.5.7` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.7"`. 4.5.1
   upgraded the integration to devnet 1.2.0 (quoteMultiplier/funding NAV, one-at-a-time
-  status-driven in-flight accounting, TWAP guard); 4.5.4–4.5.6 finalized it: sequential
-  per-status handling (`0`/`1`/`2`/unknown) with a single return, the settled-transfer lock
-  across both directions (pending never locks), `usdcSnapshotAtSettle` captured once at the
-  first observation of settlement with automatic clearing on any wallet increase, and the
-  signed `inFlightAmount` as the direction flag. `getLighterTrackedMarkets` lives in
-  `EAppsLighter` (`IEAppsLighter`). `extensionsMapSalt26` (4.5.1–4.5.5 shipped salts 21–25;
-  field renames are bytecode-neutral and did not require redeploys). The devnet 1.1.0 reset (2026-10-26)
+  status-driven in-flight accounting, TWAP guard); 4.5.4–4.5.7 iterated the transfer accounting
+  to its final form: sequential per-status handling (`0`/`1`/`2`/unknown), the lock spanning
+  request-to-landing in both directions (pending included — the lock is what makes the
+  request-time snapshot exact), `usdcSnapshotAtRequest` captured in `recordAction` with clearing
+  on any wallet increase, and the signed `inFlightAmount` as the direction flag. The 4.5.6
+  settle-observation pin was found to trap idle pools (snapshot taken after a leg that landed
+  between evaluations) and was replaced. `getLighterTrackedMarkets` lives in `EAppsLighter`
+  (`IEAppsLighter`). `extensionsMapSalt27` (4.5.1–4.5.6 shipped salts 21–26). The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
   version/salt pair: 4.5.0 / `extensionsMapSalt20`. (History: 4.6.1 = ENavView removal +
@@ -1043,7 +1041,7 @@ No extension/adapter storage (Rigoblock hard rule).
   `0x080f…1fA6`).** `_inFlightAdjustment` rewritten with explicit `status == 0 / 1 / 2` branches,
   the landing check simplified to any wallet increase over the pinned baseline (fee-robust, and
   exact-fee-free delivery verified live), and `recordAction` reset of the baseline fixed. Renamed
-  the `slot` parameters and the `usdcSnapshotAtSettle` field (`usdcSnapshotAtSettle`). Redeployed
+  the `slot` parameters and the `usdcSnapshotAtRequest` field (`usdcSnapshotAtRequest`). Redeployed
   (`VERSION = "4.5.5"`, `extensionsMapSalt25`): EAppsLighter `0x0A1a60a826ec486A6AD471A110E219D3d7F7cDE7`, ExtensionsMap
   `0x8B4F7CD12aedfA3f73B9214aC7a18bB934Fe4FFb`, SmartPool `0xDe038d009519577f36812a1E8A8DB8B880f89cB0`, ALighter `0xA7d741784bd0235dB139241Fe5eF991b12778ec4`; Authority rewired (five selectors
   remove/re-add, `factory.setImplementation(0xDe03…)`). The tester pool `0x0CD1…89adc` was
@@ -1055,12 +1053,24 @@ No extension/adapter storage (Rigoblock hard rule).
 - **4.5.6 sequential statuses + withdrawal-carry fix + redeploy (2026-11-16, deployer key
   `0x080f…1fA6`).** `_inFlightAdjustment` rewritten as a flat `status == 0 / 1 / 2 / unknown`
   chain writing a single return variable; fixed the confirmed-withdrawal carry sign; renamed the
-  snapshot field to `usdcSnapshotAtSettle`; added a moving-mark conservation test (positions
+  snapshot field to `usdcSnapshotAtRequest`; added a moving-mark conservation test (positions
   revalue freely during pending and settled-in-transit windows — `testNavExactWhilePositionsMoveDuringTransfer`).
   Redeployed (`VERSION = "4.5.6"`, `extensionsMapSalt26`): EAppsLighter `0x2Ed167C39818479073fDE526645da6f4165AE26D`, SmartPool
   `0xf3DFc970B55329A45D27E9e10D5553501D46abBf`, ALighter `0xe01FA2d4d91C8cC6259b285F7fC40E5782333fc9`; Authority rewired. Tester pool upgraded; a 4 USDC deposit
   settled and cleared automatically (wallet 66, core 34, NAV 100 USDC). Live NAV-exactness
   suite passes; full regression green (forge 1045, mocha 369).
+- **4.5.7 request-time snapshot + request-to-landing lock + redeploy (2026-11-16, deployer key
+  `0x080f…1fA6`).** Review found the 4.5.6 settle-observation pin trapped mint/burn on idle pools
+  (the first evaluation hours after a completed transfer snapshots a wallet that already includes
+  the leg, and the record never clears). Final design: the USDC snapshot is captured when the
+  request is recorded (provably predating the async leg), the lock spans request-to-landing in
+  both directions (pending included — it is what keeps the snapshot exact; orders unaffected),
+  and clearing happens on any wallet increase over the snapshot, whenever observed. Redeployed
+  (`VERSION = "4.5.7"`, `extensionsMapSalt27`): EAppsLighter `0x8107Fc5d322D02D041CA65696ef2dE3282aaFa87`, ExtensionsMap `0x39EFCCebD55Ad5a81e534BCEDD2131B34249DFc0`,
+  SmartPool `0x8FDB277326BB6a07010B09bDdbE70DFDae4CA862`, ALighter `0x330DA2Cd4930862d945DadF9c4c9DA6F4aD22528`; Authority rewired. Tester pool upgraded; the trap
+  scenario verified live — an observation 12 s after a 5 USDC withdrawal had fully settled and
+  delivered (no intermediate evaluation) cleared and unlocked instead of trapping; live
+  NAV-exactness suite passes.
 - Explorer verification: enabled with devnet 1.1.0 (Blockscout contract verification, per the
   changelog; the pre-reset build had it disabled). Hardhat 3's verify plugin (v3.1.0+) has native
   Blockscout support and does **not** accept Hardhat 2's `customChains` (that is `@hh2`-tag plugin

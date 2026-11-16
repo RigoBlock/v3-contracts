@@ -312,10 +312,10 @@ contract ALighterForkTest is Test {
         assertEq(lighterApp.balances[0].amount, 1_010e6, "Balance should be collateral plus position PnL");
     }
 
-    /// @notice Lock semantics around a deposit: minting works while the request is pending (also
-    ///  from later blocks — the pending deposit is valued exactly, no wall-clock expiry); once
-    ///  Core settles, minting locks until the async refund lands in the pool wallet, which clears
-    ///  the record and unlocks in the same evaluation.
+    /// @notice Lock semantics around a deposit: from the request until the async refund lands,
+    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact);
+    ///  once the refund lands in the pool wallet, the mint's own evaluation clears the record and
+    ///  unlocks in the same pass.
     function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
@@ -325,23 +325,17 @@ contract ALighterForkTest is Test {
         vm.prank(poolOwner);
         IALighter(pool).sendToCore(3, pool, false, depositAmount, LighterRouteType.Perps);
 
-        // Pending: mint allowed (in-flight covers the lagging Core read), same and later blocks.
-        _mockAccountInfo(0);
+        // Pending: locked.
         deal(usdc, poolOwner, depositAmount);
         vm.startPrank(poolOwner);
         IERC20(usdc).approve(pool, depositAmount);
+        vm.expectRevert(LighterLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
 
-        vm.roll(block.number + 1);
-        _mockAccountInfo(0);
-        _mockTxStatus(1, 0);
-        deal(usdc, poolOwner, depositAmount);
-        IERC20(usdc).approve(pool, depositAmount);
-        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
-
-        // Settled with a partial acceptance: the unaccepted remainder is in transit and the
-        // settled state locks mint for NAV-dependent flows.
-        uint256 baseline = IERC20(usdc).balanceOf(pool);
+        // Settled with a partial acceptance: the unaccepted remainder is in transit and the lock
+        // holds (the reverted mint's evaluation is rolled back, so commit the record with an
+        // exempt updateUnitaryValue).
+        uint256 snapshot = IERC20(usdc).balanceOf(pool);
         vm.roll(block.number + 1);
         _mockAccountInfo(int128(uint128(depositAmount - 1e6)));
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(depositAmount - 1e6)));
@@ -349,14 +343,11 @@ contract ALighterForkTest is Test {
         IERC20(usdc).approve(pool, depositAmount);
         vm.expectRevert(LighterLib.NavLocked.selector);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
-
-        // The settled observation pins the wallet baseline (the reverted mint's evaluation is
-        // rolled back, so commit it with an exempt updateUnitaryValue).
         ISmartPoolActions(pool).updateUnitaryValue();
 
-        // The refund lands in the pool wallet (balance recovers to baseline + remainder): the
-        // mint's own evaluation clears the record and unlocks in the same pass.
-        deal(usdc, pool, baseline + 1e6);
+        // The refund lands in the pool wallet (balance increases over the request-time snapshot):
+        // the mint's own evaluation clears the record and unlocks in the same pass.
+        deal(usdc, pool, snapshot + 1e6);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }

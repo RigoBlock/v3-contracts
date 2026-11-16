@@ -93,11 +93,15 @@ library LighterLib {
 
     /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
     ///  request status. Pending requests are valued exactly and never lock. A confirmed request
-    ///  captures the pool's USDC balance when settlement is first observed and carries the async
-    ///  EVM-side leg (deposit refund / withdrawal delivery) until the wallet increases over the
-    ///  snapshot; while the leg is in transit mint/burn are locked (assertNavUnlocked), so the
-    ///  increase is attributable to the leg itself. A landed, empty or rejected leg clears the
-    ///  record; an unknown future status conservatively carries the amount and stays locked.
+    /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
+    ///  request status. The USDC snapshot is taken when the request is recorded, so it provably
+    ///  predates the async EVM-side leg (refund/delivery), which Core only schedules after
+    ///  processing the request. Pending: valued exactly (deposit added back, withdrawal untouched)
+    ///  but locked. Confirmed: the leg is carried until the wallet increases over the snapshot,
+    ///  which clears the record; nothing outstanding (full acceptance) needs no landing. Rejected:
+    ///  nothing is in transit, cleared immediately. Unknown statuses carry conservatively and stay
+    ///  locked. The lock (assertNavUnlocked) spans request to landing: it is what keeps every
+    ///  permissioned flow out of the wallet so the snapshot comparison stays exact.
     function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
         LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
@@ -106,13 +110,9 @@ library LighterLib {
         (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
         if (status == 0) {
             // pending: a deposit left the wallet and is not on Core yet; a withdrawal has not
-            //  moved either side
+            //  moved either side; the leg cannot have landed
             adjustment = amount > 0 ? amount : int256(0);
         } else if (status == 1) {
-            if (data.usdcSnapshotAtSettle == 0) {
-                lighterSlot.data.usdcSnapshotAtSettle = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
-                data.usdcSnapshotAtSettle = lighterSlot.data.usdcSnapshotAtSettle;
-            }
             if (amount > 0) {
                 // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
                 //  the collateral read) and the unaccepted remainder is refunded async
@@ -122,10 +122,10 @@ library LighterLib {
                 adjustment = int256(outstanding);
             } else {
                 // withdrawal confirmed: Core debited and the delivery to the wallet is async;
-                //  the app carries the undelivered amount (inFlightAmount is negative)
+                //  inFlightAmount is negative, the app carries the undelivered amount
                 adjustment = -amount;
             }
-            if (adjustment == 0 || _legLanded(data.usdcSnapshotAtSettle)) {
+            if (adjustment == 0 || _legLanded(data.usdcSnapshotAtRequest)) {
                 delete lighterSlot.data;
                 adjustment = 0;
             }
@@ -138,9 +138,9 @@ library LighterLib {
         }
     }
 
-    /// @dev True once the wallet increased over the snapshot taken at settlement. EVM-initiated
-    ///  transfers carry no fee, and the settled lock blocks every other flow, so any increase is
-    ///  the async leg itself.
+    /// @dev True once the wallet increased over the request-time snapshot. The snapshot predates
+    ///  the async leg by construction, EVM-initiated transfers carry no fee, and the lock blocks
+    ///  every other flow, so the increase is the leg itself.
     function _legLanded(uint128 snapshot) private view returns (bool) {
         return IERC20(LighterConstants.USDC).balanceOf(address(this)) > snapshot;
     }
@@ -154,15 +154,12 @@ library LighterLib {
         }
         data.inFlightAmount = int128(amount);
         data.lastReqId = reqId;
-        data.usdcSnapshotAtSettle = 0;
+        data.usdcSnapshotAtRequest = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
     }
 
     ///  lock: they are valued exactly by the in-flight amount.
     function assertNavUnlocked() internal view {
-        LighterData memory data = StorageLib.lighterSlot().data;
-        if (data.lastReqId == 0) return;
-        uint8 status = readTxStatus(data.lastReqId);
-        if (status == 0) return;
+        if (StorageLib.lighterSlot().data.lastReqId == 0) return;
         revert NavLocked();
     }
 
