@@ -5,7 +5,7 @@ import {EApps} from "./EApps.sol";
 import {LighterLib} from "../libraries/LighterLib.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {TransientStorage} from "../libraries/TransientStorage.sol";
-import {Applications, LighterSlot, LighterViewData} from "../types/Applications.sol";
+import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEAppsLighter} from "./adapters/interfaces/IEAppsLighter.sol";
@@ -21,12 +21,8 @@ contract EAppsLighter is EApps, IEAppsLighter {
     constructor(EAppsParams memory params) EApps(params) {}
 
     /// @inheritdoc IEAppsLighter
-    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
-        LighterSlot storage s = StorageLib.lighterSlot();
-        viewData.marketIds = s.trackedMarkets;
-        viewData.inFlightAmount = s.data.inFlightAmount;
-        viewData.lastReqId = s.data.lastReqId;
-        viewData.balanceSnapshot = s.data.balanceSnapshot;
+    function getLighterTrackedMarkets() external view override returns (uint16[] memory) {
+        return StorageLib.lighterSlot().trackedMarkets;
     }
 
     /// @dev Valuation must run before the lock check: it is what clears a landed leg from the
@@ -37,7 +33,7 @@ contract EAppsLighter is EApps, IEAppsLighter {
         if (appType == Applications.LIGHTER_PERPS) {
             balances = LighterLib.getLighterBalances(address(this), msg.sender == StorageLib.pool().owner);
             if (!TransientStorage.getNavLockExempt()) {
-                LighterLib.assertNavUnlocked();
+                require(StorageLib.lighterSlot().data.lastReqId == 0, LighterLib.NavLocked());
             }
         } else {
             balances = super._handleApplication(appType);

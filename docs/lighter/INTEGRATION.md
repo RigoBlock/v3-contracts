@@ -249,13 +249,12 @@ balance), clients can still read the tracked-market list, and any later `createO
 working against it (the deposit flow re-activates the bit). This mirrors GMX, where the
 tracked-markets storage likewise outlives the active-app bitmap.
 
-The view lives in the **base `EApps`**, not `EAppsLighter`, deliberately: `ExtensionsMap` routes
-the selector on every chain from shared map code (with the `type(IEApps).interfaceId` assert),
-so the base answers it — returning empty arrays off-Lighter — instead of every other chain's
-extension reverting on a routed selector. It returns each market together with its stored
-`sizeDecimals`/`priceDecimals` (plus the in-flight bookkeeping fields) because those scales
-are pool storage that any client decoding raw Core positions needs; a constants-table lookup
-would work too, but the storage values are the ground truth the NAV loop itself uses.
+`getLighterTrackedMarkets()` returns just the tracked market ids — the Lighter analog of the
+base `EApps.getUniV4TokenIds()`. It lives in `EAppsLighter` behind `IEAppsLighter`; the
+ExtensionsMap routes its selector independently of the `type(IEApps).interfaceId` assert.
+On non-Lighter chains the routed selector reverts cleanly (the `EApps` family has no such
+function and no fallback). Clients that also need the in-flight record read the Lighter slot
+storage directly.
 
 ### Market values: the on-chain quoteMultiplier (devnet 1.2.0)
 

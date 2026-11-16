@@ -46,11 +46,3 @@ struct LighterSlot {
     uint16[] trackedMarkets;
     mapping(uint16 marketId => uint256 index) marketIndex;
 }
-
-/// @notice Pool-storage view of the Lighter slot, returned by EAppsLighter.getLighterTrackedMarkets.
-struct LighterViewData {
-    uint16[] marketIds;
-    int128 inFlightAmount;
-    uint64 lastReqId;
-    uint128 balanceSnapshot;
-}

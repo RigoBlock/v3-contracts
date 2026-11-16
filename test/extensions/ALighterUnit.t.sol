@@ -166,7 +166,7 @@ contract LighterLibHarness {
     }
 
     function assertNavUnlocked() external view {
-        LighterLib.assertNavUnlocked();
+        require(StorageLib.lighterSlot().data.lastReqId == 0, LighterLib.NavLocked());
     }
 
     function trackMarket(uint16 marketId) external {

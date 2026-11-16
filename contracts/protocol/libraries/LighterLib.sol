@@ -112,7 +112,7 @@ library LighterLib {
         int256 amount = int256(data.inFlightAmount);
         if (data.lastReqId == 0 || amount == 0) return 0;
 
-        (uint8 status, bytes memory payload) = readTxStatus(data.lastReqId);
+        (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
         if (status == 0) {
             // pending: a deposit left the wallet and is not on Core yet; a withdrawal has not
             //  moved either side; the leg cannot have landed
@@ -129,7 +129,7 @@ library LighterLib {
                 //  inFlightAmount is negative, the app carries the undelivered amount
                 adjustment = -amount;
             }
-            if (adjustment == 0 || _legLanded(data.balanceSnapshot)) {
+            if (adjustment == 0 || _readBalance() > data.balanceSnapshot) {
                 delete lighterSlot.data;
                 adjustment = 0;
             }
@@ -139,11 +139,10 @@ library LighterLib {
         }
     }
 
-    /// @dev True once the wallet increased over the request-time snapshot. The snapshot predates
-    ///  the async leg by construction, EVM-initiated transfers carry no fee, and the lock blocks
-    ///  every other flow, so the increase is the leg itself.
-    function _legLanded(uint128 snapshot) private view returns (bool) {
-        return IERC20(LighterConstants.USDC).balanceOf(address(this)) > snapshot;
+    /// @dev The pool's USDC wallet balance; the landing reference for the async leg and the
+    ///  request-time snapshot source.
+    function _readBalance() private view returns (uint256) {
+        return IERC20(LighterConstants.USDC).balanceOf(address(this));
     }
 
     function recordAction(int256 amount, uint64 reqId) internal {
@@ -153,12 +152,12 @@ library LighterLib {
         LighterData storage data = StorageLib.lighterSlot().data;
         uint64 lastReqId = data.lastReqId;
         if (lastReqId != 0) {
-            (uint8 status, ) = readTxStatus(lastReqId);
+            (uint8 status, ) = _readTxStatus(lastReqId);
             if (status == 0) revert PendingRequest();
         }
         data.inFlightAmount = int128(amount);
         data.lastReqId = reqId;
-        data.balanceSnapshot = uint128(IERC20(LighterConstants.USDC).balanceOf(address(this)));
+        data.balanceSnapshot = uint128(_readBalance());
     }
 
     ///  lock: they are valued exactly by the in-flight amount.
@@ -199,7 +198,7 @@ library LighterLib {
     }
 
     /// @dev status: 0 pending, 1 successful, 2 failed (payload then abi.encode(uint32 errorCode)).
-    function readTxStatus(uint64 reqId) private view returns (uint8 status, bytes memory payload) {
+    function _readTxStatus(uint64 reqId) private view returns (uint8 status, bytes memory payload) {
         (status, payload) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
     }
 

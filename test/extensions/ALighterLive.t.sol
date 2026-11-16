@@ -6,10 +6,10 @@ import {console2} from "forge-std/console2.sol";
 
 import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
-import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
+import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
-import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
 
 /// @title ALighterLiveTest
 /// @notice Live-RPC tests against the LighterEVM devnet: real READ_CORE precompile responses,
@@ -222,22 +222,22 @@ contract ALighterLiveTest is Test {
     ///  Positions and collateral are static during the test (only the pool owner can write to
     ///  Core), so the only value that can change between brackets is the mark price.
     function _attemptNavComparison() internal returns (NavAttempt memory attempt) {
-        LighterViewData memory viewData = abi.decode(
-            _ethCall(TESTER_POOL, abi.encodeCall(IEAppsLighter.getLighterTrackedMarkets, ())),
-            (LighterViewData)
-        );
+        // tracked markets and the in-flight record are internal accounting: read the Lighter
+        ///  slot storage directly
+        uint16[] memory marketIds = _readTrackedMarkets();
+        (int256 inFlightAmount, uint64 lastReqId, uint128 balanceSnapshot) = _readLighterData();
 
-        uint256 marketCount = viewData.marketIds.length;
+        uint256 marketCount = marketIds.length;
         LighterTypes.Position[] memory positions = new LighterTypes.Position[](marketCount);
         LighterTypes.MarketInfo[] memory marketsBefore = new LighterTypes.MarketInfo[](marketCount);
         uint64[] memory markAfter = new uint64[](marketCount);
 
         int256 collateral = int256(_readAccountInfo(TESTER_POOL).collateralBaseAmount);
-        int256 inFlight = _replicateInFlightAdjustment(viewData);
+        int256 inFlight = _replicateInFlightAdjustment(inFlightAmount, lastReqId, balanceSnapshot);
 
         for (uint256 i; i < marketCount; ++i) {
-            positions[i] = _readPosition(TESTER_POOL, viewData.marketIds[i]);
-            marketsBefore[i] = _readMarketInfo(viewData.marketIds[i]);
+            positions[i] = _readPosition(TESTER_POOL, marketIds[i]);
+            marketsBefore[i] = _readMarketInfo(marketIds[i]);
         }
 
         // Issued immediately after the bracket above; the second bracket follows immediately.
@@ -250,7 +250,7 @@ contract ALighterLiveTest is Test {
         );
 
         for (uint256 i; i < marketCount; ++i) {
-            markAfter[i] = _readMarketInfo(viewData.marketIds[i]).markPrice;
+            markAfter[i] = _readMarketInfo(marketIds[i]).markPrice;
         }
 
         attempt.expectedBefore = collateral + inFlight;
@@ -326,17 +326,20 @@ contract ALighterLiveTest is Test {
     ///  in-flight amount back; a settled request contributes nothing once its leg landed (wallet
     ///  recovered to the pinned baseline + leg) and stays carried while the leg is in transit —
     ///  the pool's own evaluation reverts in that state, so the attempt skips.
-    function _replicateInFlightAdjustment(LighterViewData memory viewData) internal returns (int256 adjustment) {
-        int256 amount = int256(viewData.inFlightAmount);
-        if (viewData.lastReqId == 0 || amount == 0) return 0;
+    function _replicateInFlightAdjustment(
+        int256 amount,
+        uint64 lastReqId,
+        uint128 balanceSnapshot
+    ) internal returns (int256 adjustment) {
+        if (lastReqId == 0 || amount == 0) return 0;
 
         (uint8 status, bytes memory payload) = abi.decode(
-            _readCore(abi.encodePacked(uint16(0x0000), viewData.lastReqId)),
+            _readCore(abi.encodePacked(uint16(0x0000), lastReqId)),
             (uint8, bytes)
         );
         if (status == 0) return amount > 0 ? amount : int256(0);
 
-        uint256 baseline = uint256(viewData.balanceSnapshot);
+        uint256 baseline = uint256(balanceSnapshot);
         if (amount > 0) {
             uint256 amount256 = uint256(amount);
             uint256 accepted = status == 1 && payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
@@ -361,6 +364,37 @@ contract ALighterLiveTest is Test {
     /// @dev USDC balanceOf via the live RPC.
     function _usdcBalance(address account) internal returns (uint256) {
         return abi.decode(_ethCall(LighterConstants.USDC, abi.encodeWithSelector(0x70a08231, account)), (uint256));
+    }
+
+    /// @dev The pool's LighterData, decoded from raw storage (eth_getStorageAt). Solidity does
+    ///  not split a value type across slots: slot 0 packs int128 inFlightAmount | uint64
+    ///  lastReqId (tail unused), slot 1 holds the whole uint128 balanceSnapshot.
+    function _readLighterData() internal returns (int256 inFlightAmount, uint64 lastReqId, uint128 balanceSnapshot) {
+        bytes32 base = StorageLib.LIGHTER_DATA_SLOT;
+        uint256 w0 = uint256(_storageAt(TESTER_POOL, base));
+        uint256 w1 = uint256(_storageAt(TESTER_POOL, bytes32(uint256(base) + 1)));
+        inFlightAmount = int256(int128(uint128(w0)));
+        lastReqId = uint64(w0 >> 128);
+        balanceSnapshot = uint128(w1);
+    }
+
+    /// @dev The pool's tracked-market list, decoded from raw storage: the array length sits at
+    ///  slot 2 of the Lighter slot, elements pack 16 uint16 per slot from keccak256(slot 2).
+    function _readTrackedMarkets() internal returns (uint16[] memory marketIds) {
+        bytes32 base = StorageLib.LIGHTER_DATA_SLOT;
+        uint256 count = uint256(_storageAt(TESTER_POOL, bytes32(uint256(base) + 2)));
+        marketIds = new uint16[](count);
+        bytes32 dataSlot = keccak256(abi.encode(bytes32(uint256(base) + 2)));
+        for (uint256 i; i < count; ++i) {
+            bytes32 word = _storageAt(TESTER_POOL, bytes32(uint256(dataSlot) + i / 16));
+            marketIds[i] = uint16(uint256(word) >> ((i % 16) * 16));
+        }
+    }
+
+    /// @dev eth_getStorageAt via the live RPC.
+    function _storageAt(address account, bytes32 slot) internal returns (bytes32 value) {
+        string memory params = string.concat('["', vm.toString(account), '","', vm.toString(slot), '","latest"]');
+        value = abi.decode(vm.rpc("lighter", "eth_getStorageAt", params), (bytes32));
     }
 
     function _within(int256 a, int256 b, uint256 tolerance) internal pure returns (bool) {

@@ -16,7 +16,7 @@ import {IEOracle} from "../../contracts/protocol/extensions/adapters/interfaces/
 import {ISmartPoolActions} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolActions.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {IERC20} from "../../contracts/protocol/interfaces/IERC20.sol";
-import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 
 /// @title ALighterForkTest
@@ -267,10 +267,10 @@ contract ALighterForkTest is Test {
         vm.stopPrank();
 
         // The traded markets are tracked for NAV valuation without any explicit tracking call.
-        LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
-        assertEq(viewData.marketIds.length, 2, "Traded markets should be auto-tracked");
-        assertEq(viewData.marketIds[0], 5);
-        assertEq(viewData.marketIds[1], MARKET_ID);
+        uint16[] memory marketIds = IEAppsLighter(pool).getLighterTrackedMarkets();
+        assertEq(marketIds.length, 2, "Traded markets should be auto-tracked");
+        assertEq(marketIds[0], 5);
+        assertEq(marketIds[1], MARKET_ID);
     }
 
     /// @notice NAV valuation reads collateral plus tracked positions from (mocked) Core state.

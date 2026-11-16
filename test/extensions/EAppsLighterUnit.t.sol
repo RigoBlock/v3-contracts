@@ -24,7 +24,7 @@ import {IRigoblockPoolProxyFactory} from "../../contracts/protocol/interfaces/IR
 import {ISmartPool} from "../../contracts/protocol/ISmartPool.sol";
 import {ISmartPoolState} from "../../contracts/protocol/interfaces/v4/pool/ISmartPoolState.sol";
 import {Constants} from "../../contracts/test/Constants.sol";
-import {Applications, LighterViewData} from "../../contracts/protocol/types/Applications.sol";
+import {Applications} from "../../contracts/protocol/types/Applications.sol";
 import {ExternalApp} from "../../contracts/protocol/types/ExternalApp.sol";
 import {DeploymentParams, Extensions, EAppsParams} from "../../contracts/protocol/types/DeploymentParams.sol";
 
@@ -376,7 +376,7 @@ contract EAppsLighterUnitTest is Test {
         _mockMarketInfo(0, _marketInfo(500_000));
         _mockEvmAccountIndex(pool, 7);
         IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
-        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 1);
 
         // The order is not visible in the parent Core snapshot yet. A permissionless evaluation
         //  (any account, here a different prank) must not prune the freshly tracked market.
@@ -384,7 +384,7 @@ contract EAppsLighterUnitTest is Test {
         vm.prank(user);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
         assertEq(
-            IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length,
+            IEAppsLighter(pool).getLighterTrackedMarkets().length,
             1,
             "Permissionless same-block NAV eval must not prune the freshly tracked market"
         );
@@ -396,18 +396,14 @@ contract EAppsLighterUnitTest is Test {
         ExternalApp memory lighterApp = _findLighterApp(
             IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
         );
-        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 1);
         assertEq(lighterApp.balances[0].amount, 15_000e6, "Position valued once Core reflects it");
 
         // An operator evaluation with the position closed prunes it.
         _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
         vm.prank(poolOwner);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
-        assertEq(
-            IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length,
-            0,
-            "Operator eval prunes the empty market"
-        );
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 0, "Operator eval prunes the empty market");
     }
 
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.
@@ -520,23 +516,11 @@ contract EAppsLighterUnitTest is Test {
         assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
     }
 
-    /// @notice getLighterTrackedMarkets reports tracked markets and the in-flight ledger; a fresh
-    ///  pool reports an empty view. Since devnet 1.2.0 no per-market constants are stored (the
-    ///  on-chain quoteMultiplier replaced the decimals table).
+    /// @notice getLighterTrackedMarkets reports the tracked market ids; a fresh pool reports an
+    ///  empty list.
     function testGetLighterTrackedMarkets() public {
         uint256 deposit = 10_000e6;
         _depositAndSettle(deposit);
-
-        // Pre-evaluation: the view reports the record and the request-time wallet snapshot (the
-        //  mock manager pulls no tokens, so it equals the pool balance).
-        LighterViewData memory viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
-        assertEq(viewData.inFlightAmount, int128(uint128(deposit)), "Deposit in-flight amount recorded");
-        assertEq(viewData.lastReqId, 1, "Only transfers record an action");
-        assertEq(
-            viewData.balanceSnapshot,
-            MockUSDC(USDC).balanceOf(pool),
-            "Snapshot captured when the request is recorded"
-        );
 
         // The settled, fully-accepted deposit clears on the first NAV evaluation.
         _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
@@ -549,19 +533,14 @@ contract EAppsLighterUnitTest is Test {
         IALighter(pool).createOrder(0, 2, 0, 0, 0, 0, 30_000, 100_000, true, false, 0);
         vm.stopPrank();
 
-        viewData = IEAppsLighter(pool).getLighterTrackedMarkets();
-        assertEq(viewData.marketIds.length, 2, "Two markets should be tracked");
-        assertEq(viewData.marketIds[0], 0, "ETH-PERP");
-        assertEq(viewData.marketIds[1], 2, "SOL-PERP");
-        assertEq(viewData.inFlightAmount, 0, "Deposit settled: no in-flight amount");
-        assertEq(viewData.lastReqId, 0);
+        uint16[] memory marketIds = IEAppsLighter(pool).getLighterTrackedMarkets();
+        assertEq(marketIds.length, 2, "Two markets should be tracked");
+        assertEq(marketIds[0], 0, "ETH-PERP");
+        assertEq(marketIds[1], 2, "SOL-PERP");
 
-        // A fresh pool with no Lighter activity reports the empty view.
+        // A fresh pool with no Lighter activity reports the empty list.
         vm.prank(poolOwner);
         (address pool2, ) = IRigoblockPoolProxyFactory(factory).createPool("Lighter Unit 2", "LU2", USDC);
-        LighterViewData memory empty = IEAppsLighter(pool2).getLighterTrackedMarkets();
-        assertEq(empty.marketIds.length, 0);
-        assertEq(empty.inFlightAmount, 0);
-        assertEq(empty.lastReqId, 0);
+        assertEq(IEAppsLighter(pool2).getLighterTrackedMarkets().length, 0);
     }
 }
