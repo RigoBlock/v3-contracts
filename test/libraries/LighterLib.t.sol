@@ -243,15 +243,34 @@ contract LighterLibTest is Test {
         harness.readPosition(ACCOUNT, 1);
     }
 
-    /// @notice A not-found position read means "no position": the zeroed struct is pruned by
-    ///  the NAV loop and NAV degrades to collateral-only instead of reverting.
-    function testGetLighterBalancesNoPositionWhenNotFound() public {
+    /// @notice Regression (audit: same-block prune of a freshly tracked market). A market whose
+    ///  position has never been observed on Core is not prunable: right after tracking, the
+    ///  parent-Core snapshot cannot yet show the position or orders, and pruning on that stale
+    ///  read would hide a live position from NAV. Once observed non-empty (confirmed), an empty
+    ///  read prunes normally.
+    function testFreshMarketSurvivesStaleEmptyReadUntilConfirmed() public {
         _track(1);
         _mockPositionNotFound(ACCOUNT, 1);
+        _mockAccountInfo(ACCOUNT, _accountInfo(0));
 
+        // Same-block and later-block stale reads keep the market tracked, valuing it as dust.
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
-        assertEq(balances.length, 0, "No collateral and no size: purgeable empty list");
-        assertEq(harness.trackedMarkets().length, 0, "Not-found market must be pruned by the NAV loop");
+        assertEq(harness.trackedMarkets().length, 1, "Unconfirmed market must survive the stale read");
+        assertEq(harness.marketIndex(1), 1);
+        vm.roll(block.number + 1);
+        balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(harness.trackedMarkets().length, 1, "Still unconfirmed: not pruned in a later block");
+
+        // Core now reflects the position: the observation confirms the market.
+        _mockPosition(ACCOUNT, 1, _position(100, 1, 0));
+        balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(harness.trackedMarkets().length, 1);
+
+        // Position and orders closed: the confirmed market prunes normally.
+        _mockPositionNotFound(ACCOUNT, 1);
+        balances = harness.getLighterBalances(ACCOUNT);
+        assertEq(balances.length, 0, "Confirmed and empty: purgeable empty list");
+        assertEq(harness.trackedMarkets().length, 0, "NAV loop prunes the confirmed dead market");
         assertEq(harness.marketIndex(1), 0);
     }
 
@@ -734,29 +753,36 @@ contract LighterLibTest is Test {
     // NAV-loop pruning of stale tracked markets (getLighterBalances is state-changing)
     // =========================================================================
 
-    /// @dev Seeds MAX_TRACKED_MARKETS entries directly and reports found=false for every
-    ///  position read of `account`: a not-found read is a zeroed position, i.e. an empty
-    ///  (stale) market.
+    /// @dev Seeds MAX_TRACKED_MARKETS entries directly, confirms each with a non-empty
+    ///  observation, then reports found=false for every position read of `account`: the markets
+    ///  are confirmed-empty, i.e. stale and prunable.
     function _seedFullRegistry(address account) internal {
         for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
             uint16 marketId = 100 + uint16(i);
             harness.seedTrackedMarket(marketId);
-            _mockPositionNotFound(account, marketId);
+            _mockMarketInfoWithPrice(marketId, 5_000_000, 1);
+            _mockPosition(account, marketId, _position(100, 0, 0));
+        }
+        harness.getLighterBalances(account);
+        for (uint256 i; i < LighterConstants.MAX_TRACKED_MARKETS; ++i) {
+            _mockPositionNotFound(account, 100 + uint16(i));
         }
         assertEq(harness.trackedMarkets().length, LighterConstants.MAX_TRACKED_MARKETS);
     }
 
-    /// @notice The NAV loop prunes a tracked market that holds no position and no orders, and a
-    ///  fully pruned registry with zero collateral and no in-flight returns the purgeable empty
-    ///  list.
-    function testNavLoopPrunesStaleMarket() public {
+    /// @notice The NAV loop prunes a tracked market that holds no position and no orders once it
+    ///  has been confirmed (observed non-empty on Core), and a fully pruned registry with zero
+    ///  collateral and no in-flight returns the purgeable empty list.
+    function testNavLoopPrunesConfirmedStaleMarket() public {
         _track(1);
-        _mockPosition(ACCOUNT, 1, _position(0, 0, 0));
+        _mockPosition(ACCOUNT, 1, _position(100, 1, 0));
+        harness.getLighterBalances(ACCOUNT);
 
+        _mockPosition(ACCOUNT, 1, _position(0, 0, 0));
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT);
 
         assertEq(balances.length, 0, "Zero collateral and no active market: purgeable empty list");
-        assertEq(harness.trackedMarkets().length, 0, "Stale market must be pruned by the NAV loop");
+        assertEq(harness.trackedMarkets().length, 0, "Confirmed stale market must be pruned by the NAV loop");
         assertEq(harness.marketIndex(1), 0);
     }
 

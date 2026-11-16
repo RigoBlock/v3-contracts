@@ -38,9 +38,17 @@ library LighterLib {
             uint16 marketId = marketIds[i - 1];
             LighterTypes.Position memory position = readPosition(account, marketId);
             if (position.size == 0 && position.totalOrderCount == 0 && position.totalPositionTiedOrderCount == 0) {
-                _untrackMarket(slot, marketId, i - 1);
+                // an empty market is pruned only once its position or orders have been observed on
+                //  Core: right after tracking, the parent-Core snapshot cannot yet show them, and
+                //  pruning on that stale read would hide a live position from NAV
+                if (slot.marketConfirmations[marketId] != 0) {
+                    _untrackMarket(slot, marketId, i - 1);
+                    continue;
+                }
+                hasActiveMarkets = true;
                 continue;
             }
+            slot.marketConfirmations[marketId] = block.number;
             hasActiveMarkets = true;
             totalUsdcValue += _positionValueUsdc(position, marketId);
         }
@@ -181,6 +189,7 @@ library LighterLib {
             lighterSlot.marketIndex[lastMarket] = listIndex + 1;
         }
         delete lighterSlot.marketIndex[marketId];
+        delete lighterSlot.marketConfirmations[marketId];
     }
 
     function coreAccountExists(address account) internal view returns (bool exists) {

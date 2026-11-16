@@ -343,6 +343,62 @@ contract EAppsLighterUnitTest is Test {
         assertEq(_findLighterApp(apps).balances[0].amount, int256(deposit));
     }
 
+    /// @dev Position builder for the 1.2.0 tuple (size, entryQuote, orders, tiedOrders, marginMode).
+    function _position(
+        int64 size,
+        uint56 entryQuote,
+        uint64 orders,
+        uint64 tiedOrders,
+        uint8 marginMode
+    ) internal pure returns (LighterTypes.Position memory) {
+        return
+            LighterTypes.Position({
+                size: size,
+                entryQuote: entryQuote,
+                initialMarginFraction: 0,
+                totalOrderCount: orders,
+                totalPositionTiedOrderCount: tiedOrders,
+                marginMode: marginMode,
+                allocatedMargin: 0,
+                lastFundingRatePrefixSum: 0
+            });
+    }
+
+    /// @notice Regression (audit: same-block prune of a freshly tracked market). createOrder
+    ///  auto-tracks the market before Core can reflect the order; a same-block NAV evaluation
+    ///  must not prune it (the stale snapshot shows no position yet), otherwise a live position
+    ///  would be hidden from NAV and mintable against.
+    function testFreshTrackedMarketSurvivesSameBlockNavEval() public {
+        _depositAndSettle(10_000e6);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(10_000e6))));
+
+        vm.prank(poolOwner);
+        _mockMarketInfo(0, _marketInfo(500_000));
+        _mockEvmAccountIndex(pool, 7);
+        IALighter(pool).createOrder(0, 0, 0, 0, 0, 0, 20_000, 500_000, false, false, 0);
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
+
+        // The order is not visible in the parent Core snapshot yet: this stale read must keep
+        // the market tracked (any account may trigger the evaluation).
+        _mockPosition(pool, 0, _position(0, 0, 0, 0, 0));
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        assertEq(
+            IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length,
+            1,
+            "Same-block NAV eval must not prune the freshly tracked market"
+        );
+
+        // Core now reflects the position; it stays tracked and is valued.
+        vm.roll(block.number + 1);
+        _mockPosition(pool, 0, _position(20_000, 10_000e6, 0, 0, 0));
+        _mockMarketInfo(0, _marketInfo(750_000));
+        ExternalApp memory lighterApp = _findLighterApp(
+            IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS))
+        );
+        assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().marketIds.length, 1);
+        assertEq(lighterApp.balances[0].amount, 15_000e6, "Position valued once Core reflects it");
+    }
+
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.
     /// @dev Mirrors the live-verified formula in LighterLib._positionValueUsdc: a long of size
     ///  20_000 entered at entryQuote 10_000e6, marked at 600_000 with quoteMultiplier 1 is worth

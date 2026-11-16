@@ -45,6 +45,9 @@ struct LighterSlot {
     LighterData data;
     uint16[] trackedMarkets;
     mapping(uint16 marketId => uint256 index) marketIndex;
+    /// @notice Block at which the market was last observed holding a position or orders; 0 means
+    ///  never observed (a freshly tracked market is not prunable until Core reflects it).
+    mapping(uint16 marketId => uint256 confirmedBlock) marketConfirmations;
 }
 
 /// @notice Pool-storage view of the Lighter slot, returned by EAppsLighter.getLighterTrackedMarkets.

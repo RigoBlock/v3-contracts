@@ -699,8 +699,13 @@ same-block mixed deposit+withdrawal batches into one signed amount evaluated aga
 reqId, understating NAV by `min(D, W)` with a same-block lock exemption that let a back-running
 mint price off it. The current rules eliminate all three: one request at a time (a batched
 second leg reverts `PendingRequest`, atomically rolling back a multicall), no wall-clock
-window, and the request-to-landing lock with no exemptions. Regression tests:
-`testMixedBatchRevertsAtomically`, `testMixedBatchSeparateTransactionsReverts`. A balance-baseline auto-clear without the lock
+window, and the request-to-landing lock with no exemptions. A second audited finding — the same-block prune of a freshly auto-tracked market — is fixed
+by the `marketConfirmations` gate above (regression tests:
+`testFreshMarketSurvivesStaleEmptyReadUntilConfirmed`,
+`testFreshTrackedMarketSurvivesSameBlockNavEval`). The mixed-batch netting report needed no
+code change: one-request-at-a-time plus the request-to-landing lock remove the accumulator it
+exploited (regression tests: `testMixedBatchRevertsAtomically`,
+`testMixedBatchSeparateTransactionsReverts`). A balance-baseline auto-clear without the lock
 (4.5.2) was shown mint-exploitable, and an owner-attested `syncTransfer` (4.5.3) removed the
 exploit but added a manual step. 4.5.4 keeps the lock and makes clearing automatic. The pinned
 tests assert the invariant: wallet + app NAV exact in every tradeable state, and the settled
