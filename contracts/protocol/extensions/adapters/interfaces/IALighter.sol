@@ -9,9 +9,8 @@ import {ILighterCoreEntrypoint} from "./lighter/ILighterCoreEntrypoint.sol";
 ///  target protocol). Security-enforced parameters keep their position but have blank names.
 /// @dev NAV valuation lives in EAppsLighter (internal LIGHTER_PERPS branch), not in this adapter:
 ///  the adapter owns Core writes, the extension owns reads/valuation. Markets are tracked
-///  automatically on createOrder; stale tracked entries are pruned automatically by the at-cap
-///  sweep in LighterLib.trackMarket (no owner-facing track/untrack methods). See
-///  docs/lighter/INTEGRATION.md.
+///  automatically on createOrder; stale tracked entries are pruned automatically by the NAV loop
+///  (no owner-facing track/untrack methods). See docs/lighter/INTEGRATION.md.
 interface IALighter is ILighterInteropManager, ILighterCoreEntrypoint {
     event Deposited(uint256 amount);
     event Withdrawn(uint256 amount);

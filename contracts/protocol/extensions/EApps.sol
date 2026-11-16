@@ -17,7 +17,7 @@ import {StorageLib} from "../../protocol/libraries/StorageLib.sol";
 import {TransientStorage} from "../../protocol/libraries/TransientStorage.sol";
 import {IStaking} from "../../staking/interfaces/IStaking.sol";
 import {IStorage} from "../../staking/interfaces/IStorage.sol";
-import {Applications, LighterSlot, LighterViewData, TrackedMarket} from "../types/Applications.sol";
+import {Applications} from "../types/Applications.sol";
 import {AppTokenBalance, ExternalApp} from "../types/ExternalApp.sol";
 import {EAppsParams} from "../types/DeploymentParams.sol";
 import {IEApps} from "./adapters/interfaces/IEApps.sol";
@@ -84,26 +84,6 @@ contract EApps is IEApps {
     /// @inheritdoc IEApps
     function getUniV4TokenIds() external view override returns (uint256[] memory tokenIds) {
         return StorageLib.uniV4TokenIdsSlot().tokenIds;
-    }
-
-    /// @inheritdoc IEApps
-    function getLighterTrackedMarkets() external view override returns (LighterViewData memory viewData) {
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        uint16[] storage markets = slot.trackedMarkets;
-        uint256 length = markets.length;
-        viewData.marketIds = new uint16[](length);
-        viewData.sizeDecimals = new uint8[](length);
-        viewData.priceDecimals = new uint8[](length);
-        for (uint256 i; i < length; ++i) {
-            uint16 marketId = markets[i];
-            viewData.marketIds[i] = marketId;
-            TrackedMarket memory market = slot.markets[marketId];
-            viewData.sizeDecimals[i] = market.sizeDecimals;
-            viewData.priceDecimals[i] = market.priceDecimals;
-        }
-        viewData.inFlightAmount = slot.data.inFlightAmount;
-        viewData.lastActionTimestamp = slot.data.lastActionTimestamp;
-        viewData.lastReqId = slot.data.lastReqId;
     }
 
     /// @notice Directly retrieve balances from target application contract.

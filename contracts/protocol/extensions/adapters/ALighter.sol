@@ -103,8 +103,9 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     }
 
     /// @inheritdoc ILighterCoreEntrypoint
-    /// @notice Creates a perp order on LighterCore. The market is tracked automatically on first
-    ///  trade so it is always valued in NAV (see docs/lighter/API_KEYS.md for the API-key caveat).
+    /// @notice Creates a perp order on LighterCore; the market is tracked automatically on first
+    ///  trade so it is always valued in NAV. Core rejects unsupported order types (e.g. TWAP,
+    ///  orderType 6) asynchronously with an error code on the reqId status.
     function createOrder(
         uint48 accountIndex,
         uint16 marketIndex,

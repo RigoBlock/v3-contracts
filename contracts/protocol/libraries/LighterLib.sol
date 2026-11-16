@@ -1,24 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.4;
 
+import {IERC20} from "../interfaces/IERC20.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
 import {LighterConstants} from "../types/LighterConstants.sol";
-import {LighterSlot, LighterData, TrackedMarket} from "../types/Applications.sol";
-import {LighterTypes} from "../extensions/adapters/interfaces/lighter/LighterTypes.sol";
+import {LighterSlot, LighterData} from "../types/Applications.sol";
+import {LighterTypes} from "../types/LighterTypes.sol";
 
 /// @title LighterLib
 /// @notice Rigoblock-specific helpers for LighterCore perps: NAV valuation, market tracking and
-///  the post-action settlement lock. READ_CORE response shapes and the NAV formula are specified
-///  in docs/lighter/INTEGRATION.md.
+///  in-flight accounting over the pool's Lighter slot.
 library LighterLib {
     error NavLocked();
+    error PendingRequest();
     error MaxTrackedMarketsReached();
     error InvalidMarket();
     error LighterReadFailed();
-
-    /// @notice Settlement lock window after any recorded Core write.
-    uint48 internal constant _SETTLEMENT_WINDOW = 16 seconds;
 
     uint16 internal constant _SELECTOR_TX_STATUS = 0x0000;
     uint16 internal constant _SELECTOR_ACCOUNT_INFO = 0x0001;
@@ -26,19 +24,12 @@ library LighterLib {
     uint16 internal constant _SELECTOR_POSITION = 0x0007;
     uint16 internal constant _SELECTOR_EVM_ACCOUNT_INDEX = 0x0009;
 
-    int256 internal constant _USDC_DECIMAL_FACTOR = 1e6;
-
-    /// @notice Returns the pool's Lighter balances valued in 6-decimal USDC, pruning stale
-    ///  tracked markets while looping.
-    /// @dev Absence semantics follow the Lighter docs: READ_CORE reports found=false for a
-    ///  nonexistent account/market, so NAV degrades instead of reverting (missing
-    ///  account/position = zero, unreadable mark price = position valued flat at entry). A
-    ///  revert here would freeze updateUnitaryValue for every token holder; GmxLib applies the
-    ///  same never-revert policy.
-    /// @dev This runs inside the non-view getAppTokenBalances path, so it prunes tracked markets
-    ///  that hold no position and no orders as it loops (backward, swap-pop safe); see
-    ///  docs/lighter/INTEGRATION.md ("Trading flow").
-    function getLighterBalances(address account) internal returns (AppTokenBalance[] memory balances) {
+    /// @param canPrune Permission to untrack dead markets during the loop. Pruning mutates the
+    ///  tracked set, so it is operator-gated by the caller: a permissionless NAV evaluation
+    ///  computes the same balances but leaves the set untouched (a stale-snapshot prune would
+    ///  hide a freshly opened position from NAV; an operator pruning their own market is
+    ///  self-harm, out of the threat model).
+    function getLighterBalances(address account, bool canPrune) internal returns (AppTokenBalance[] memory balances) {
         if (!coreAccountExists(account)) return balances;
 
         LighterSlot storage slot = StorageLib.lighterSlot();
@@ -50,40 +41,37 @@ library LighterLib {
         uint16[] storage marketIds = slot.trackedMarkets;
         for (uint256 i = marketIds.length; i > 0; --i) {
             uint16 marketId = marketIds[i - 1];
-            TrackedMarket memory market = slot.markets[marketId];
             LighterTypes.Position memory position = readPosition(account, marketId);
             if (position.size == 0 && position.totalOrderCount == 0 && position.totalPositionTiedOrderCount == 0) {
-                _untrackMarket(slot, marketId, i - 1);
+                // empty markets leave the tracked set only via an operator-gated evaluation;
+                //  a market kept by a permissionless evaluation still pins the app valued
+                if (canPrune) {
+                    _untrackMarket(slot, marketId, i - 1);
+                    continue;
+                }
+                hasActiveMarkets = true;
                 continue;
             }
             hasActiveMarkets = true;
-            totalUsdcValue += _positionValueUsdc(position, marketId, market.sizeDecimals, market.priceDecimals);
+            totalUsdcValue += _positionValueUsdc(position, marketId);
         }
 
-        totalUsdcValue += _inFlightAdjustment(slot.data);
+        totalUsdcValue += _inFlightAdjustment(slot);
 
         if (totalUsdcValue == 0) {
-            // Dust keeps the app valued (and unpurgeable) while a position/orders or an in-flight
-            //  transfer exists; otherwise the empty list lets purgeInactiveTokensAndApps drop the
-            //  app bit. Mirrors HyperliquidLib's sign handling below.
             if (!hasActiveMarkets && !hasInFlight) return balances;
             totalUsdcValue = 1;
         }
 
-        // A negative total falls through unchanged: the liability stays in NAV, the list stays
-        //  non-empty and the app cannot be purged while the pool owes money (mirrors HyperliquidLib).
         balances = new AppTokenBalance[](1);
         balances[0] = AppTokenBalance({token: LighterConstants.USDC, amount: totalUsdcValue});
     }
 
-    /// @dev Unrealized PnL of one position from Core's mark price, plus isolated margin (which
-    ///  sits outside the shared collateral). If the mark price is unreadable the position is
-    ///  valued flat at its entry notional (zero PnL).
+    /// @dev value (USDC base units) = size * quoteMultiplier * markPrice - signedEntryQuote,
+    ///  plus pending funding and isolated margin. Unreadable market info values the position flat.
     function _positionValueUsdc(
         LighterTypes.Position memory position,
-        uint16 marketId,
-        uint8 sizeDecimals,
-        uint8 priceDecimals
+        uint16 marketId
     ) private view returns (int256 value) {
         if (position.size == 0) return 0;
 
@@ -92,103 +80,126 @@ library LighterLib {
             : -int256(uint256(position.entryQuote));
 
         (bool found, LighterTypes.MarketInfo memory marketInfo) = _tryReadMarketInfo(marketId);
-        value = found
-            ? ((int256(position.size) * int256(uint256(marketInfo.markPrice)) * _USDC_DECIMAL_FACTOR) /
-                int256(10 ** (sizeDecimals + priceDecimals))) - entryValue
-            : int256(0);
+        if (found) {
+            int256 quoteMultiplier = int256(uint256(marketInfo.quoteMultiplier));
+            value = (int256(position.size) * quoteMultiplier * int256(uint256(marketInfo.markPrice))) - entryValue;
+            value += _pendingFunding(position, quoteMultiplier, marketInfo.fundingRatePrefixSum);
+        }
 
         if (position.marginMode == 1) {
-            // Devnet 1.1.0: allocatedMargin is already Core USDC base units (1e6 per USDC).
             value += int256(position.allocatedMargin);
         }
     }
 
-    /// @dev In-flight adjustment for a pending or just-settled transfer, driven by the
-    ///  transaction-status read. See docs/lighter/INTEGRATION.md ("In-flight accounting").
-    function _inFlightAdjustment(LighterData memory data) private view returns (int256) {
+    function _pendingFunding(
+        LighterTypes.Position memory position,
+        int256 quoteMultiplier,
+        int64 fundingRatePrefixSum
+    ) private pure returns (int256 pendingFunding) {
+        int256 fundingDelta = int256(position.lastFundingRatePrefixSum) - int256(fundingRatePrefixSum);
+        int256 numerator = int256(position.size) * quoteMultiplier * fundingDelta;
+        pendingFunding = numerator / 1e6;
+        if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
+    }
+
+    /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
+    ///  request status. Pending requests are valued exactly and never lock. A confirmed request
+    /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
+    ///  predates the async leg (Core schedules refund/delivery only after processing the request),
+    ///  so the record clears exactly when the wallet increases over it.
+    function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
+        LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
         if (data.lastReqId == 0 || amount == 0) return 0;
-        if (block.timestamp > uint256(data.lastActionTimestamp) + _SETTLEMENT_WINDOW) return 0;
 
-        uint8 status = readTxStatus(data.lastReqId);
-        if (amount > 0) {
-            return status == 0 ? amount : int256(0);
-        }
-        return status == 1 ? amount : int256(0);
-    }
-
-    /// @notice Records a Core write for in-flight accounting and the settlement lock.
-    function recordAction(int256 amount, uint64 reqId) internal {
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        if (reqId != 0) {
-            if (slot.data.lastActionBlock != block.number) {
-                slot.data.inFlightAmount = 0;
+        (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
+        if (status == 0) {
+            // pending: a deposit left the wallet and is not on Core yet; a withdrawal has not
+            //  moved either side; the leg cannot have landed
+            adjustment = amount > 0 ? amount : int256(0);
+        } else if (status == 1) {
+            if (amount > 0) {
+                // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
+                //  the collateral read) and the unaccepted remainder is refunded async
+                uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
+                uint256 outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
+                adjustment = int256(outstanding);
+            } else {
+                // withdrawal confirmed: Core debited and the delivery to the wallet is async;
+                //  inFlightAmount is negative, the app carries the undelivered amount
+                adjustment = -amount;
             }
-            slot.data.inFlightAmount += int128(amount);
-            slot.data.lastReqId = reqId;
+            if (adjustment == 0 || _readBalance() > data.balanceSnapshot) {
+                delete lighterSlot.data;
+                adjustment = 0;
+            }
+        } else if (status == 2) {
+            // rejected on Core (deposits never fail per spec): nothing is in transit
+            delete lighterSlot.data;
         }
-        slot.data.lastActionBlock = uint48(block.number);
-        slot.data.lastActionTimestamp = uint48(block.timestamp);
     }
 
-    /// @notice Reverts while NAV reads may still be stale after a Core deposit/withdrawal.
+    /// @dev The pool's USDC wallet balance; the landing reference for the async leg and the
+    ///  request-time snapshot source.
+    function _readBalance() private view returns (uint256) {
+        return IERC20(LighterConstants.USDC).balanceOf(address(this));
+    }
+
+    function recordAction(int256 amount, uint64 reqId) internal {
+        // a zero amount records nothing and disturbs no existing record (only nonzero transfers
+        //  are ever tracked)
+        if (amount == 0) return;
+        LighterData storage data = StorageLib.lighterSlot().data;
+        uint64 lastReqId = data.lastReqId;
+        if (lastReqId != 0) {
+            (uint8 status, ) = _readTxStatus(lastReqId);
+            if (status == 0) revert PendingRequest();
+        }
+        data.inFlightAmount = int128(amount);
+        data.lastReqId = reqId;
+        data.balanceSnapshot = uint128(_readBalance());
+    }
+
+    ///  lock: they are valued exactly by the in-flight amount.
     function assertNavUnlocked() internal view {
-        LighterData memory data = StorageLib.lighterSlot().data;
-        if (data.lastActionBlock == 0) return;
-        if (data.lastActionBlock == block.number) return;
-        require(block.timestamp >= data.lastActionTimestamp + _SETTLEMENT_WINDOW, NavLocked());
+        if (StorageLib.lighterSlot().data.lastReqId == 0) return;
+        revert NavLocked();
     }
 
-    /// @notice Tracks a perp market for NAV valuation, validating it against Core. No-op when
-    ///  already tracked. Called by ALighter on every createOrder so the traded market is always
-    ///  valued; decimals come from the LighterConstants release-time table, never from calldata.
-    /// @dev Reverts with LighterConstants.UnknownMarket for markets absent from the decimals
-    ///  table, with InvalidMarket for non-perp markets, and with MaxTrackedMarketsReached at
-    ///  LighterConstants.MAX_TRACKED_MARKETS. Stale entries are pruned by the NAV loop in
-    ///  getLighterBalances instead, so an order that hits a full list of stale entries reverts
-    ///  until any NAV-evaluating tx (updateUnitaryValue/mint/purge — or even an eth_call read,
-    ///  since the pruning is state-changing) removes them.
     function trackMarket(uint16 marketId) internal {
         LighterSlot storage slot = StorageLib.lighterSlot();
         if (slot.marketIndex[marketId] != 0) return;
 
-        (uint8 sizeDecimals, uint8 priceDecimals) = LighterConstants.marketDecimals(marketId);
         LighterTypes.MarketInfo memory marketInfo = readMarketInfo(marketId);
         require(marketInfo.marketType == 0, InvalidMarket());
+        require(marketInfo.quoteMultiplier != 0, InvalidMarket());
 
         uint16[] storage markets = slot.trackedMarkets;
         require(markets.length < LighterConstants.MAX_TRACKED_MARKETS, MaxTrackedMarketsReached());
 
         slot.marketIndex[marketId] = markets.length + 1;
-        slot.markets[marketId] = TrackedMarket({sizeDecimals: sizeDecimals, priceDecimals: priceDecimals});
         markets.push(marketId);
     }
 
-    /// @dev Swap-removes a tracked market and its decimal scales; no Core reads, no requires.
-    function _untrackMarket(LighterSlot storage slot, uint16 marketId, uint256 listIndex) private {
-        uint16[] storage markets = slot.trackedMarkets;
+    function _untrackMarket(LighterSlot storage lighterSlot, uint16 marketId, uint256 listIndex) private {
+        uint16[] storage markets = lighterSlot.trackedMarkets;
         uint256 lastIndex = markets.length - 1;
         uint16 lastMarket = markets[lastIndex];
         markets[listIndex] = lastMarket;
         markets.pop();
         if (lastMarket != marketId) {
-            slot.marketIndex[lastMarket] = listIndex + 1;
+            lighterSlot.marketIndex[lastMarket] = listIndex + 1;
         }
-        delete slot.marketIndex[marketId];
-        delete slot.markets[marketId];
+        delete lighterSlot.marketIndex[marketId];
     }
 
-    /// @notice True when the account controls an existing LighterCore account. The account-info
-    ///  read reports found=false when the account does not exist.
     function coreAccountExists(address account) internal view returns (bool exists) {
         (exists, ) = _readCoreData(abi.encodePacked(_SELECTOR_ACCOUNT_INFO, account, false));
     }
 
-    /// @notice Processing status of an EVM-to-Core write: 0 pending/unknown, 1 successful,
-    ///  2 failed (data then holds abi.encode(uint32 errorCode)). The tx-status read is the one
-    ///  read without the (bool found, bytes) envelope.
-    function readTxStatus(uint64 reqId) internal view returns (uint8 status) {
-        (status, ) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
+    /// @dev status: 0 pending, 1 successful, 2 failed (payload then abi.encode(uint32 errorCode)).
+    function _readTxStatus(uint64 reqId) private view returns (uint8 status, bytes memory payload) {
+        (status, payload) = abi.decode(_readCore(abi.encodePacked(_SELECTOR_TX_STATUS, reqId)), (uint8, bytes));
     }
 
     function readAccountInfo(address account) internal view returns (LighterTypes.AccountInfo memory info) {
@@ -203,8 +214,6 @@ library LighterLib {
         info = abi.decode(data, (LighterTypes.MarketInfo));
     }
 
-    /// @notice Reads a position; found=false (account or market absent, or no position) yields a
-    ///  zeroed struct, which callers read as "no position".
     function readPosition(
         address account,
         uint16 marketId
@@ -219,8 +228,6 @@ library LighterLib {
         accountIndex = abi.decode(data, (uint48));
     }
 
-    /// @dev NAV variant of readMarketInfo: found=false reports failure so the position can be
-    ///  valued flat instead of freezing NAV.
     function _tryReadMarketInfo(
         uint16 marketId
     ) internal view returns (bool found, LighterTypes.MarketInfo memory info) {
@@ -229,18 +236,12 @@ library LighterLib {
         if (found) info = abi.decode(data, (LighterTypes.MarketInfo));
     }
 
-    /// @dev Staticcall wrapper around READ_CORE; reverts with LighterReadFailed when the
-    ///  precompile rejects the query (unsupported selector, malformed input, or less than
-    ///  20,000 gas forwarded, per the Lighter docs).
     function _readCore(bytes memory payload) private view returns (bytes memory ret) {
         bool success;
         (success, ret) = LighterConstants.READ_CORE.staticcall(payload);
         require(success, LighterReadFailed());
     }
 
-    /// @dev Unwraps the documented abi.encode(bool found, bytes data) envelope every read
-    ///  except tx status returns; found=false means the account, asset, or market does not
-    ///  exist and data is empty.
     function _readCoreData(bytes memory payload) private view returns (bool found, bytes memory data) {
         (found, data) = abi.decode(_readCore(payload), (bool, bytes));
     }
