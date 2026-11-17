@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, LighterEVM devnet 1.2.0 upgrade + settled-leg pin/clear accounting: `EAppsLighter` 10 647 → 10 058 (v4.5.1) → 10 080 (v4.5.2) → 9 941 (v4.5.3) → 10 562 (v4.5.4) → 10 557 (v4.5.5) → 10 502 (v4.5.6) → 10 214 (v4.5.7) → 10 214 (review iteration) → 10 197 (final 4.5.0 train), `EApps` 6 676 → 5 698 (v4.5.4, view removed), `ALighter` 6 459 → 6 379 (v4.5.4) → 6 405 (v4.5.5), `SmartPool` 24 321 → 24 328; everything else unchanged).
+Limit: 24576 bytes per contract. Last measured: 2026-11-17 (v4.5.1 in-flight landing threshold fix: `EAppsLighter` 10 055, `ALighter` 6 500, `SmartPool` 24 328; previous table values for `EAppsArbitrum`, `EAppsLighter`, `EAppsHyperliquid` and `ALighter` updated to match current `development` bytecode).
 
 ### Implementation and factory
 
@@ -60,9 +60,9 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, Lighte
 
 | Contract         | Size (bytes) | Headroom | % of limit |
 | ---------------- | -----------: | -------: | ---------: |
-| EAppsArbitrum    |        20620 |     3956 |     83.90% |
-| EAppsLighter     |        10197 |    14379 |     41.49% |
-| EAppsHyperliquid |        10130 |    14446 |     41.22% |
+| EAppsArbitrum    |        19658 |     4918 |     79.99% |
+| EAppsLighter     |        10055 |    14521 |     40.91% |
+| EAppsHyperliquid |         9158 |    15418 |     37.26% |
 | EApps            |         5698 |    18878 |     23.19% |
 | EGmxCallback     |         6227 |    18349 |     25.34% |
 | ECrosschain      |         5175 |    19401 |     21.06% |
@@ -84,7 +84,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-16 (v4.5.4 train, Lighte
 | AGmxV2          |        17768 |     6808 |     72.30% |
 | AUniswapRouter  |        12843 |    11733 |     52.26% |
 | AIntents        |        11466 |    13110 |     46.66% |
-| ALighter        |         6557 |    18019 |     26.68% |
+| ALighter        |         6500 |    18076 |     26.45% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |
