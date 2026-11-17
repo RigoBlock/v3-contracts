@@ -106,7 +106,8 @@ library LighterLib {
     ///  request status. Pending requests are valued exactly and never lock. A confirmed request
     /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
     ///  predates the async leg (Core schedules refund/delivery only after processing the request),
-    ///  so the record clears exactly when the wallet increases over it.
+    ///  so the record clears only when the wallet has grown by at least the outstanding leg amount.
+    ///  A smaller inflow (e.g. a dust donation) leaves the record intact and keeps mint/burn locked.
     function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
         LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
@@ -118,18 +119,19 @@ library LighterLib {
             //  moved either side; the leg cannot have landed
             adjustment = amount > 0 ? amount : int256(0);
         } else if (status == 1) {
+            uint256 outstanding;
             if (amount > 0) {
                 // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
                 //  the collateral read) and the unaccepted remainder is refunded async
                 uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
-                uint256 outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
-                adjustment = int256(outstanding);
+                outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
             } else {
                 // withdrawal confirmed: Core debited and the delivery to the wallet is async;
                 //  inFlightAmount is negative, the app carries the undelivered amount
-                adjustment = -amount;
+                outstanding = uint256(-amount);
             }
-            if (adjustment == 0 || _readBalance() > data.balanceSnapshot) {
+            adjustment = int256(outstanding);
+            if (adjustment == 0 || _readBalance() >= data.balanceSnapshot + outstanding) {
                 delete lighterSlot.data;
                 adjustment = 0;
             }

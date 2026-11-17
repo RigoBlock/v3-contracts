@@ -664,9 +664,9 @@ contract LighterLibTest is Test {
         assertEq(balances[0].amount, 700e6, "New pending deposit added back; old carry gone");
     }
 
-    /// @notice A plain ERC-20 transfer into the pool while a leg is outstanding clears the
-    ///  record early (R3 residual: no code path can attribute or block it; documented).
-    function testDirectTransferClearsEarly() public {
+    /// @notice A plain ERC-20 transfer that covers the outstanding leg amount clears the record,
+    ///  because that is the only wallet increase that can be the async leg landing.
+    function testDirectTransferOfLegAmountClears() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
@@ -680,6 +680,74 @@ contract LighterLibTest is Test {
         AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1000e6);
         assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the wallet increase");
+    }
+
+    /// @notice A dust donation must NOT clear a settled withdrawal that has not yet landed.
+    ///  The record and its lock survive until the full delivery amount arrives.
+    function testDustDonationDoesNotClearSettledWithdrawal() public {
+        MockERC20(USDC).mint(address(harness), 500e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
+        harness.recordAction(-400e6, 1);
+        _mockTxStatus(1, 1, bytes(""));
+
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1400e6, "Carried withdrawal before donation");
+
+        // 1 wei donation: wallet increases, but not by the leg amount.
+        MockERC20(USDC).mint(address(harness), 1);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1400e6, "App carry unchanged by dust donation");
+        assertEq(harness.lighterData().lastReqId, 1, "Record must survive dust donation");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // Only the full delivery clears the record.
+        MockERC20(USDC).mint(address(harness), 400e6 - 1);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1000e6);
+        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by full delivery");
+    }
+
+    /// @notice A dust donation must NOT clear the unaccepted refund of a partially-accepted deposit.
+    function testDustDonationDoesNotClearPartialDepositRefund() public {
+        MockERC20(USDC).mint(address(harness), 1000e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
+        harness.recordAction(100e6, 1);
+
+        // 40 of 100 deposited accepted; 60 refund in transit.
+        _mockTxStatus(1, 1, abi.encode(uint64(40e6)));
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 70e6, "Unaccepted remainder carried while refund is in transit");
+
+        // 1 wei donation is not the refund.
+        MockERC20(USDC).mint(address(harness), 1);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 70e6, "App carry unchanged by dust donation");
+        assertEq(harness.lighterData().lastReqId, 1, "Record must survive dust donation");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // The actual refund clears the record.
+        MockERC20(USDC).mint(address(harness), 60e6 - 1);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 10e6, "Refund landed: collateral read is authoritative");
+        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by full refund");
+    }
+
+    /// @notice A donation larger than the outstanding leg also clears the record. The pool wallet
+    ///  now covers the missing leg, so mint/burn can unlock and NAV is not understated.
+    function testDonationLargerThanLegClearsAndUnlocks() public {
+        MockERC20(USDC).mint(address(harness), 500e6);
+        _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
+        harness.recordAction(-400e6, 1);
+        _mockTxStatus(1, 1, bytes(""));
+
+        // Donation of 500 USDC exceeds the 400 USDC outstanding leg.
+        MockERC20(USDC).mint(address(harness), 500e6);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1000e6, "Carry dropped; collateral read alone is authoritative");
+        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by donation >= leg");
+        harness.assertNavUnlocked();
     }
 
     /// @notice wallet USDC + Lighter app balance, in 6-dec USDC.

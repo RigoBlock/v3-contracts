@@ -940,7 +940,7 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.0");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.1");
     }
 
     function testDirectCallToAdapterReverts() public {

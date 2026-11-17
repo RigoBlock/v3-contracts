@@ -627,10 +627,10 @@ The rules the accounting follows (violations of any of these are bugs, not trade
   trapped pools on idle chains — see R5). Orders record no action and are never blocked.
 - **R3 — snapshot at request, exactly once.** `balanceSnapshot` is captured in
   `recordAction`. It provably predates the async leg: Core schedules the refund/delivery only
-  after processing the request, so `wallet > snapshot` becomes true exactly when the leg lands —
-  whether that is the next block or hours later. No evaluation cadence is assumed; there is no
-  window in which anything can pollute the measurement except a plain ERC-20 transfer (no code
-  path exists to block it; documented residual, at the sender's cost).
+  after processing the request, so the record clears only when `wallet >= snapshot + outstanding`
+  (the outstanding leg amount for a withdrawal, or the unaccepted refund for a deposit). A smaller
+  wallet increase — including any plain ERC-20 dust donation — leaves the record and the lock in
+  place, so mint/burn cannot price off a deflated NAV.
 - **R4 — the lock reverts only on unresolved records, and runs after the valuation.**
   `assertNavUnlocked` reverts whenever a record exists; the NAV valuation executes first and
   clears landed, empty (full acceptance) and rejected legs in the same evaluation, so the revert
@@ -653,10 +653,10 @@ observation; anyone can force one via `updateUnitaryValue`.
    carry stops counting the lost funds. This is the only lock with no automatic resolution, and
    it is unambiguous: the delivery receipt is verifiable off-chain (Lighter docs, `event_info`).
 2. **A plain ERC-20 transfer into the pool while a leg is outstanding** (no pool code runs, so
-   it cannot be blocked or attributed) clears the record early if it increases the wallet; it
-   costs the sender real funds, and between the early clear and the actual landing NAV
-   understates by at most the leg amount. Direct transfers are donations: they raise true NAV
-   by the same amount, so no value extraction is possible from the clear itself.
+   it cannot be blocked or attributed) can only clear the record when the wallet increase is at
+   least the outstanding leg amount. A dust donation leaves the record intact and keeps mint/burn
+   locked, so it cannot be used to mint shares at an understated NAV. This was changed from the
+   4.5.0 "any increase clears" heuristic after proving that heuristic mint-exploitable.
 3. **Pending and in-transit windows block mint/burn/donate/deposits** by design (R2); the lock
    lifts automatically the moment the leg lands. Orders, transfers, and `updateUnitaryValue`
    are never blocked.
@@ -674,20 +674,22 @@ itself. The flow, evaluated on every NAV read (valuation runs first and clears o
 the lock asserts after):
 
 1. **First observation of the settled state pins the wallet baseline** (one balance snapshot).
-2. Until the wallet increases over the baseline, the leg amount is carried in NAV (deposit:
-   `+ (amount − acceptedAmount)`; withdrawal: `+ amount`) and mint/burn stay locked.
-3. When the wallet increases, the record clears in the same evaluation and the lock lifts.
-   Full acceptances (nothing outstanding) and failed withdrawals (nothing moved) clear at the
-   first observation, so the common cases never hold the lock beyond one evaluation.
+2. Until the wallet increases over the baseline by at least the outstanding leg amount, the leg
+   amount is carried in NAV (deposit: `+ (amount − acceptedAmount)`; withdrawal: `+ amount`) and
+   mint/burn stay locked.
+3. When the wallet has grown by at least the outstanding leg amount, the record clears in the
+   same evaluation and the lock lifts. Full acceptances (nothing outstanding) and failed
+   withdrawals (nothing moved) clear at the first observation, so the common cases never hold the
+   lock beyond one evaluation.
 
 EVM-initiated transfers are **fee-free**: the docs state Core charges no USDC fee for
 EVM-initiated `sendToCore`/`sendToEvm`, and the delivery is exactly `baseAmount * tickSize` —
 verified live (withdrawals of 20/10/8 USDC delivered to the wei, Core debited exactly). The
-increase-over-baseline check (rather than an exact `baseline + amount` equality) is deliberate:
-it cannot be self-DoSed by any future fee deduction, and in the locked window any increase is
-the leg itself. Settlement and delivery are **not atomic**: per the docs "a successful Core
-status does not confirm delivery on EVM" — the delivery/refund is a separate exogenous
-transaction scheduled after Core executes, which is exactly the gap the carry + lock covers.
+`wallet >= snapshot + outstanding` check is deliberate: it cannot be self-DoSed by any future fee
+deduction, and a smaller increase (e.g. a dust donation) cannot be mistaken for the leg itself.
+Settlement and delivery are **not atomic**: per the docs "a successful Core status does not
+confirm delivery on EVM" — the delivery/refund is a separate exogenous transaction scheduled
+after Core executes, which is exactly the gap the carry + lock covers.
 `recordAction` resets the pinned baseline to zero so each request is measured against its own
 observation (an overwrite never inherits a previous request's baseline).
 
@@ -763,15 +765,15 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.0` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.0"`;
-  `extensionsMapSalt20`. The devnet 1.2.0 integration was iterated through review-only numbers
-  (4.5.1–4.5.8) that were burned without ever leaving the resettable devnet; per the
-  unreleased-train rule the shipped train keeps the accepted 4.5.0/salt20 pair, so the PR shows
-  no version/salt change against `development`. Final shape: sequential per-status handling
-  (`0`/`1`/`2`/unknown), one transfer at a time, the lock spanning request-to-landing in both
-  directions (pending included — orders and `updateUnitaryValue` never blocked), and
-  `balanceSnapshot` (the pool's USDC balance captured when the request is recorded; it provably
-  predates the async leg, so clearing on any wallet increase is exact whenever observed).
+- `VERSION` is `4.5.1` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.1"`;
+  `extensionsMapSalt21`. This follows the 4.5.0/salt20 devnet 1.2.0 train (deployed 2026-11-16);
+  the in-flight landing threshold fix changes `LighterLib` → `EAppsLighter` and `ALighter`, so
+  both a new ExtensionsMap and a new implementation are required. The intermediate 4.5.1–4.5.8
+  numbers used during the 2026-11-16 review iteration were devnet-only and superseded by the
+  clean 4.5.0 train; this fix therefore takes the next available version/salt pair. Final shape:
+  sequential per-status handling (`0`/`1`/`2`/unknown), one transfer at a time, the lock spanning
+  request-to-landing in both directions (pending included — orders and `updateUnitaryValue` never
+  blocked), and `balanceSnapshot` cleared only when `wallet >= snapshot + outstanding`.
   `getLighterTrackedMarkets` lives in `EAppsLighter` (`IEAppsLighter`). The devnet 1.1.0 reset (2026-10-26)
   wiped every previously deployed train (4.6.0–4.6.4 existed only on the old devnet), so after
   merging `development` (at 4.4.7/salt19) the unreleased train was renumbered to the next
