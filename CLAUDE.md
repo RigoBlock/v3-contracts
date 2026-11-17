@@ -1,272 +1,95 @@
 # Claude AI Assistant Guidelines - Extended Reference
 
-> **Note**: For quick reference, see [AGENTS.md](./AGENTS.md) which contains the essential guidelines. This file provides deeper explanations and context.
+> **Note**: For quick reference, see [AGENTS.md](./AGENTS.md). For deployment mechanics, testing patterns, cross-chain rules, and developer patterns, see the dedicated docs linked from AGENTS.md. This file provides deeper explanations, historical context, and case studies that do not fit in a quick-reference guide.
 
 ## Purpose of This Document
 
-AGENTS.md provides concise, actionable guidelines for AI assistants. This document (CLAUDE.md) provides:
-- Extended explanations of architectural decisions
-- Detailed examples and patterns
-- Historical context for design choices
-- In-depth case studies
+- **[AGENTS.md](./AGENTS.md)**: Concise, actionable rules and checklists for AI code generation.
+- **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**: What to redeploy when, salt / `VERSION` bumps, deterministic addresses, nonce and gas management.
+- **[docs/TESTING.md](./docs/TESTING.md)**: Test runners, fork-block hygiene, Arbitrum semantics, useful commands.
+- **[docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)**: Storage pattern, common operations, approval patterns, adding adapters/extensions/storage, pitfalls.
+- **[docs/CROSSCHAIN.md](./docs/CROSSCHAIN.md)**: Cross-chain address rules and Virtual Supply model.
+- **CLAUDE.md (this file)**: "Why" behind the rules, detailed case studies, and historical design decisions.
 
-**When to reference each:**
-- **AGENTS.md**: Quick facts, critical rules, common operations
-- **CLAUDE.md**: Understanding "why", detailed patterns, case studies
+## Architecture at a Glance
 
----
+For the full upgrade/redeploy rules, ExtensionsMap salt, `VERSION` bump policy, and deterministic-deployment requirements, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). The short version:
 
-## Architecture Deep Dive
+```
+User → Pool Proxy (delegatecall)→ Implementation
+                                   ↓ fallback
+                                   Extensions (via ExtensionsMap)
+                                   ↓ fallback
+                                   Adapters (via Authority)
+```
 
-### Why Proxy + Extensions + Adapters?
+- **Pool Proxy**: Fixed user-facing address.
+- **Implementation**: Mixin contracts + libraries compiled into one upgradeable contract.
+- **Extensions**: Chain-specific, immutable, routed via ExtensionsMap.
+- **Adapters**: Protocol integrations, upgradeable via Authority governance.
 
-**Problem**: Smart contracts cannot be upgraded without changing address
+## Storage Pattern Notes
 
-**Solution**: Proxy pattern with fallback mechanism
-- **Pool Proxy**: Fixed address, user-facing entry point
-- **Implementation**: Upgradeable logic (via factory). Includes all Mixin contracts and libraries (NavImpactLib, VirtualStorageLib, etc.) compiled into its bytecode. The ExtensionsMap address is stored as `immutable` in the implementation.
-- **Extensions**: Chain-specific, immutable per deployment (e.g., price oracles with specific feeds). Routed via ExtensionsMap (selector → extension address).
-- **Adapters**: Protocol integrations, upgradeable via governance
+For the copy-paste pattern and the `-1` slot convention, see [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md). One design note worth keeping here:
 
-**Upgrade implications — what to redeploy:**
-- **Library change (used only by implementation)** (e.g., NavImpactLib ratio): Redeploy implementation only. Reuse the existing ExtensionsMap — pass the same address to `new SmartPool(authority, existingExtensionsMap, tokenJar)`. No extensions need redeployment.
-- **Library change (used by an extension)**: The extension must be redeployed (library is compiled into extension bytecode) → new ExtensionsMap → new implementation.
-- **Extension change**: New extension + new ExtensionsMap + new implementation.
-- **Adapter change**: New adapter + Authority governance update. No implementation changes.
-
-**ExtensionsMap salt:** Only bump the salt when the ExtensionsMap contract code itself changes or when an extension address changes. If only the implementation changes and extensions are unchanged, reuse the existing ExtensionsMap.
-
-**Version bump:** Every implementation change MUST bump `VERSION` in `MixinConstants.sol`.
-
-**Why separate Extensions and Adapters?**
-1. **Extensions** need chain-specific constructor params (oracle feeds, SpokePool addresses)
-   - Cannot be deployed with same address across chains
-   - Mapped in ExtensionsMap (deployed with chain params)
-   - Example: ECrosschain needs chain-specific acrossSpokePool address
-
-2. **Adapters** are protocol integrations that may need updates
-   - Uniswap V3/V4 router addresses
-   - Governance strategies
-   - Staking mechanisms
-   - Mapped in Authority (governance can update)
-
-### ERC-7201 Storage Pattern
-
-**Why namespaced storage?**
-- Proxy pattern means multiple contracts share storage space
-- Traditional storage slots can collide
-- ERC-7201 uses `keccak256("unique.namespace")` for isolation
-
-**Critical implementation detail:**
 ```solidity
-// Slot calculation
 bytes32 slot = keccak256("pool.proxy.virtual.supply") - 1;
-
-// Why -1? 
-// Prevents collision with compiler-assigned slots at keccak256(value)
-// Compiler uses keccak256 for mappings/arrays, so we offset by -1
 ```
 
-**Testing gotcha - ERC-7201 with explicit structs:**
-When you define storage as:
-```solidity
-library VirtualStorageLib {
-    struct VirtualSupply {
-        int256 supply;
-    }
-    
-    function _storage() private pure returns (VirtualSupply storage $) {
-        bytes32 slot = VIRTUAL_SUPPLY_SLOT;
-        assembly { $.slot := slot }
-    }
-}
-```
+The `-1` offset avoids collisions with compiler-assigned mapping/array slots, which are placed at `keccak256(value)`. This is why the convention is `keccak256(namespace) - 1`.
 
-Each contract calling this library accesses **its own** storage at that slot. Tests calling library functions access the **test contract's storage**, not the pool's storage. This is why we cannot directly manipulate pool storage from tests - we must use actual pool operations.
+**Testing gotcha:** when a library uses an explicit ERC-7201 struct, calling the library from a test contract manipulates the **test contract's** storage at that slot, not the pool's. Always drive pool state through real pool operations in tests.
 
-### Virtual Supply System Explained
+## Cross-Chain / Virtual Supply
 
-**The Problem:**
-```
-Pool on Arbitrum has 100 USDC, totalSupply = 100 shares (NAV = $1.00)
-Transfer 50 USDC to Optimism
-
-Without virtual supply:
-- Arbitrum: 50 USDC left, 100 shares → NAV = $0.50 ❌
-- Optimism: 50 USDC received, 50 shares → NAV = $1.00
-- NAVs diverge! ❌
-```
-
-**The Solution - Virtual Supply (VS-Only Model):**
-```
-Transfer 50 USDC from Arbitrum to Optimism (Transfer mode)
-
-Arbitrum (source):
-- Physical: 50 USDC
-- Total Supply: 100 shares
-- Virtual Supply: -50 shares (outputValue / NAV)
-- Effective Supply: 100 + (-50) = 50 shares
-- NAV: 50 USDC / 50 shares = $1.00 ✓
-
-Optimism (destination):
-- Physical: 50 USDC (received)
-- Total Supply: 50 shares  
-- Virtual Supply: +50 shares (receivedValue / NAV)
-- Effective Supply: 50 + 50 = 100 shares
-- NAV: 50 USDC / 100 shares = $0.50... wait!
-```
-
-**Wait, destination NAV is wrong?**
-No! Destination already had assets before. Full picture:
-```
-Optimism BEFORE transfer:
-- Physical: 50 USDC
-- Total Supply: 50 shares
-- NAV: 50 / 50 = $1.00
-
-Optimism AFTER transfer (receives 49 USDC after fees):
-- Physical: 99 USDC
-- Virtual Supply: +49 shares (49 USDC / $1.00 NAV)
-- Effective Supply: 50 + 49 = 99 shares
-- NAV: 99 USDC / 99 shares = $1.00 ✓
-```
-
-**Key insight:** VS adjusts effective supply to maintain NAV. Performance is shared proportionally across chains through the effective supply mechanism.
-
----
+For the Virtual Supply model and cross-chain NAV rules, see [docs/CROSSCHAIN.md](./docs/CROSSCHAIN.md).
 
 ## Common Patterns Explained
 
 ### Safe Token Operations
 
-**Why SafeTransferLib?**
-
-Standard ERC20 has inconsistencies:
-```solidity
-// USDT approve() reverts if allowance > 0
-token.approve(spender, 100);  // OK
-token.approve(spender, 200);  // REVERTS! ❌
-
-// Some tokens don't return bool
-token.transfer(to, amount);  // No return value
-
-// Some tokens return false instead of reverting
-bool success = token.transfer(to, amount);
-if (!success) { /* need to check! */ }
-```
-
-SafeTransferLib handles all cases:
-```solidity
-token.safeApprove(spender, amount);  // Resets to 0 first if needed
-token.safeTransfer(to, amount);      // Reverts on failure regardless of return
-```
+Standard ERC20 is inconsistent: USDT requires an approve reset, some tokens return no bool, and some return `false` instead of reverting. `SafeTransferLib` abstracts all of this. Use it for every token operation.
 
 ### NAV Updates and Timing
 
-**When to call updateUnitaryValue()?**
-
-NAV is calculated as:
-```
-NAV = (total asset value) / totalSupply
-```
-
-It changes when:
-1. Token prices change
-2. Tokens added/removed from pool
-3. Fees accrued
-
-**Automatic updates:**
-- `deposit()` / `withdraw()` - Always updates NAV
-- State-changing operations update if needed
-
-**Manual updates needed:**
-- Before reading NAV for validation (if may have changed)
-- Before cross-chain transfers (want current NAV)
-- When reading for external queries (may be stale)
-
 ```solidity
-// ❌ Wrong - may read stale NAV
+// ❌ May read stale NAV
 uint256 nav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
 
-// ✓ Correct - ensure current NAV
+// ✓ Forces a fresh NAV computation first
 ISmartPoolActions(address(this)).updateUnitaryValue();
 uint256 nav = ISmartPoolState(address(this)).getPoolTokens().unitaryValue;
 ```
+
+NAV-sensitive operations (mint, burn, cross-chain transfers) should update NAV before acting on it. For the exact commands and fork-testing rules, see [docs/TESTING.md](./docs/TESTING.md).
 
 ---
 
 ## Case Study: Across Bridge Integration
 
-### Design Decision - Two Operation Modes
+### Design Decision — Two Operation Modes
 
-**Why have Transfer AND Sync modes?**
+The Across integration supports **Transfer** mode (NAV-neutral via Virtual Supply) and **Sync** mode (NAV changes naturally, used for donations/rebalancing).
 
-Initial design: Only Transfer mode (always NAV-neutral)
+Transfer mode is the default because it gives predictable NAV behavior. Sync mode is available for rebalancing but validates against a tolerance to prevent large NAV manipulation.
+
+### Security Decision — Handler Verification
+
+The destination flow is:
+
 ```
-Problem: Solver fills with extra tokens (surplus)
-- Destination NAV increases naturally
-- But we wrote positive VS (shares arriving)
-- Result: Effective supply increases → NAV diluted
-
-Actually, this is correct! VS model shares performance.
-```
-
-Solution: Two modes
-1. **Transfer**: Default, NAV-neutral via VS adjustments
-2. **Sync**: For donations/rebalancing, no VS adjustments, NAV changes naturally
-
-**Why not always use Sync?**
-- Most users want predictable NAV behavior
-- Transfer mode makes cross-chain transfers "just work"
-- Sync mode requires understanding NAV implications
-- Sync mode validated against tolerance (prevents large NAV manipulation)
-
-### Security Decision - Handler Verification
-
-**Why must handler verify msg.sender?**
-
-The destination flow uses the Across MulticallHandler (external contract, not ours):
-```
-SpokePool → MulticallHandler.handleV3AcrossMessage() → (executes encoded multicall) → pool.donate() (ECrosschain via delegatecall)
+SpokePool → MulticallHandler.handleV3AcrossMessage()
+            → executes encoded multicall
+            → pool.donate() (ECrosschain extension via delegatecall)
 ```
 
-`handleV3AcrossMessage` is NOT a method on the pool or ECrosschain. The pool's actual entry point is `ECrosschain.donate()`, called via the MulticallHandler's encoded multicall instructions.
+`handleV3AcrossMessage` is not a pool method. The real entry point is `ECrosschain.donate()`, which runs in pool context with `msg.sender == MulticallHandler`. The donation lock and NAV integrity checks prevent manipulation. The MulticallHandler is a trusted Across contract, and the encoded instructions are created by `AIntents._buildMulticallInstructions()` at deposit time.
 
-`ECrosschain.donate()` runs via delegatecall in the pool's context:
-- Code runs as if it's part of pool
-- `msg.sender` is the MulticallHandler (which received the call from SpokePool)
-- Donation lock + NAV integrity checks prevent manipulation
+### Testing Challenge — Storage Isolation
 
-**Security requirement:**
-The MulticallHandler is a trusted Across contract. The encoded multicall instructions are created by `AIntents._buildMulticallInstructions()` at deposit time and cannot be tampered with.
+A test that calls `VirtualStorageLib.updateVirtualSupply(delta)` directly updates the **test contract's** storage, not the pool's, because the library's ERC-7201 struct resolves to the calling contract's slot. Create virtual supply through real operations, e.g.:
 
-### Testing Challenge - Storage Isolation
-
-**Problem encountered:**
-Test tried to directly set virtual supply:
 ```solidity
-// In test
-VirtualStorageLib.updateVirtualSupply(delta);
-// Doesn't work! Updates test contract's storage, not pool's storage
-```
-
-**Why?**
-Library uses ERC-7201 storage with explicit struct:
-```solidity
-function _storage() private pure returns (VirtualSupply storage $) {
-    bytes32 slot = VIRTUAL_SUPPLY_SLOT;
-    assembly { $.slot := slot }  // $ = storage at this slot IN CALLING CONTRACT
-}
-```
-
-When test calls library, `$` points to test contract storage at that slot, not pool storage.
-
-**Solution:**
-Create virtual supply through actual pool operations:
-```solidity
-// Use actual protocol operation (Across fill via MulticallHandler) to create virtual supply
-// SpokePool calls MulticallHandler.handleV3AcrossMessage(), which executes encoded
-// multicall instructions including pool.donate() (ECrosschain extension via delegatecall)
 vm.prank(address(spokePool));
 IMulticallHandler(multicallHandler).handleV3AcrossMessage(
     outputToken,
@@ -274,65 +97,9 @@ IMulticallHandler(multicallHandler).handleV3AcrossMessage(
     relayer,
     abi.encode(instructions)
 );
-// Now pool has virtual supply via legitimate operation (donate → _updateVirtualSupply)
 ```
 
----
-
-## Testing Patterns
-
-### Fork Testing Best Practices
-
-**When to use forks:**
-- Testing with actual deployed contracts
-- Integration testing with real protocols (Uniswap, Across, etc.)
-- Cross-chain scenarios
-
-**Pattern:**
-```solidity
-uint256 ethFork = vm.createFork("ethereum", Constants.MAINNET_BLOCK);
-uint256 baseFork = vm.createFork("base", Constants.BASE_BLOCK);
-
-// Test cross-chain flow
-vm.selectFork(ethFork);
-// ... initiate transfer on Arbitrum
-bytes memory message = captureMessage();
-
-vm.selectFork(baseFork);
-// ... simulate Across fill on destination via MulticallHandler
-vm.prank(address(spokePool));
-IMulticallHandler(multicallHandler).handleV3AcrossMessage(outputToken, amount, relayer, abi.encode(instructions));
-```
-
-**Critical: Use deployed addresses from Constants.sol**
-- Reduces RPC calls (contracts already deployed)
-- Ensures realistic testing environment
-- Avoids address mismatches
-
-### Unit Testing Libraries
-
-**When libraries show as "uncovered" in codecov:**
-
-Integration tests may use library methods, but codecov needs explicit unit tests:
-
-```solidity
-// Library
-library TransientStorage {
-    function setDonationLock(bool locked) internal { ... }
-}
-
-// Integration test (uses library indirectly)
-pool.donate(...);  // Internally calls TransientStorage.setDonationLock()
-
-// Codecov: "TransientStorage.setDonationLock() not covered" ❌
-
-// Solution: Add explicit unit test
-function test_SetDonationLock() public {
-    TransientStorage.setDonationLock(true);
-    assertTrue(TransientStorage.getDonationLock());
-}
-// Now codecov sees direct coverage ✓
-```
+For fork-test patterns and commands, see [docs/TESTING.md](./docs/TESTING.md).
 
 ---
 
@@ -340,96 +107,36 @@ function test_SetDonationLock() public {
 
 ### Why Separate AGENTS.md and CLAUDE.md?
 
-**AGENTS.md**: Quick reference optimized for AI code generation
-- Critical rules (storage, security)
-- Common operations (copy-paste patterns)
-- Checklists for validation
-- ~400 lines, highly scannable
+- **AGENTS.md**: Quick reference optimized for AI code generation — critical rules, common operations, checklists.
+- **CLAUDE.md**: Deeper understanding for complex decisions, case studies, and historical context.
 
-**CLAUDE.md**: Deeper understanding for complex decisions
-- Why rules exist (context)
-- Detailed explanations
-- Case studies of real problems solved
-- ~500 lines, reference material
+### Consolidation
 
-**Analogy:**
-- AGENTS.md = API reference
-- CLAUDE.md = Architecture guide
+Avoid creating many small files for a single topic. Prefer:
 
-### Documentation Consolidation
+- `README.md`: overview and quick reference
+- `IMPLEMENTATION_GUIDE.md`: detailed patterns
+- `COMPREHENSIVE_ANALYSIS.md`: deep technical dive
 
-**Anti-pattern seen:**
-- 15+ .md files for single integration
-- Redundant information across files
-- Outdated analysis files kept around
-- Hard to find current information
-
-**Better approach:**
-- README.md: Overview and quick reference
-- IMPLEMENTATION_GUIDE.md: Detailed patterns
-- COMPREHENSIVE_ANALYSIS.md: Deep technical dive
-- Delete outdated files
-
-**Rule of thumb:**
-- 3-5 files per integration maximum
-- Update existing files, don't create new ones for each iteration
-- Move to `/docs/<protocol>/` when complete
-- Clean up working documents
+Update existing files rather than creating new ones for each iteration.
 
 ---
 
 ## Solidity Code Style
 
-### Named mapping variables
-
-All new mappings must use named key and value parameters (introduced in Solidity 0.8.18):
-
-```solidity
-// ✓ Correct
-mapping(address owner => UserAccount) userAccounts;
-mapping(bytes4 selector => mapping(address delegated => uint256 position)) selectorToAddressPosition;
-
-// ✗ Wrong — legacy style, not permitted in new code
-mapping(address => UserAccount) userAccounts;
-mapping(bytes4 => mapping(address => uint256)) selectorToAddressPosition;
-```
-
-Rules:
-- Name both key **and** value; for arrays the value name describes the element type (`address[] addresses`, `bytes4[] selectors`).
-- For nested mappings, name all levels.
-- Applies to: struct fields, state variables, and library-internal structs in any file touched by the current PR.
-- Do **not** retrofit legacy contracts that are not being modified — accuracy of git blame matters more than style uniformity.
+For the named-mapping-variable rule and other style notes, see [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md).
 
 ---
 
 ## Code Comment Philosophy
 
-### What belongs in code comments
+Source files should contain only what is strictly necessary to understand core functionality:
 
-Source files (`.sol`) should contain **only what is strictly necessary to understand core functionality**:
-
-- NatSpec for all `public`/`external` functions (required for ABI tooling)
-- `@inheritdoc` for interface implementations (avoids duplication)
+- NatSpec for all `public`/`external` functions
+- `@inheritdoc` for interface implementations
 - Brief inline `// why` comments for non-obvious decisions
 
-**Not in code:**
-- Design rationale or architectural tradeoffs
-- Audit finding responses or dispositions
-- Known limitations that require extended explanation
-- Future-feature justifications
-- References to external protocol details beyond what is needed to read the function
-
-### What belongs in `/docs/`
-
-Everything that helps when understanding *why* a decision was made, not *what* the code does:
-
-- Design decision rationale and rejected alternatives
-- Audit finding responses (see `docs/staking/CANTINA_FINDINGS_STATUS.md`)
-- Known limitations with mitigation patterns
-- Cross-protocol interaction designs
-- NAV accounting analysis
-
-A single-line comment pointing to the doc is acceptable: `// see docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-14`
+Design rationale, audit responses, and known limitations belong in `/docs/`. A one-line comment may reference the relevant doc section, e.g. `// see docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`.
 
 ---
 
@@ -439,36 +146,27 @@ A single-line comment pointing to the doc is acceptable: `// see docs/staking/CA
 
 When an audit fix causes a previously-passing test to fail, the failure is **always a signal to investigate, never noise to suppress**.
 
-**Required steps before accepting any audit fix:**
-1. Run the full test suite with the fix applied
-2. For each failing test: understand what it was asserting and why the fix breaks it
-3. Determine which is wrong — the test or the fix
-4. Only after that analysis: either correct the fix, or (if the test is genuinely stale) remove it with documented justification
+Required steps:
 
-**NEVER**: silently remove a failing test, or rewrite it to match the new (potentially broken) behavior, without completing the above analysis.
+1. Run the full test suite with the fix applied.
+2. For each failing test, understand what it was asserting and why the fix breaks it.
+3. Determine which is wrong — the test or the fix.
+4. Only then either correct the fix or, if the test is genuinely stale, remove it with documented justification.
 
-### Canonical example: RIGO-14 / RIGO-7
+**Never** silently remove or rewrite a failing test without this analysis.
 
-**Audit finding (RIGO-14)**: POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
+### Canonical Example: RIGO-14 / RIGO-7
 
-**What happened when applied:**
-- `test_Donate_WithMsgValue_Reverts` started failing
-- Initial reaction: rewrite the test to match
-- First investigation concluded "fix was wrong" (claimed it would block ETH forwarding)
-- Deeper investigation (RIGO-7 analysis) reversed that conclusion
+**Audit finding (RIGO-14):** POSM ETH residue publicly sweepable — proposed fix: remove `payable` from `MixinFallback.fallback()`.
 
-**Why the initial "fix was wrong" conclusion was itself wrong:**
-1. `fallback() payable` provides no capability: `receive()` handles plain ETH independently; any ETH-carrying call-with-data reverts inside the `delegatecall` to `ExtensionsMap.getExtensionBySelector` (non-payable) before the adapter is reached, regardless of whether `fallback()` is payable.
-2. The claim "adapters need ETH via msg.value" contradicts the protocol rule that adapters forward ETH from the vault balance, never from `msg.value` (AGENTS.md pitfall 15).
+When the fix was applied, `test_Donate_WithMsgValue_Reverts` started failing. The initial conclusion was "the fix is wrong" because it was thought adapters need ETH via `msg.value`. Deeper analysis (RIGO-7) reversed that conclusion:
 
-**The test was also wrong:**
-`test_Donate_WithMsgValue_Reverts` used `vm.mockCall` which bypasses the real CALLVALUE check in `ExtensionsMap`. It tested mock behavior, not production behavior.
+1. `fallback() payable` provides no real capability: `receive()` handles plain ETH independently, and any ETH-carrying call-with-data reverts inside the delegatecall to `ExtensionsMap.getExtensionBySelector` regardless of `fallback()`'s payability.
+2. The claim that adapters need `msg.value` contradicts the protocol rule that adapters forward ETH from the vault balance, not from `msg.value` (see [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)).
 
-**Correct final outcome:** `payable` removed from `fallback()`. Fake test deleted. RIGO-14 (POSM residue) remains unfixed — the real fix is appending `Actions.SWEEP` to adapter command sequences, which addresses both ETH and ERC20 residues.
+The failing test was also wrong: it used `vm.mockCall`, which bypassed the real `CALLVALUE` check in `ExtensionsMap`, so it tested mock behavior rather than production behavior.
 
-**Lesson**: The test failure was a genuine signal. The correct response was full system-level analysis, not just code inspection in isolation. The investigation took multiple rounds because intermediate conclusions were wrong.
-
-Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`
+**Final outcome:** `payable` was removed from `fallback()`, the fake test was deleted, and the real POSM residue fix was identified as appending `Actions.SWEEP` to adapter command sequences. Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`.
 
 ---
 
@@ -477,4 +175,8 @@ Full disposition: `docs/staking/CANTINA_FINDINGS_STATUS.md#RIGO-7`
 - [Rigoblock Documentation](https://docs.rigoblock.com)
 - [Deployed Contracts](https://docs.rigoblock.com/readme-2/deployed-contracts-v4)
 - [GitHub Repository](https://github.com/RigoBlock/v3-contracts)
-- [Across Integration](./docs/across/)
+- [AGENTS.md](./AGENTS.md)
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+- [docs/TESTING.md](./docs/TESTING.md)
+- [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
+- [docs/CROSSCHAIN.md](./docs/CROSSCHAIN.md)
