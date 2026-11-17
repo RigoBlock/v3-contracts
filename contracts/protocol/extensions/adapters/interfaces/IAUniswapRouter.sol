@@ -25,6 +25,10 @@ interface IAUniswapRouter {
     /// @notice Thrown when the calldata contains both mint and increase for the same tokenId.
     error PositionDoesNotExist();
 
+    /// @notice Thrown when a newly minted position is not owned by the pool.
+    /// @param tokenId The ERC-721 token ID of the V4 position minted to a different owner.
+    error PositionNotPoolOwned(uint256 tokenId);
+
     /// @notice Thrown when a universal router command is not supported.
     /// @param commandType The unsupported command byte.
     error InvalidCommandType(uint256 commandType);

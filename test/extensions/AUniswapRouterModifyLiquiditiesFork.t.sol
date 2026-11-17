@@ -28,6 +28,7 @@ import {EnumerableSet} from "../../contracts/protocol/libraries/EnumerableSet.so
 import {StorageLib} from "../../contracts/protocol/libraries/StorageLib.sol";
 
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
@@ -557,6 +558,36 @@ contract AUniswapRouterModifyLiquiditiesForkTest is Test {
         vm.prank(poolOwner);
         vm.expectRevert(IAUniswapRouter.PositionDoesNotExist.selector);
         IAUniswapRouter(ethPool).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1 hours);
+    }
+
+    /// @notice A mint with ADDRESS_THIS as owner would send the NFT to Posm itself: the pool
+    ///         could never manage it (onlyIfApproved) while NAV would count its value. The
+    ///         post-call ownerOf assertion reverts the whole call, so the mint is rolled back.
+    function test_ModifyLiquidities_Mint_OwnerAddressThis_Reverts() public {
+        address ethPool = _createEthPool();
+        PoolKey memory poolKey = _ethWethPoolKey();
+        _ensureEthWethPool();
+
+        deal(ethPool, 1 ether);
+        deal(WETH, ethPool, 1 ether);
+
+        uint256 expectedTokenId = IPositionManager(POSM).nextTokenId();
+
+        bytes memory unlockData = _encodeMintAndSettlePair(
+            poolKey,
+            TICK_LOWER,
+            TICK_UPPER,
+            1e13,
+            uint128(0.01 ether),
+            ActionConstants.ADDRESS_THIS
+        );
+
+        vm.prank(poolOwner);
+        vm.expectRevert(abi.encodeWithSelector(IAUniswapRouter.PositionNotPoolOwned.selector, expectedTokenId));
+        IAUniswapRouter(ethPool).modifyLiquidities(unlockData, block.timestamp + 1 hours);
+
+        assertEq(IPositionManager(POSM).nextTokenId(), expectedTokenId, "mint must be rolled back");
+        assertEq(IEApps(ethPool).getUniV4TokenIds().length, 0, "no position must be tracked");
     }
 
     /// @notice Ports "should increase liquidity".
