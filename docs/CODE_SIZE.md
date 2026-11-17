@@ -82,7 +82,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-17 (v4.5.1 in-flight lan
 | Contract        | Size (bytes) | Headroom | % of limit |
 | --------------- | -----------: | -------: | ---------: |
 | AGmxV2          |        17768 |     6808 |     72.30% |
-| AUniswapRouter  |        12843 |    11733 |     52.26% |
+| AUniswapRouter  |        13052 |    11524 |     53.11% |
 | AIntents        |        11466 |    13110 |     46.66% |
 | ALighter        |         6500 |    18076 |     26.45% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |

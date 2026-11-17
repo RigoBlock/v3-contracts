@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity 0.8.37;
 
+import {IERC721} from "@openzeppelin-legacy/contracts/token/ERC721/IERC721.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {ActionConstants} from "@uniswap/v4-periphery/src/libraries/ActionConstants.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
@@ -209,6 +210,10 @@ contract AUniswapRouter is IAUniswapRouter, IMinimumVersion, AUniswapDecoder, Re
                     PositionInfo.unwrap(_uniV4Posm.positionInfo(i)) !=
                     PositionInfo.unwrap(PositionInfoLibrary.EMPTY_POSITION_INFO)
                 ) {
+                    // a mint with ADDRESS_THIS as owner sends the NFT to Posm itself, and the pool
+                    // could never manage it (onlyIfApproved) while NAV would count its value
+                    require(IERC721(address(_uniV4Posm)).ownerOf(i) == address(this), PositionNotPoolOwned(i));
+
                     // increase counter. Position 0 is reserved flag for removed position
                     if (storedLength++ == 0) {
                         // activate uniV4 liquidity application

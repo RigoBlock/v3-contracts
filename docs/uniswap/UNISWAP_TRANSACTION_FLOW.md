@@ -449,7 +449,7 @@ V4 positions with hooks that have `AFTER_ADD_LIQUIDITY_RETURNS_DELTA` or `AFTER_
 The decoder runs before the call is forwarded, so a newly minted position's tokenId is not yet known. Mint and increase operations on the same position must be separate transactions.
 
 ### 8. `MINT_POSITION` Owner Must Be Pool Address
-The `owner` parameter in `MINT_POSITION` is validated as a recipient. It must be `poolAddress` (i.e., `address(this)` in delegatecall context).
+The `owner` parameter in `MINT_POSITION` is validated as a recipient. It must be `poolAddress` (i.e., `address(this)` in delegatecall context). This is enforced in both directions: the recipient allowlist rejects arbitrary owners at decode time, and after the Posm call the adapter asserts `ownerOf(tokenId) == poolAddress` before tracking the id, reverting the whole call with `PositionNotPoolOwned` otherwise. A mint with `ADDRESS_THIS` as owner would send the NFT to Posm itself — the pool could never manage it (`onlyIfApproved`), while NAV would count its value against the pool.
 
 ### 9. V3 Path Encoding
 V3 paths are packed bytes: `[tokenA (20 bytes) | fee (3 bytes) | tokenB (20 bytes) | fee (3 bytes) | tokenC (20 bytes)]`. For exact-out, the path is **reversed** — first token in path bytes is the output token.
