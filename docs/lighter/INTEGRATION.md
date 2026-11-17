@@ -217,20 +217,62 @@ Core-write methods, and `ExtensionsMap` lost the `getLighterBalances` selector):
   (a gas heuristic only — any Core perp market is tradeable without a Rigoblock release).
 - **At-cap behavior:** `trackMarket` is O(1) (a `marketIndex` mapping lookup — never an array
   scan). When `createOrder` tries to track a new market while the list is full it reverts
-  `MaxTrackedMarketsReached`; no sweep happens there. Stale entries are pruned by the NAV loop
-  instead (below), so the owner only needs any NAV-evaluating transaction (`updateUnitaryValue`,
-  mint/burn, `purgeInactiveTokensAndApps` — or even an `eth_call` read, whose prunes simply do
-  not persist) to clear dead entries before trading a 33rd market.
-- **Purge inside NAV (not a separate sweep):** `IEApps.getAppTokenBalances` is **not view**, so
-  the NAV loop itself prunes: iterating the tracked markets backwards over the live storage
+  `MaxTrackedMarketsReached`; no sweep happens there. Stale entries are pruned by an
+  operator-gated evaluation only (see "Pruning tracked markets" below) — a NAV-evaluating
+  transaction alone does **not** clear them — so before trading a 33rd market the operator runs
+  one direct `getAppTokenBalances` call.
+- **Purge inside the evaluation (not a separate sweep):** `IEApps.getAppTokenBalances` is **not
+  view**, and the evaluation loop untracks dead markets when — and only when — it runs with
+  operator permission: iterating the tracked markets backwards over the live storage
   array, any market with **no open position and no open orders** (`size == 0 &&
 totalOrderCount == 0 && totalPositionTiedOrderCount == 0` in the 0x0007 tuple) is untracked
   on the spot (swap-pop), and a market holding any state survives. One pass does valuation and
-  cleanup; there is no `_sweepUntrackableMarkets` pass to pay for separately. Off-chain `eth_call`
-  reads re-execute the (reverted) prunes each call — harmless and gas-free to the caller. (GMX
+  cleanup; there is no `_sweepUntrackableMarkets` pass to pay for separately. (GMX
   comparison: GMX needs no tracked-market list because positions are enumerable from GMX's own
   DataStore; its `purgeInactiveTokensAndApps` is an owner action that drops apps with empty
   balances — see "App purge" below for how the Lighter branch makes that reachable.)
+
+### Pruning tracked markets (operator-gated, one call)
+
+The evaluation loop untracks dead markets only when it runs with operator permission
+(`canPrune`). Permission is **not** granted by NAV-evaluating transactions: `updateUnitaryValue`,
+mint/burn and `purgeInactiveTokensAndApps` all evaluate apps through an external **self-call**
+(`IEApps(address(this)).getAppTokenBalances(...)` from the implementation), so inside the
+extension `msg.sender` is the pool itself — never the operator. The tracked set therefore only
+shrinks when the operator calls the extension **directly**:
+
+```solidity
+// from the owner address (EOA or owner contract), as a state-changing transaction:
+pool.getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)); // packedApps = 16
+```
+
+- The selector is routed via `ExtensionsMap` and the extension is delegatecalled with the
+  original caller preserved, so `msg.sender == pool().owner` holds inside the branch and every
+  market that is empty on Core (`size == 0 && totalOrderCount == 0 &&
+  totalPositionTiedOrderCount == 0`) is untracked in that transaction. Calls from any other
+  address compute the same balances and leave the tracked set untouched.
+- The same call can be batched through the pool's `multicall` adapter — its self-delegatecall
+  preserves `msg.sender`, so pruning works inside a multicall too.
+- An `eth_call` from the owner address **previews** the prune (which markets would be
+  untracked) without persisting anything — useful before spending gas.
+- The call reverts with `NavLocked` while a deposit/withdrawal request is pending
+  (`lastReqId != 0`): wait for the transfer leg to settle, then prune.
+
+**Why operator-gated (no attack vector):** a permissionless prune could drop a market against a
+stale parent-Core snapshot in the same block as `createOrder`, hiding a freshly opened position
+from NAV (audit regression, tested in `EAppsLighterUnit.t.sol`). The gate is also what protects
+the app bit: dead tracked markets make the branch report dust (`balances.length != 0`), so
+`purgeInactiveTokensAndApps` can never drop `LIGHTER_PERPS` while any market is tracked — NAV
+cannot be understated through app-dropping, and a fully-exited pool re-activates the bit on the
+next `sendToCore` deposit.
+
+**Known limitation / planned improvement (low priority):** `purgeInactiveTokensAndApps` does
+not untrack Lighter markets today (same self-call, `canPrune = false`). Planned: set a transient
+operator-prune flag in `purgeInactiveTokensAndApps` (mirroring `NavLockExempt`) so the existing
+owner action also untracks dead markets, and drop the `msg.sender` check from the extension
+entirely (house rule: extensions must not take permission decisions from `msg.sender`, which is
+the pool itself on any self-call path). No security issue in the meantime — the worst case is
+the 33rd market reverting `MaxTrackedMarketsReached` until the operator runs the one call above.
 
 This design makes **untracked-position NAV risk structurally impossible for all EVM-initiated
 flows**: the only way to trade a market through the pool is `createOrder`, which tracks it, and
@@ -354,8 +396,8 @@ only for spot markets, which the adapter rejects). This differs from the GMX epi
 markets lacked Chainlink streams and feed addresses had to be hardcoded: Lighter's mark price is
 not a per-market external dependency but Core-internal state that exists by construction with
 the market. The residual risk is a market being delisted (read starts failing), which degrades
-that position to zero-PnL rather than reverting NAV; the NAV loop then drops the stale entry on
-its next pass.
+that position to zero-PnL rather than reverting NAV; an operator evaluation then drops the
+stale entry (see "Pruning tracked markets").
 
 **Worked example (live devnet reads, 2026-10-23, pool `0x7Bcea…6CB8`).** Short 0.008 ETH-PERP
 (`position = -80` on sizeDecimals 4), entry notional `entryQuote = 320_000_000` ($320.00, i.e.
@@ -444,11 +486,13 @@ questions follow for Lighter:
   active-application bitmap, so once the bit is dropped the tracked list is inert — it is read
   again only if a later deposit re-activates the bit (the same outlives-the-bit behavior as
   GMX's tracked-token storage). Purge requires only that the branch can report empty: no Core
-  collateral, no open position/orders, no in-flight amount. Stale tracked entries are cleaned by
-  the NAV loop itself on its next pass, so no owner-facing untrack method is needed.
+  collateral, no open position/orders, no in-flight amount. Stale tracked entries are **not**
+  cleaned by the NAV loop (its self-call runs with `canPrune = false` — which is also what keeps
+  this branch non-empty while dead markets are tracked, see "App purge" below); they leave the
+  list via an operator-gated direct call — see "Pruning tracked markets" above.
 - **Can the owner accidentally purge while a position or orders are open? No.** Any surviving
-  tracked market (one with a position or open orders — precisely the entries the NAV loop does
-  not prune) makes the branch report dust = 1 (non-empty) even when the mark-to-market total is
+  tracked market (one with a position or open orders — precisely the entries no evaluation ever
+  untracks) makes the branch report dust = 1 (non-empty) even when the mark-to-market total is
   exactly zero, so the purge condition `balances.length == 0` cannot be met with live state. The
   owner must close positions and orders and drain collateral first — the same trust model as
   GMX, where `purgeInactiveTokensAndApps` likewise relies on the app honestly reporting empty.
@@ -796,7 +840,8 @@ No extension/adapter storage (Rigoblock hard rule).
   scripts): before pools can use the adapter on 19529, governance must register the five
   adapter selectors — `sendToCore`, `sendToEvm`, `createOrder`, `cancelOrder`,
   `cancelAllOrders`. (The former `trackMarket`/`untrackMarket` selectors were removed when
-  tracking became automatic and untracking moved into the NAV loop (purge-in-place); the former
+  tracking became automatic and untracking moved into the evaluation loop (purge-in-place,
+  operator-gated — see "Pruning tracked markets"); the former
   `getLighterBalances` view needed no Authority mapping anyway and is gone from
   `ExtensionsMap` too — see "Trading flow".) NAV needs no Authority mapping: the
   `LIGHTER_PERPS` branch routes through the immutable `ExtensionsMap` to `EAppsLighter`.
@@ -904,8 +949,10 @@ No extension/adapter storage (Rigoblock hard rule).
   NAV-exactness test in `ALighterLive.t.sol` passes against it on either version, since the
   NAV branch is unchanged in shape).
 - **Devnet rewire executed after the 4.6.3 redeploy (2026-10-23, deployer key `0x080f…1fA6`).**
-  Motivation: purge-in-place redesign — the NAV loop itself untracks dead markets (allowed
-  because `getAppTokenBalances` is non-view), the at-cap sweep was deleted, negative account
+  Motivation: purge-in-place redesign — the evaluation loop untracks dead markets (allowed
+  because `getAppTokenBalances` is non-view; correction 2026-11-17: it untracks only on
+  operator-gated evaluations — the NAV loop's self-call has `canPrune = false`, see "Pruning
+  tracked markets"), the at-cap sweep was deleted, negative account
   values are returned as-is (Hyperliquid parity), `Position.position` renamed `size`.
   Redeployed (salt24 ExtensionsMap at `0xfA61b80d39F9f030deabC3EeDaAd93A54d7Ddf13`,
   `VERSION = "4.6.3"`): EAppsLighter `0x66718b5dD15f07851F8A7dfb029AD5BaAB5A0D34` (deploy tx
@@ -1235,8 +1282,9 @@ errors, check `eth_getCode` on `0x6600…0001` at the pin and bump `LIGHTER_BLOC
 - [x] USDC-only: asset index, quote asset, and route enforced on every entrypoint
 - [x] Pool forced as deposit recipient / withdrawal recipient (no third-party egress)
 - [x] Per-call approve with reset-to-1 (Pattern 2, USDT-safe via `safeApprove`)
-- [x] createOrder auto-tracks its market (O(1) mapping check); untracking is internal-only in
-      the NAV loop (no position AND no open orders required); untracked positions impossible
+- [x] createOrder auto-tracks its market (O(1) mapping check); untracking is operator-gated in
+      the evaluation loop (no position AND no open orders required; direct
+      `getAppTokenBalances` call, see "Pruning tracked markets"); untracked positions impossible
       via EVM flows
 - [x] App purge reachable: branch reports empty when nothing is held, dust = 1 while any market
       with position/orders survives (zero-PnL position cannot be orphaned by
