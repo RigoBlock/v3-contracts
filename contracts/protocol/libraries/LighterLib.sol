@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0-or-later
 pragma solidity ^0.8.4;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "../interfaces/IERC20.sol";
 import {StorageLib} from "../libraries/StorageLib.sol";
 import {AppTokenBalance} from "../types/ExternalApp.sol";
@@ -12,6 +13,9 @@ import {LighterTypes} from "../types/LighterTypes.sol";
 /// @notice Rigoblock-specific helpers for LighterCore perps: NAV valuation, market tracking and
 ///  in-flight accounting over the pool's Lighter slot.
 library LighterLib {
+    using SafeCast for int256;
+    using SafeCast for uint256;
+
     error NavLocked();
     error PendingRequest();
     error MaxTrackedMarketsReached();
@@ -122,13 +126,13 @@ library LighterLib {
                 // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
                 //  the collateral read) and the unaccepted remainder is refunded async
                 uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
-                outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
+                outstanding = accepted < amount.toUint256() ? amount.toUint256() - accepted : 0;
             } else {
                 // withdrawal confirmed: Core debited and the delivery to the wallet is async;
                 //  inFlightAmount is negative, the app carries the undelivered amount
-                outstanding = uint256(-amount);
+                outstanding = (-amount).toUint256();
             }
-            adjustment = int256(outstanding);
+            adjustment = outstanding.toInt256();
             if (adjustment == 0 || _readBalance() >= data.balanceSnapshot + outstanding) {
                 delete lighterSlot.data;
                 adjustment = 0;
@@ -154,9 +158,9 @@ library LighterLib {
             _inFlightAdjustment(StorageLib.lighterSlot());
             if (data.lastReqId != 0) revert PendingRequest();
         }
-        data.inFlightAmount = int128(amount);
+        data.inFlightAmount = amount.toInt128();
         data.lastReqId = reqId;
-        data.balanceSnapshot = uint128(_readBalance());
+        data.balanceSnapshot = _readBalance().toUint128();
     }
 
     ///  lock: they are valued exactly by the in-flight amount.

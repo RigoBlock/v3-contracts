@@ -2,6 +2,7 @@
 // solhint-disable-next-line
 pragma solidity 0.8.37;
 
+import {SafeCast} from "@openzeppelin-legacy/contracts/utils/math/SafeCast.sol";
 import {SafeTransferLib} from "../../libraries/SafeTransferLib.sol";
 import {ReentrancyGuardTransient} from "../../libraries/ReentrancyGuardTransient.sol";
 import {IERC20} from "../../interfaces/IERC20.sol";
@@ -70,7 +71,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
         }
 
         StorageLib.activeApplications().storeApplication(uint256(Applications.LIGHTER_PERPS));
-        LighterLib.recordAction(int256(amount), reqId);
+        LighterLib.recordAction(SafeCast.toInt256(amount), reqId);
         emit Deposited(amount);
     }
 
@@ -98,7 +99,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
         );
 
         // USDC's Core tickSize is 1: base units are already 6-decimal USDC.
-        LighterLib.recordAction(-int256(uint256(baseAmount)), reqId);
+        LighterLib.recordAction(-SafeCast.toInt256(baseAmount), reqId);
         emit Withdrawn(baseAmount);
     }
 
