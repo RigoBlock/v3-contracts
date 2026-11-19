@@ -309,9 +309,9 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice Lock semantics around a deposit: from the request until the async refund lands,
-    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact).
-    ///  The refund landing in the wallet is not detectable on-chain, so the record carries until
-    ///  the settle window elapses; only then does the mint unlock.
+    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact);
+    ///  once the refund lands in the pool wallet, the mint's own evaluation clears the record and
+    ///  unlocks in the same pass.
     function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
@@ -341,13 +341,9 @@ contract ALighterForkTest is Test {
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         ISmartPoolActions(pool).updateUnitaryValue();
 
-        // The refund lands in the pool wallet (balance increases over the request-time snapshot),
-        //  but a raw balance increase is not the landing signal: the record carries and the mint
-        //  stays locked until the operator attests.
+        // The refund lands in the pool wallet (balance increases over the request-time snapshot):
+        // the mint's own evaluation clears the record and unlocks in the same pass.
         deal(usdc, pool, snapshot + 1e6);
-        vm.expectRevert(LighterLib.NavLocked.selector);
-        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
-        vm.warp(block.timestamp + 1 hours);
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }

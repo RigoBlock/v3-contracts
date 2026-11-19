@@ -33,9 +33,4 @@ library LighterConstants {
 
     /// @notice Maximum number of perp markets tracked in pool storage for NAV valuation.
     uint256 internal constant MAX_TRACKED_MARKETS = 32;
-
-    /// @notice A confirmed transfer's async leg is carried — and mint/burn locked — from the
-    ///  first observation of the settled state until this window elapses, then self-clears.
-    ///  The confirm-to-delivery gap is seconds by design; the window only bounds relay failure.
-    uint64 internal constant SETTLED_TRANSFER_WINDOW = 1 hours;
 }

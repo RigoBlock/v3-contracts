@@ -102,11 +102,10 @@ library LighterLib {
         if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
     }
 
-    /// @dev A confirmed leg is carried — NAV exact, mint/burn locked — from the first observation
-    ///  of the settled state until SETTLED_TRANSFER_WINDOW elapses, then the record self-clears.
-    ///  Landing is not detectable on-chain: a direct ERC-20 transfer is indistinguishable from
-    ///  the delivery, so no balance check is applied. Full acceptance and failure self-clear
-    ///  immediately (no async leg).
+    /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
+    ///  predates the async leg (Core schedules refund/delivery only after processing the request),
+    ///  so the record clears only when the wallet has grown by at least the outstanding leg amount.
+    ///  A smaller inflow (e.g. a dust donation) leaves the record intact and keeps mint/burn locked.
     function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
         LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
@@ -115,7 +114,7 @@ library LighterLib {
         (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
         if (status == 0) {
             // pending: a deposit left the wallet and is not on Core yet; a withdrawal has not
-            //  moved either side
+            //  moved either side; the leg cannot have landed
             adjustment = amount > 0 ? amount : int256(0);
         } else if (status == 1) {
             uint256 outstanding;
@@ -129,15 +128,10 @@ library LighterLib {
                 //  inFlightAmount is negative, the app carries the undelivered amount
                 outstanding = uint256(-amount);
             }
-            if (outstanding == 0) {
+            adjustment = int256(outstanding);
+            if (adjustment == 0 || _readBalance() >= data.balanceSnapshot + outstanding) {
                 delete lighterSlot.data;
-            } else if (data.settledAt == 0) {
-                lighterSlot.data.settledAt = uint64(block.timestamp);
-                adjustment = int256(outstanding);
-            } else if (block.timestamp >= data.settledAt + LighterConstants.SETTLED_TRANSFER_WINDOW) {
-                delete lighterSlot.data;
-            } else {
-                adjustment = int256(outstanding);
+                adjustment = 0;
             }
         } else if (status == 2) {
             // rejected on Core (deposits never fail per spec): nothing is in transit
@@ -145,7 +139,8 @@ library LighterLib {
         }
     }
 
-    /// @dev The pool's USDC wallet balance; the request-time snapshot source.
+    /// @dev The pool's USDC wallet balance; the landing reference for the async leg and the
+    ///  request-time snapshot source.
     function _readBalance() private view returns (uint256) {
         return IERC20(LighterConstants.USDC).balanceOf(address(this));
     }
@@ -156,16 +151,15 @@ library LighterLib {
         if (amount == 0) return;
         LighterSlot storage slot = StorageLib.lighterSlot();
         if (slot.data.lastReqId != 0) {
-            // one transfer at a time, full lifecycle: the previous record must have self-cleared
-            //  (failed, fully accepted, or settled past the window) before a new request starts.
-            //  Overwriting an unresolved record would drop its carry while the funds are still
-            //  owed to the pool, understating NAV.
+            // one transfer at a time, full lifecycle: the previous record must have cleared —
+            //  failed, or its leg observed landed — before a new request starts. Overwriting an
+            //  unresolved record would drop its carry while the funds are still owed to the
+            //  wallet, understating NAV.
             _inFlightAdjustment(slot);
             if (slot.data.lastReqId != 0) revert PendingRequest();
         }
         slot.data.inFlightAmount = int128(amount);
         slot.data.lastReqId = reqId;
-        slot.data.settledAt = 0;
         slot.data.balanceSnapshot = uint128(_readBalance());
     }
 

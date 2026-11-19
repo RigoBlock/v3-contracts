@@ -29,11 +29,13 @@ struct HyperliquidData {
     uint48 lastActionTimestamp;
 }
 
-/// @notice Packed Lighter in-flight accounting. Transfers are one-at-a-time, full lifecycle.
+/// @notice Packed Lighter in-flight accounting. Transfers are one-at-a-time: recordAction
+///  requires the previous request to be settled. balanceSnapshot is the pool balance of the
+///  integration token (USDC) captured when the request is recorded; it predates the async
+///  refund/delivery leg, which the wallet-increase check detects.
 struct LighterData {
     int128 inFlightAmount;
     uint64 lastReqId;
-    uint64 settledAt; // first status-1 observation timestamp; 0 = settled state not observed yet
     uint128 balanceSnapshot; // pool balance of the integration token (USDC) at the transfer request
 }
 
