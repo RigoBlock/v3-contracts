@@ -149,18 +149,14 @@ library LighterLib {
         // a zero amount records nothing and disturbs no existing record (only nonzero transfers
         //  are ever tracked)
         if (amount == 0) return;
-        LighterSlot storage slot = StorageLib.lighterSlot();
-        if (slot.data.lastReqId != 0) {
-            // one transfer at a time, full lifecycle: the previous record must have cleared —
-            //  failed, or its leg observed landed — before a new request starts. Overwriting an
-            //  unresolved record would drop its carry while the funds are still owed to the
-            //  wallet, understating NAV.
-            _inFlightAdjustment(slot);
-            if (slot.data.lastReqId != 0) revert PendingRequest();
+        LighterData storage data = StorageLib.lighterSlot().data;
+        if (data.lastReqId != 0) {
+            _inFlightAdjustment(StorageLib.lighterSlot());
+            if (data.lastReqId != 0) revert PendingRequest();
         }
-        slot.data.inFlightAmount = int128(amount);
-        slot.data.lastReqId = reqId;
-        slot.data.balanceSnapshot = uint128(_readBalance());
+        data.inFlightAmount = int128(amount);
+        data.lastReqId = reqId;
+        data.balanceSnapshot = uint128(_readBalance());
     }
 
     ///  lock: they are valued exactly by the in-flight amount.

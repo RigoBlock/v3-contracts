@@ -25,8 +25,8 @@ contract EAppsLighter is EApps, IEAppsLighter {
         return StorageLib.lighterSlot().trackedMarkets;
     }
 
-    /// @dev Valuation must run before the lock check: it is what clears a resolved leg from the
-    ///  record, so the mint that observes the resolution succeeds in the same evaluation. Pruning
+    /// @dev Valuation must run before the lock check: it is what clears a landed leg from the
+    ///  record, so the mint that observes the landing succeeds in the same evaluation. Pruning
     ///  dead markets is operator-gated (msg.sender is the pool caller): permissionless
     ///  evaluations compute the same balances without mutating the tracked set.
     function _handleApplication(Applications appType) internal override returns (AppTokenBalance[] memory balances) {
