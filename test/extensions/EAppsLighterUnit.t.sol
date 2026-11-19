@@ -516,6 +516,49 @@ contract EAppsLighterUnitTest is Test {
         assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
     }
 
+    /// @notice Regression (audit, accepted residual — known limitation 2): an exogenous wallet
+    ///  inflow of at least the outstanding leg clears the record. The carry is a receivable that
+    ///  still exists until the delivery lands, so NAV is understated by exactly the leg until
+    ///  then. This is documented accepted risk on the devnet: every pool flow is locked during
+    ///  the lifecycle, so the trigger requires a raw third-party transfer (self-funded variants
+    ///  are provably unprofitable), and the window lasts only until the delivery lands.
+    function testExogenousInflowClearsSettledLeg_DocumentedRisk() public {
+        uint256 deposit = 10_000e6;
+        uint256 withdraw = 4_000e6;
+        uint256 packedLighter = 1 << uint256(Applications.LIGHTER_PERPS);
+        _depositAndSettle(deposit);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit))));
+
+        // Operator withdraws; Core debits, delivery still in transit.
+        vm.prank(poolOwner);
+        IALighter(pool).sendToEvm(0, 3, pool, LighterRouteType.Perps, uint64(withdraw));
+        _mockTxStatus(2, 1);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit - withdraw))));
+
+        uint256 walletBeforeInflow = MockUSDC(USDC).balanceOf(pool);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(packedLighter);
+
+        // Exogenous inflow of the FULL leg amount clears the record and lifts the lock.
+        MockUSDC(USDC).mint(pool, withdraw);
+        ExternalApp memory app = _findLighterApp(IEApps(pool).getAppTokenBalances(packedLighter));
+        assertEq(app.balances[0].amount, int256(deposit - withdraw), "Carry dropped: collateral read alone");
+        assertEq(
+            MockUSDC(USDC).balanceOf(pool) + uint256(app.balances[0].amount),
+            walletBeforeInflow + withdraw + deposit - withdraw,
+            "NAV counts the inflow but drops the receivable: understated by the leg"
+        );
+
+        // The delivery lands: NAV self-corrects.
+        MockUSDC(USDC).mint(pool, withdraw);
+        app = _findLighterApp(IEApps(pool).getAppTokenBalances(packedLighter));
+        assertEq(
+            MockUSDC(USDC).balanceOf(pool) + uint256(app.balances[0].amount),
+            walletBeforeInflow + 2 * withdraw + deposit - withdraw,
+            "NAV exact again once the delivery lands"
+        );
+    }
+
     /// @notice getLighterTrackedMarkets reports the tracked market ids; a fresh pool reports an
     ///  empty list.
     function testGetLighterTrackedMarkets() public {

@@ -636,10 +636,13 @@ contract LighterLibTest is Test {
         assertEq(data.inFlightAmount, 100e6);
     }
 
-    /// @notice recordAction overwrites a settled-but-unlanded record: the previous transfer's
-    ///  leg is abandoned (its carry stops applying) and the new request starts with a fresh
-    ///  snapshot — the recovery path for a leg that never lands.
-    function testRecordActionOverwritesSettledRecord() public {
+    /// @notice Transfers are one at a time, full lifecycle: a settled-but-unlanded record (Core
+    ///  confirmed, async leg still in transit) blocks a new transfer with PendingRequest instead
+    ///  of being overwritten — overwriting would drop the outstanding leg's carry while the funds
+    ///  are still owed to the wallet, understating NAV. Once the leg lands (the wallet has grown
+    ///  by the outstanding amount), the same transfer proceeds: the record resolves and is
+    ///  replaced with a fresh snapshot.
+    function testRecordActionRevertsWhilePreviousLegInFlight() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
@@ -652,16 +655,22 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // A new request overwrites the record (previous reqId is settled): fresh snapshot, the
-        //  old leg's carry no longer applies.
-        _mockTxStatus(2, 0, bytes(""));
+        // A new request while the leg is in transit reverts: the previous record must resolve first.
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        harness.recordAction(100e6, 2);
+        assertEq(harness.lighterData().lastReqId, 1, "Unresolved record must survive the revert");
+
+        // Delivery lands (wallet grows by the outstanding amount): the record resolves and the new
+        //  request replaces it with a fresh snapshot.
+        MockERC20(USDC).mint(address(harness), 400e6);
         harness.recordAction(100e6, 2);
         LighterData memory data = harness.lighterData();
         assertEq(data.lastReqId, 2);
         assertEq(data.inFlightAmount, 100e6);
-        assertEq(data.balanceSnapshot, 500e6, "Fresh snapshot at the new request");
+        assertEq(data.balanceSnapshot, 900e6, "Fresh snapshot at the new request");
+        _mockTxStatus(2, 0, bytes(""));
         balances = harness.getLighterBalances(ACCOUNT, true);
-        assertEq(balances[0].amount, 700e6, "New pending deposit added back; old carry gone");
+        assertEq(balances[0].amount, 700e6, "New pending deposit added back; the landed leg is in the wallet");
     }
 
     /// @notice A plain ERC-20 transfer that covers the outstanding leg amount clears the record,

@@ -11,10 +11,11 @@ READ_CORE spec: market info carries `quoteMultiplier` + funding prefix sums, pos
 `lastFundingRatePrefixSum`, and selector `0x000A` exposes EVM order status — all verified live
 against the reset devnet on 2026-11-16. In-flight accounting is transaction-status driven with
 one transfer at a time, and a **settled-transfer lock**: pending requests are valued exactly and
-never lock, while a settled request's async EVM-side leg is undetectable on-chain (balance
-heuristics are mint-exploitable — proven in "In-flight accounting"), so mint/burn lock until
-the owner attests the leg landed via `syncTransfer`. All 75 offline Lighter tests pass
-(LighterLib 30 + ALighter unit 38 + EAppsLighter unit 6), the 10
+never lock; a settled request's async EVM-side leg cannot be attributed on-chain (a direct
+ERC-20 transfer is indistinguishable from the delivery), so the record clears when the wallet
+has grown by at least the outstanding leg amount (accepted residual: known limitation 2).
+All 84 offline Lighter tests pass
+(LighterLib 37 + ALighter unit 39 + EAppsLighter unit 8), the 10
 fork tests pass at `LIGHTER_BLOCK = 390_000`, and the live suite locks the 1.2.0 response
 shapes and verifies NAV exactness against the funded tester pool, with
 precompile/predeploy returns mocked via `vm.mockCall` on the fork (Foundry cannot execute the
@@ -160,8 +161,8 @@ Unlike Hyperliquid, there is **no account-activation prerequisite** and **no spo
 4. First deposit auto-creates the pool's Core master account (+146 k gas), owned by the pool's EVM
    address. Subsequent deposits reuse it. **No account-activation step exists** (unlike Hyperliquid).
 5. `recordAction(+amount, reqId)` records the in-flight amount and the Core `reqId` for
-   transaction-status-driven in-flight accounting (below); once Core settles, the owner
-   verifies the refund/delivery off-chain and calls `syncTransfer` to unlock mint/burn.
+   transaction-status-driven in-flight accounting (below); the record self-clears once the
+   wallet has grown by at least the outstanding leg amount (below).
 6. The `LIGHTER_PERPS` application bit is activated (append-only `Applications` enum), which
    makes the pool's NAV include Lighter balances via the `LIGHTER_PERPS` branch of `EAppsLighter`.
 
@@ -661,9 +662,12 @@ included — no wall-clock window), because the wallet-side movement is already 
 The rules the accounting follows (violations of any of these are bugs, not trade-offs):
 
 - **R1 — one transfer at a time.** `recordAction` reverts `PendingRequest` while the previous
-  reqId reads status 0; the next transfer overwrites the record (implicit sync, and the only
-  recovery from a leg that never lands — a reverted delivery is never retried and the funds are
-  lost per Lighter's docs, so the carry simply stops counting them).
+  record is unresolved — the previous reqId still reads status 0, or it is settled with its
+  async leg not yet observed landed — and overwrites the record only once it has cleared
+  (fixed 2026-11-19: a settled-but-unlanded record was overwritten unconditionally, silently
+  dropping the outstanding leg's carry). A leg that never lands (reverted delivery, never
+  retried, funds lost per Lighter's docs) blocks further transfers until its wallet growth is
+  observed or the operator resolves the pool state.
 - **R2 — the lock spans the whole transfer: from request to landing, both directions.** Pending
   is valued exactly by formula, but mint/burn/donate/deposits are locked throughout: this is the
   price of guaranteed exactness. With any permissioned flow able to move USDC during pending, a
@@ -692,15 +696,26 @@ observation; anyone can force one via `updateUnitaryValue`.
 **Known limitations (the complete list of non-exact or locked behaviors):**
 
 1. **A leg that never lands** (delivery/refund transaction reverted — never retried, funds lost
-   per Lighter's docs): the record stays unresolved and mint/burn stay locked until the owner
-   initiates the next transfer, which overwrites the record; NAV is exact afterwards because the
-   carry stops counting the lost funds. This is the only lock with no automatic resolution, and
-   it is unambiguous: the delivery receipt is verifiable off-chain (Lighter docs, `event_info`).
+   per Lighter's docs): the record stays unresolved, mint/burn stay locked, and further Lighter
+   transfers revert — but the pool is not bricked, since the recorded amount is carried in NAV
+   exactly (the wallet never receives the funds, so the carry remains correct forever). Recovery
+   is operational: any wallet increase of at least the outstanding amount clears the record (a
+   deliberate operator transfer can substitute for the lost leg), after which NAV excludes the
+   lost funds and the lock lifts. The delivery receipt is verifiable off-chain (Lighter docs,
+   `event_info`).
 2. **A plain ERC-20 transfer into the pool while a leg is outstanding** (no pool code runs, so
-   it cannot be blocked or attributed) can only clear the record when the wallet increase is at
-   least the outstanding leg amount. A dust donation leaves the record intact and keeps mint/burn
-   locked, so it cannot be used to mint shares at an understated NAV. This was changed from the
-   4.5.0 "any increase clears" heuristic after proving that heuristic mint-exploitable.
+   it cannot be blocked or attributed) clears the record when the wallet increase is at least the
+   outstanding leg amount. The carry is a receivable that still exists until the delivery lands,
+   so the record then reports collateral-only and NAV is understated by exactly the leg until
+   the delivery lands (regression test: `testExogenousInflowClearsSettledLeg_DocumentedRisk`).
+   Accepted residual on the devnet, for these reasons: every pool flow (mint, burn, donate,
+   deposits, further transfers) is locked during the lifecycle, so the trigger requires a raw
+   third-party transfer — a self-funded inflow is provably unprofitable, since the mint-time
+   extraction `M * O / (V - O + M)` is strictly less than the amount `O >= D` the attacker had
+   to send; the practical window lasts only until the delivery transaction lands (seconds by
+   design); and the only alternative bounds (wall-clock windows) would deem the lifecycle
+   complete during a Core outage with the delivery still pending. Revisit before mainnet funds
+   are at risk.
 3. **Pending and in-transit windows block mint/burn/donate/deposits** by design (R2); the lock
    lifts automatically the moment the leg lands. Orders, transfers, and `updateUnitaryValue`
    are never blocked.
@@ -734,8 +749,8 @@ deduction, and a smaller increase (e.g. a dust donation) cannot be mistaken for 
 Settlement and delivery are **not atomic**: per the docs "a successful Core status does not
 confirm delivery on EVM" — the delivery/refund is a separate exogenous transaction scheduled
 after Core executes, which is exactly the gap the carry + lock covers.
-`recordAction` resets the pinned baseline to zero so each request is measured against its own
-observation (an overwrite never inherits a previous request's baseline).
+`recordAction` starts a fresh record per request; a new record never inherits a previous
+request's state.
 
 History (why the design looks like this): the 1.1.0 integration used a 16-second lock that
 assumed a timing guarantee Axiom explicitly disclaimed, subtracted settled withdrawals (NAV
@@ -752,7 +767,18 @@ code change: one-request-at-a-time plus the request-to-landing lock remove the a
 exploited (regression tests: `testMixedBatchRevertsAtomically`,
 `testMixedBatchSeparateTransactionsReverts`). A balance-baseline auto-clear without the lock
 (4.5.2) was shown mint-exploitable, and an owner-attested `syncTransfer` (4.5.3) removed the
-exploit but added a manual step. 4.5.4 keeps the lock and makes clearing automatic. The pinned
+exploit but added a manual step. 4.5.4 keeps the lock and makes clearing automatic. Review
+2026-11-19 (two external reports): the automatic balance clear has a confirmed residual — an
+exogenous wallet inflow of at least the outstanding leg clears the record while the receivable
+still exists, understating NAV by the leg until the delivery lands; retained as documented
+accepted devnet risk (known limitation 2), because every pool flow is locked during the
+lifecycle (self-funded variants are provably unprofitable, so the trigger requires a raw
+third-party transfer), while both alternatives were rejected: owner attestation reintroduces
+the manual step 4.5.4 removed, and a settle-observation wall-clock window would deem the
+lifecycle complete during a Core outage with the delivery still pending. The same review fixed
+a separate confirmed bug: `recordAction` overwrote a settled-but-unlanded record when the
+operator submitted the next request, silently dropping the previous leg's carry (regression
+test: `testRecordActionRevertsWhilePreviousLegInFlight`). The pinned
 tests assert the invariant: wallet + app NAV exact in every tradeable state, and the settled
 state provably locked while a leg is in transit.
 
@@ -809,12 +835,11 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.1` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.1"`;
-  `extensionsMapSalt21`. This follows the 4.5.0/salt20 devnet 1.2.0 train (deployed 2026-11-16);
-  the in-flight landing threshold fix changes `LighterLib` → `EAppsLighter` and `ALighter`, so
-  both a new ExtensionsMap and a new implementation are required. The intermediate 4.5.1–4.5.8
-  numbers used during the 2026-11-16 review iteration were devnet-only and superseded by the
-  clean 4.5.0 train; this fix therefore takes the next available version/salt pair. Final shape:
+- `VERSION` is `4.5.2` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.2"`;
+  `extensionsMapSalt22`. This follows the 4.5.1/salt21 pair (deployed 2026-11-17, in-flight
+  landing threshold fix); the 2026-11-19 record-lifecycle fix (a new transfer requires the
+  previous record to have cleared) changes `LighterLib` → `EAppsLighter` and `ALighter`, so
+  both a new ExtensionsMap and a new implementation are required. Final shape:
   sequential per-status handling (`0`/`1`/`2`/unknown), one transfer at a time, the lock spanning
   request-to-landing in both directions (pending included — orders and `updateUnitaryValue` never
   blocked), and `balanceSnapshot` cleared only when `wallet >= snapshot + outstanding`.
