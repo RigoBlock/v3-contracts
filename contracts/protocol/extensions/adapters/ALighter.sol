@@ -24,7 +24,7 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     using SafeTransferLib for address;
     using ApplicationsLib for ApplicationsSlot;
 
-    string private constant _REQUIRED_VERSION = "4.5.1";
+    string private constant _REQUIRED_VERSION = "4.5.2";
 
     address private immutable _adapter;
 
@@ -156,6 +156,20 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
     ) external override nonReentrant onlyDelegateCall returns (uint64 reqId) {
         reqId = ILighterCoreEntrypoint(LighterConstants.CORE_ENTRYPOINT).cancelAllOrders(_requireAccountIndex());
         emit OrderSent(reqId);
+    }
+
+    /// @notice Emitted when the operator abandons a transfer whose async EVM-side leg never landed.
+    event InFlightLegAbandoned();
+
+    /// @notice Releases a stuck transfer record whose async EVM-side leg never landed — the
+    ///  recovery for the documented never-landing-leg case (a reverted delivery is never retried
+    ///  and the funds are lost per Lighter's docs). Write access is owner-gated by MixinFallback.
+    /// @dev Only abandon after verifying off-chain — per Lighter's docs, the delivery receipt via
+    ///  the Core transaction's event_info — that the leg will not land: abandoning a live leg
+    ///  drops its carry from NAV, so a late landing mints against an understated NAV.
+    function abandonInFlightLeg() external nonReentrant onlyDelegateCall {
+        LighterLib.abandonAction();
+        emit InFlightLegAbandoned();
     }
 
     /// @dev Resolves the pool's own Core account index; reverts if the pool has no Core account yet

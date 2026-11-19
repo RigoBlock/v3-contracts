@@ -646,10 +646,13 @@ READ_CORE `0x0000` (`0` pending, `1` success, `2` failed — live-verified). Dep
 or zero; per the Send-to-Core Core response this write **never returns `status == 2`** —
 rejection is expressed as a partial or zero `acceptedAmount`, with the remainder refunded
 async). Withdrawal rejections do use `status == 2` with `abi.encode(uint32 errorCode)` (e.g.
-`7003` insufficient balance). Transfers are **one at a time**: `recordAction` reverts
-`PendingRequest` while the previous request still reads status 0, so the tracked amount always
-describes exactly one request; the next transfer overwrites the record (implicit sync). Orders
-never call `recordAction`, so trading is never blocked.
+`7003` insufficient balance). Transfers are **one at a time, full lifecycle**: `recordAction`
+reverts `PendingRequest` while the previous record is unresolved — the previous request still
+reads status 0, or it is settled with its async EVM-side leg still in transit. A record resolves
+when the request fails on Core or the leg is observed landed (`wallet >= snapshot + outstanding`,
+checked with the same logic as the NAV adjustment); a leg that verifiably never lands is released
+explicitly via `abandonInFlightLeg()` (owner action). The tracked amount therefore always
+describes exactly one request. Orders never call `recordAction`, so trading is never blocked.
 
 **Pending (status 0) is exact at every stage, for arbitrarily long Core delays** (downtime
 included — no wall-clock window), because the wallet-side movement is already known:
@@ -660,10 +663,13 @@ included — no wall-clock window), because the wallet-side movement is already 
 
 The rules the accounting follows (violations of any of these are bugs, not trade-offs):
 
-- **R1 — one transfer at a time.** `recordAction` reverts `PendingRequest` while the previous
-  reqId reads status 0; the next transfer overwrites the record (implicit sync, and the only
-  recovery from a leg that never lands — a reverted delivery is never retried and the funds are
-  lost per Lighter's docs, so the carry simply stops counting them).
+- **R1 — one transfer at a time, full lifecycle.** `recordAction` reverts `PendingRequest` while
+  the previous record is unresolved: pending (status 0), or settled on Core with the async leg
+  still in transit — overwriting such a record would drop the outstanding leg's carry while the
+  funds are still owed to the wallet, understating NAV. The record resolves when the request
+  fails (status 2) or the leg is observed landed; a never-landing leg — a reverted delivery is
+  never retried and the funds are lost per Lighter's docs — is released explicitly via
+  `abandonInFlightLeg()` (the carry simply stops counting the lost funds).
 - **R2 — the lock spans the whole transfer: from request to landing, both directions.** Pending
   is valued exactly by formula, but mint/burn/donate/deposits are locked throughout: this is the
   price of guaranteed exactness. With any permissioned flow able to move USDC during pending, a
@@ -681,9 +687,9 @@ The rules the accounting follows (violations of any of these are bugs, not trade
   fires only while a leg is genuinely outstanding. `updateUnitaryValue` is exempt (it must be
   able to commit the clearing observation).
 - **R5 — no trap states.** Because the snapshot predates the leg, clearing is eventual whenever
-  the leg lands; because the record is overwritten per request, a never-landing leg (lost
-  delivery) is absorbed by the next transfer. Verified live: an observation taken long after
-  settle + delivery completed (the 4.5.6 trap scenario) clears and unlocks.
+  the leg lands; a never-landing leg (lost delivery) is absorbed by an explicit
+  `abandonInFlightLeg()` instead of trapping the pool. Verified live: an observation taken long
+  after settle + delivery completed (the 4.5.6 trap scenario) clears and unlocks.
 
 Settlement is observed lazily: any on-chain evaluation (or `eth_call`) of the Lighter branch
 reads the tx-status precompile for the recorded reqId; the first non-zero read is the
@@ -693,9 +699,11 @@ observation; anyone can force one via `updateUnitaryValue`.
 
 1. **A leg that never lands** (delivery/refund transaction reverted — never retried, funds lost
    per Lighter's docs): the record stays unresolved and mint/burn stay locked until the owner
-   initiates the next transfer, which overwrites the record; NAV is exact afterwards because the
-   carry stops counting the lost funds. This is the only lock with no automatic resolution, and
-   it is unambiguous: the delivery receipt is verifiable off-chain (Lighter docs, `event_info`).
+   calls `abandonInFlightLeg()`; NAV is exact afterwards because the carry stops counting the
+   lost funds. This is the only lock with no automatic resolution, and it is unambiguous: the
+   delivery receipt is verifiable off-chain (Lighter docs, `event_info`). Abandoning is
+   irreversible and must only follow that off-chain verification — abandoning a live leg drops
+   its carry, so a late landing mints against an understated NAV.
 2. **A plain ERC-20 transfer into the pool while a leg is outstanding** (no pool code runs, so
    it cannot be blocked or attributed) can only clear the record when the wallet increase is at
    least the outstanding leg amount. A dust donation leaves the record intact and keeps mint/burn
@@ -809,13 +817,14 @@ No extension/adapter storage (Rigoblock hard rule).
 
 ## Deployment wiring
 
-- `VERSION` is `4.5.1` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.1"`;
-  `extensionsMapSalt21`. This follows the 4.5.0/salt20 devnet 1.2.0 train (deployed 2026-11-16);
-  the in-flight landing threshold fix changes `LighterLib` → `EAppsLighter` and `ALighter`, so
-  both a new ExtensionsMap and a new implementation are required. The intermediate 4.5.1–4.5.8
-  numbers used during the 2026-11-16 review iteration were devnet-only and superseded by the
-  clean 4.5.0 train; this fix therefore takes the next available version/salt pair. Final shape:
-  sequential per-status handling (`0`/`1`/`2`/unknown), one transfer at a time, the lock spanning
+- `VERSION` is `4.5.2` (`MixinConstants.sol`); `ALighter._REQUIRED_VERSION = "4.5.2"`;
+  `extensionsMapSalt22`. This follows the 4.5.1/salt21 pair (deployed 2026-11-17, in-flight
+  landing threshold fix); the record-lifecycle fix changes `LighterLib` → `EAppsLighter` and
+  `ALighter` (new `abandonInFlightLeg` selector, owner-gated), so both a new ExtensionsMap and a
+  new implementation are required. Final shape:
+  sequential per-status handling (`0`/`1`/`2`/unknown), one transfer at a time, full lifecycle
+  (a new transfer requires the previous record to be resolved — failed, or leg observed landed;
+  a never-landing leg is released via `abandonInFlightLeg`), the lock spanning
   request-to-landing in both directions (pending included — orders and `updateUnitaryValue` never
   blocked), and `balanceSnapshot` cleared only when `wallet >= snapshot + outstanding`.
   `getLighterTrackedMarkets` lives in `EAppsLighter` (`IEAppsLighter`). The devnet 1.1.0 reset (2026-10-26)

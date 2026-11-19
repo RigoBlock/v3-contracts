@@ -532,6 +532,45 @@ contract ALighterUnit is Test {
         assertEq(secondReqId, 2);
     }
 
+    /// @notice A second transfer also reverts while the previous request is settled on Core but
+    ///  its async EVM-side leg has not landed yet: the record must resolve (failed or leg
+    ///  observed landed) before it can be replaced, otherwise the outstanding leg's carry would
+    ///  vanish while the funds are still in transit.
+    function testSendToCoreRevertsWhilePreviousLegInFlight() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        uint64 firstReqId = IALighter(address(pool)).sendToEvm(0, 3, address(pool), LighterRouteType.Perps, 400e6);
+        assertEq(firstReqId, 1);
+
+        // Settled on Core, delivery still in transit (wallet unchanged).
+        _mockTxStatus(1, 1);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
+
+        // The operator recovery for a leg that verifiably never lands releases the record, and
+        //  the next transfer records normally.
+        vm.expectEmit(true, true, true, true, address(pool));
+        emit ALighter.InFlightLegAbandoned();
+        ALighter(address(pool)).abandonInFlightLeg();
+        _useLibHarness();
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
+        LighterLibHarness(address(pool)).assertNavUnlocked();
+
+        _useAdapter();
+        uint64 secondReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
+        assertEq(secondReqId, 2);
+    }
+
+    /// @notice The recovery reverts when no transfer is in flight, and the adapter cannot be
+    ///  called directly (delegatecall-only).
+    function testAbandonInFlightLegRevertsWithoutRecord() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
+        ALighter(address(pool)).abandonInFlightLeg();
+
+        vm.expectRevert(IALighter.DirectCallNotAllowed.selector);
+        adapter.abandonInFlightLeg();
+    }
+
     function testSendToEvmRevertsForWrongAsset() public {
         vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
         vm.expectRevert(IALighter.InvalidAsset.selector);
@@ -913,8 +952,10 @@ contract ALighterUnit is Test {
         vm.expectRevert(LighterLib.PendingRequest.selector);
         IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
 
-        // Once the first request settles, the next transfer starts normally (overwrite).
+        // Once the first request settles and its async leg lands (the wallet grows by the
+        //  outstanding amount), the next transfer starts normally.
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(60e6)));
+        MockERC20(_usdc).mint(address(pool), 60e6);
         uint64 reqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
         assertEq(reqId, 2);
     }
@@ -940,7 +981,7 @@ contract ALighterUnit is Test {
     // =========================================================================
 
     function testRequiredVersion() public {
-        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.1");
+        assertEq(IMinimumVersion(address(adapter)).requiredVersion(), "4.5.2");
     }
 
     function testDirectCallToAdapterReverts() public {

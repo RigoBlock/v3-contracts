@@ -47,7 +47,7 @@ npx hardhat codesize --skipcompile true --contractname SmartPool
 ## Deployed bytecode sizes
 
 Production settings: optimizer 200 runs, no viaIR, evmVersion cancun.
-Limit: 24576 bytes per contract. Last measured: 2026-11-17 (v4.5.1 in-flight landing threshold fix: `EAppsLighter` 10 055, `ALighter` 6 500, `SmartPool` 24 328; previous table values for `EAppsArbitrum`, `EAppsLighter`, `EAppsHyperliquid` and `ALighter` updated to match current `development` bytecode).
+Limit: 24576 bytes per contract. Last measured: 2026-11-19 (v4.5.2 record-lifecycle fix: `ALighter` 7 234; `EAppsLighter` 10 055 and `SmartPool` 24 328 unchanged). Previous: 2026-11-17 (v4.5.1 in-flight landing threshold fix).
 
 ### Implementation and factory
 
@@ -84,7 +84,7 @@ Limit: 24576 bytes per contract. Last measured: 2026-11-17 (v4.5.1 in-flight lan
 | AGmxV2          |        17768 |     6808 |     72.30% |
 | AUniswapRouter  |        13052 |    11524 |     53.11% |
 | AIntents        |        11466 |    13110 |     46.66% |
-| ALighter        |         6500 |    18076 |     26.45% |
+| ALighter        |         7234 |    17342 |     29.44% |
 | AHyperliquid    |         8091 |    16485 |     32.92% |
 | A0xRouter       |         4321 |    20255 |     17.58% |
 | AStaking        |         2151 |    22425 |      8.75% |

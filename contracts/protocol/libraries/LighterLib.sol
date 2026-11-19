@@ -14,6 +14,7 @@ import {LighterTypes} from "../types/LighterTypes.sol";
 library LighterLib {
     error NavLocked();
     error PendingRequest();
+    error NoInFlightLeg();
     error MaxTrackedMarketsReached();
     error InvalidMarket();
     error LighterReadFailed();
@@ -102,8 +103,6 @@ library LighterLib {
         if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
     }
 
-    /// @dev Status-driven adjustment for the one outstanding transfer, processed sequentially by
-    ///  request status. Pending requests are valued exactly and never lock. A confirmed request
     /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
     ///  predates the async leg (Core schedules refund/delivery only after processing the request),
     ///  so the record clears only when the wallet has grown by at least the outstanding leg amount.
@@ -151,15 +150,33 @@ library LighterLib {
         // a zero amount records nothing and disturbs no existing record (only nonzero transfers
         //  are ever tracked)
         if (amount == 0) return;
-        LighterData storage data = StorageLib.lighterSlot().data;
-        uint64 lastReqId = data.lastReqId;
-        if (lastReqId != 0) {
-            (uint8 status, ) = _readTxStatus(lastReqId);
-            if (status == 0) revert PendingRequest();
+        LighterSlot storage slot = StorageLib.lighterSlot();
+        if (slot.data.lastReqId != 0) {
+            // transfers are one at a time, full lifecycle: the previous record must resolve —
+            //  the request failed on Core, or its async leg is observed landed — before a new
+            //  request starts. Resolving runs the same status/balance check as the NAV
+            //  adjustment, so a settled-but-unlanded leg blocks with PendingRequest instead of
+            //  being silently dropped (its carry would vanish while the funds are still in
+            //  transit, understating NAV). A leg that never lands is released explicitly via
+            //  abandonAction.
+            _inFlightAdjustment(slot);
+            if (slot.data.lastReqId != 0) revert PendingRequest();
         }
-        data.inFlightAmount = int128(amount);
-        data.lastReqId = reqId;
-        data.balanceSnapshot = uint128(_readBalance());
+        slot.data.inFlightAmount = int128(amount);
+        slot.data.lastReqId = reqId;
+        slot.data.balanceSnapshot = uint128(_readBalance());
+    }
+
+    /// @notice Operator recovery for a transfer whose async EVM-side leg never lands (known
+    ///  limitation: a reverted delivery is never retried and the funds are lost per Lighter's
+    ///  docs). Deletes the record and releases mint/burn. Caller-gated by the adapter, as adapter
+    ///  write access is owner-gated by MixinFallback. Irreversible: only abandon after verifying
+    ///  off-chain — per Lighter's docs, the delivery transaction's receipt via the Core
+    ///  transaction's event_info — that the leg will not land; abandoning a live leg drops its
+    ///  carry, so a late landing mints against an understated NAV.
+    function abandonAction() internal {
+        require(StorageLib.lighterSlot().data.lastReqId != 0, NoInFlightLeg());
+        delete StorageLib.lighterSlot().data;
     }
 
     ///  lock: they are valued exactly by the in-flight amount.
