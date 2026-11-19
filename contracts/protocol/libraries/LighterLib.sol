@@ -15,6 +15,7 @@ library LighterLib {
     error NavLocked();
     error PendingRequest();
     error NoInFlightLeg();
+    error LegNotLanded();
     error MaxTrackedMarketsReached();
     error InvalidMarket();
     error LighterReadFailed();
@@ -103,10 +104,15 @@ library LighterLib {
         if (numerator < 0 && numerator % 1e6 != 0) pendingFunding -= 1;
     }
 
-    /// @dev Status-driven adjustment for the one outstanding transfer. The balanceSnapshot
-    ///  predates the async leg (Core schedules refund/delivery only after processing the request),
-    ///  so the record clears only when the wallet has grown by at least the outstanding leg amount.
-    ///  A smaller inflow (e.g. a dust donation) leaves the record intact and keeps mint/burn locked.
+    /// @dev Status-driven adjustment for the one outstanding transfer. A fully-accepted deposit
+    ///  (outstanding == 0) has no async leg — the collateral read is authoritative, so the record
+    ///  self-clears. A failed request leaves nothing in transit, so it self-clears too. An
+    ///  outstanding leg (withdrawal delivery or partial-deposit refund) is a receivable that
+    ///  cannot be detected on-chain: a raw wallet increase is indistinguishable from an unrelated
+    ///  inflow (donation, swap proceeds, another transfer), and clearing on it would drop the
+    ///  carry while the funds are still owed to the pool, understating NAV and lifting the lock.
+    ///  The leg is therefore carried — keeping NAV exact and mint/burn locked — until the operator
+    ///  attests the landing via confirmLegLanded (or releases a lost leg via abandonAction).
     function _inFlightAdjustment(LighterSlot storage lighterSlot) private returns (int256 adjustment) {
         LighterData memory data = lighterSlot.data;
         int256 amount = int256(data.inFlightAmount);
@@ -118,26 +124,53 @@ library LighterLib {
             //  moved either side; the leg cannot have landed
             adjustment = amount > 0 ? amount : int256(0);
         } else if (status == 1) {
-            uint256 outstanding;
-            if (amount > 0) {
-                // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in
-                //  the collateral read) and the unaccepted remainder is refunded async
-                uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
-                outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
-            } else {
-                // withdrawal confirmed: Core debited and the delivery to the wallet is async;
-                //  inFlightAmount is negative, the app carries the undelivered amount
-                outstanding = uint256(-amount);
-            }
-            adjustment = int256(outstanding);
-            if (adjustment == 0 || _readBalance() >= data.balanceSnapshot + outstanding) {
+            uint256 outstanding = _outstanding(amount, payload);
+            if (outstanding == 0) {
+                // deposit confirmed with full acceptance: no async leg, collateral read is authoritative
                 delete lighterSlot.data;
-                adjustment = 0;
+            } else {
+                // withdrawal delivery or partial-deposit refund in transit: carried until attested
+                adjustment = int256(outstanding);
             }
         } else if (status == 2) {
             // rejected on Core (deposits never fail per spec): nothing is in transit
             delete lighterSlot.data;
         }
+    }
+
+    /// @dev The outstanding async leg amount for a confirmed request: the undelivered withdrawal,
+    ///  or the unaccepted deposit remainder refunded asynchronously.
+    function _outstanding(int256 amount, bytes memory payload) private pure returns (uint256 outstanding) {
+        if (amount > 0) {
+            // deposit confirmed, possibly partially: acceptedAmount sits on Core (visible in the
+            //  collateral read) and the unaccepted remainder is refunded async
+            uint256 accepted = payload.length >= 32 ? uint256(abi.decode(payload, (uint64))) : 0;
+            outstanding = accepted < uint256(amount) ? uint256(amount) - accepted : 0;
+        } else {
+            // withdrawal confirmed: Core debited and the delivery to the wallet is async;
+            //  inFlightAmount is negative, the app carries the undelivered amount
+            outstanding = uint256(-amount);
+        }
+    }
+
+    /// @notice Operator attestation that the outstanding async leg of the recorded transfer has
+    ///  landed. Landing cannot be detected on-chain (a direct ERC-20 transfer is indistinguishable
+    ///  from the delivery), so the operator confirms it after verifying the delivery receipt
+    ///  off-chain (per Lighter's docs, via the Core transaction's event_info). The observed wallet
+    ///  increase is required to be at least the outstanding amount, so an unrelated smaller inflow
+    ///  cannot be mistaken for the landing.
+    /// @dev Reverts PendingRequest while the request is unconfirmed on Core, and LegNotLanded
+    ///  while the wallet has not grown by the outstanding amount. Records with nothing outstanding
+    ///  self-clear on any evaluation and need no confirmation.
+    function confirmLegLanded() internal {
+        LighterSlot storage slot = StorageLib.lighterSlot();
+        LighterData memory data = slot.data;
+        require(data.lastReqId != 0, NoInFlightLeg());
+        (uint8 status, bytes memory payload) = _readTxStatus(data.lastReqId);
+        require(status == 1, PendingRequest());
+        uint256 outstanding = _outstanding(int256(data.inFlightAmount), payload);
+        require(outstanding != 0 && _readBalance() >= data.balanceSnapshot + outstanding, LegNotLanded());
+        delete slot.data;
     }
 
     /// @dev The pool's USDC wallet balance; the landing reference for the async leg and the
@@ -153,12 +186,13 @@ library LighterLib {
         LighterSlot storage slot = StorageLib.lighterSlot();
         if (slot.data.lastReqId != 0) {
             // transfers are one at a time, full lifecycle: the previous record must resolve —
-            //  the request failed on Core, or its async leg is observed landed — before a new
-            //  request starts. Resolving runs the same status/balance check as the NAV
-            //  adjustment, so a settled-but-unlanded leg blocks with PendingRequest instead of
-            //  being silently dropped (its carry would vanish while the funds are still in
-            //  transit, understating NAV). A leg that never lands is released explicitly via
-            //  abandonAction.
+            //  the request failed on Core or was fully accepted (no async leg) — before a new
+            //  request starts. Resolving runs the same status check as the NAV adjustment, so a
+            //  pending request, or a confirmed request whose async leg is still in transit, blocks
+            //  with PendingRequest instead of being silently overwritten (its carry would vanish
+            //  while the funds are still owed to the pool, understating NAV). An outstanding leg
+            //  is resolved by an operator attestation (confirmLegLanded) or, for a leg that never
+            //  lands, by an explicit release (abandonAction).
             _inFlightAdjustment(slot);
             if (slot.data.lastReqId != 0) revert PendingRequest();
         }

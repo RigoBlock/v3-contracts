@@ -507,9 +507,18 @@ contract ALighterUnit is Test {
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 1000e6, "Settled, delivery pending: the app carries the amount");
 
-        // The EVM delivery lands (mock manager never moved tokens, so minting the amount to the
-        // pool simulates it): the record clears and the collateral read alone is authoritative.
+        // The wallet growing by the leg amount is not the landing signal (an unrelated inflow is
+        //  indistinguishable from the delivery): the record carries until the operator confirms.
         MockERC20(_usdc).mint(address(pool), 400e6);
+        balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
+        assertEq(balances[0].amount, 1000e6, "Inflow does not clear: the app still carries the amount");
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 1, "Record carries until attested");
+
+        // The operator confirms the landing: the record clears and the collateral read alone is
+        //  authoritative.
+        _useAdapter();
+        ALighter(address(pool)).confirmTransferLanded();
+        _useLibHarness();
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 600e6);
         assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
@@ -569,6 +578,40 @@ contract ALighterUnit is Test {
 
         vm.expectRevert(IALighter.DirectCallNotAllowed.selector);
         adapter.abandonInFlightLeg();
+    }
+
+    /// @notice The operator confirmation clears an outstanding confirmed leg once the wallet has
+    ///  grown by at least the outstanding amount, lifting the lock and allowing the next
+    ///  transfer. Confirming before that growth reverts LegNotLanded.
+    function testConfirmTransferLanded() public {
+        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
+        uint64 firstReqId = IALighter(address(pool)).sendToEvm(0, 3, address(pool), LighterRouteType.Perps, 400e6);
+        assertEq(firstReqId, 1);
+        _mockTxStatus(1, 1);
+
+        // Premature: the wallet has not grown by the outstanding amount.
+        vm.expectRevert(LighterLib.LegNotLanded.selector);
+        ALighter(address(pool)).confirmTransferLanded();
+        _useLibHarness();
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 1, "Record survives the premature call");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        LighterLibHarness(address(pool)).assertNavUnlocked();
+        _useAdapter();
+
+        // The delivery is observed in the wallet; the operator confirms.
+        MockERC20(_usdc).mint(address(pool), 400e6);
+        vm.expectEmit(true, false, false, true, address(pool));
+        emit ALighter.TransferLegConfirmed(1);
+        ALighter(address(pool)).confirmTransferLanded();
+
+        _useLibHarness();
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0, "Record cleared by the confirmation");
+        LighterLibHarness(address(pool)).assertNavUnlocked();
+
+        // The next transfer records normally.
+        _useAdapter();
+        uint64 secondReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
+        assertEq(secondReqId, 2);
     }
 
     function testSendToEvmRevertsForWrongAsset() public {
@@ -952,10 +995,13 @@ contract ALighterUnit is Test {
         vm.expectRevert(LighterLib.PendingRequest.selector);
         IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
 
-        // Once the first request settles and its async leg lands (the wallet grows by the
-        //  outstanding amount), the next transfer starts normally.
+        // Once the first request settles and the operator attests its leg landed, the next
+        //  transfer starts normally. A wallet increase alone does not resolve the record.
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(60e6)));
         MockERC20(_usdc).mint(address(pool), 60e6);
+        vm.expectRevert(LighterLib.PendingRequest.selector);
+        IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
+        ALighter(address(pool)).confirmTransferLanded();
         uint64 reqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
         assertEq(reqId, 2);
     }

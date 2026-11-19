@@ -195,7 +195,8 @@ contract EAppsLighterUnitTest is Test {
         vm.prank(poolOwner);
         (pool, ) = IRigoblockPoolProxyFactory(factory).createPool("Lighter Unit", "LUNIT", USDC);
 
-        // Authorize the ALighter adapter (5 selectors).
+        // Authorize the ALighter adapter (5 Core-write selectors + the two in-flight maintenance
+        //  selectors; governance registers the same set on the devnet).
         address aLighter = address(new ALighter());
         IAuthority(authority).setAdapter(aLighter, true);
         IAuthority(authority).addMethod(ILighterInteropManager.sendToCore.selector, aLighter);
@@ -203,6 +204,8 @@ contract EAppsLighterUnitTest is Test {
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.createOrder.selector, aLighter);
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.cancelOrder.selector, aLighter);
         IAuthority(authority).addMethod(ILighterCoreEntrypoint.cancelAllOrders.selector, aLighter);
+        IAuthority(authority).addMethod(ALighter.confirmTransferLanded.selector, aLighter);
+        IAuthority(authority).addMethod(ALighter.abandonInFlightLeg.selector, aLighter);
 
         // Fund the pool and give it non-zero supply/NAV.
         MockUSDC(USDC).mint(user, 1_000_000e6);
@@ -406,6 +409,65 @@ contract EAppsLighterUnitTest is Test {
         assertEq(IEAppsLighter(pool).getLighterTrackedMarkets().length, 0, "Operator eval prunes the empty market");
     }
 
+    /// @notice Regression (audit: unrelated inflow must not clear a settled-but-unlanded leg).
+    ///  While a withdrawal leg is outstanding, an unrelated wallet inflow of the full leg amount
+    ///  must NOT clear the record: the carry is a receivable that still exists until the delivery
+    ///  lands, so the pool-level NAV (= wallet + collateral + carry) must count the inflow AND the
+    ///  receivable. Clearing on the raw balance increase would understate NAV by the full leg and
+    ///  let the next mint price off it; the lock must hold until the operator attests the landing.
+    function testUnrelatedInflowDoesNotClearSettledLeg_ExactNavAndLock() public {
+        uint256 deposit = 10_000e6;
+        uint256 withdraw = 4_000e6;
+        uint256 packedLighter = 1 << uint256(Applications.LIGHTER_PERPS);
+        _depositAndSettle(deposit);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit))));
+
+        // Operator withdraws; Core debits, delivery still in transit.
+        vm.prank(poolOwner);
+        IALighter(pool).sendToEvm(0, 3, pool, LighterRouteType.Perps, uint64(withdraw));
+        _mockTxStatus(2, 1);
+        _mockAccountInfo(pool, _accountInfo(int128(uint128(deposit - withdraw))));
+
+        uint256 walletBeforeInflow = MockUSDC(USDC).balanceOf(pool);
+
+        // Unrelated inflow of the FULL leg amount (donation, swap proceeds, fee claim, ...).
+        MockUSDC(USDC).mint(pool, withdraw);
+
+        // The record must survive — and the lock must hold. Before the fix, the inflow cleared
+        //  the record and this evaluation succeeded with the carry dropped; now it reverts, and
+        //  the exempt path reports the exact NAV (wallet + collateral + receivable).
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(packedLighter);
+        assertEq(
+            ISmartPool(payable(pool)).updateUnitaryValue().netTotalValue,
+            walletBeforeInflow + withdraw + deposit,
+            "NAV = wallet (incl. inflow) + collateral + carried receivable: exact"
+        );
+
+        // Minting stays locked: the valuation that runs before the lock check must not clear.
+        vm.startPrank(user);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        ISmartPool(payable(pool)).mint(user, 1_000e6, 0);
+        vm.stopPrank();
+
+        // The confirmation is owner-gated: a non-owner is staticcalled, so the state change reverts.
+        vm.prank(user);
+        vm.expectRevert();
+        ALighter(pool).confirmTransferLanded();
+
+        // The operator attests the landing (delivery receipt verified off-chain): the wallet has
+        //  grown by the outstanding amount, the record clears, the lock lifts.
+        vm.prank(poolOwner);
+        ALighter(pool).confirmTransferLanded();
+        ExternalApp memory app = _findLighterApp(IEApps(pool).getAppTokenBalances(packedLighter));
+        assertEq(app.balances[0].amount, int256(deposit - withdraw), "Collateral read alone after confirmation");
+
+        // Minting succeeds again, priced off the exact NAV.
+        vm.prank(user);
+        uint256 shares = ISmartPool(payable(pool)).mint(user, 1_000e6, 0);
+        assertGt(shares, 0, "Mint succeeds after the confirmation");
+    }
+
     /// @notice NAV = collateral + unrealized PnL valued at the Core mark price.
     /// @dev Mirrors the live-verified formula in LighterLib._positionValueUsdc: a long of size
     ///  20_000 entered at entryQuote 10_000e6, marked at 600_000 with quoteMultiplier 1 is worth
@@ -481,7 +543,7 @@ contract EAppsLighterUnitTest is Test {
     /// @notice Lock semantics: from the request until the async leg lands, NAV-dependent flows
     ///  are locked (pending included — the lock keeps the request-time snapshot exact). Nothing
     ///  outstanding (full acceptance) or rejected clears in the same evaluation; a partial
-    ///  acceptance carries the remainder until the refund lands, then clears and unlocks.
+    ///  acceptance carries the remainder until the operator attests the refund landing.
     function testHandleApplication_LockLifecycle() public {
         _mockAccountInfo(pool, _accountInfo(0));
         _mockEvmAccountIndex(pool, 7);
@@ -511,9 +573,24 @@ contract EAppsLighterUnitTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
         ISmartPool(payable(pool)).updateUnitaryValue();
+
+        // The refund-sized inflow is not the landing signal: the record and the lock survive it,
+        //  and the NAV stays exact (wallet + collateral + receivable) through the exempt path.
         MockUSDC(USDC).mint(pool, 6_000e6);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS));
+        assertEq(
+            ISmartPool(payable(pool)).updateUnitaryValue().netTotalValue,
+            MockUSDC(USDC).balanceOf(pool) + 20_000e6,
+            "NAV = wallet (incl. inflow) + collateral + carried receivable: exact"
+        );
+
+        // The operator attests the refund landing; the record clears and the collateral read
+        //  alone is authoritative.
+        vm.prank(poolOwner);
+        ALighter(pool).confirmTransferLanded();
         lighterApp = _findLighterApp(IEApps(pool).getAppTokenBalances(1 << uint256(Applications.LIGHTER_PERPS)));
-        assertEq(lighterApp.balances[0].amount, 14_000e6, "Refund landed: collateral authoritative");
+        assertEq(lighterApp.balances[0].amount, 14_000e6, "Confirmed: collateral authoritative");
     }
 
     /// @notice getLighterTrackedMarkets reports the tracked market ids; a fresh pool reports an

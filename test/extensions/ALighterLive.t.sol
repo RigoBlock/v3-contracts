@@ -323,9 +323,10 @@ contract ALighterLiveTest is Test {
     }
 
     /// @dev Mirrors LighterLib._inFlightAdjustment against the view data: pending requests add the
-    ///  in-flight amount back; a settled request contributes nothing once its leg landed (wallet
-    ///  recovered to the pinned baseline + leg) and stays carried while the leg is in transit —
-    ///  the pool's own evaluation reverts in that state, so the attempt skips.
+    ///  in-flight amount back; a settled request contributes nothing once it self-resolves (full
+    ///  acceptance, failure). A settled request with an outstanding leg is carried by the pool —
+    ///  NAV exact by construction — and the pool's own evaluation reverts (NavLocked) until the
+    ///  operator confirms the landing via confirmTransferLanded, so the attempt skips.
     function _replicateInFlightAdjustment(
         int256 amount,
         uint64 lastReqId,
@@ -338,32 +339,17 @@ contract ALighterLiveTest is Test {
             (uint8, bytes)
         );
         if (status == 0) return amount > 0 ? amount : int256(0);
-
-        uint256 baseline = uint256(balanceSnapshot);
-        if (amount > 0) {
+        if (status == 1) {
             uint256 amount256 = uint256(amount);
-            uint256 accepted = status == 1 && payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
+            uint256 accepted = payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
             uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
             if (outstanding == 0) return 0;
-            // baseline == 0: the pin is not committed yet, so the pool's own evaluation carries
-            //  and locks; compare only once the wallet has provably increased over the pin.
-            if (baseline == 0 || _usdcBalance(TESTER_POOL) <= baseline) {
-                console2.log("Skipping: settled deposit refund still in transit");
-                vm.skip(true);
-            }
-            return 0;
-        }
-        if (status == 2) return 0;
-        if (baseline == 0 || _usdcBalance(TESTER_POOL) <= baseline) {
-            console2.log("Skipping: settled withdrawal delivery still in transit");
+            console2.log("Skipping: settled deposit refund awaiting operator confirmation");
             vm.skip(true);
         }
-        return 0;
-    }
-
-    /// @dev USDC balanceOf via the live RPC.
-    function _usdcBalance(address account) internal returns (uint256) {
-        return abi.decode(_ethCall(LighterConstants.USDC, abi.encodeWithSelector(0x70a08231, account)), (uint256));
+        if (status == 2) return 0;
+        console2.log("Skipping: settled withdrawal delivery awaiting operator confirmation");
+        vm.skip(true);
     }
 
     /// @dev The pool's LighterData, decoded from raw storage (eth_getStorageAt). Solidity does

@@ -9,6 +9,7 @@ import {ILighterCoreEntrypoint} from "../../contracts/protocol/extensions/adapte
 import {LighterTypes} from "../../contracts/protocol/types/LighterTypes.sol";
 import {LighterConstants} from "../../contracts/protocol/types/LighterConstants.sol";
 import {IALighter} from "../../contracts/protocol/extensions/adapters/interfaces/IALighter.sol";
+import {ALighter} from "../../contracts/protocol/extensions/adapters/ALighter.sol";
 import {LighterLib} from "../../contracts/protocol/libraries/LighterLib.sol";
 import {IEApps} from "../../contracts/protocol/extensions/adapters/interfaces/IEApps.sol";
 import {IEAppsLighter} from "../../contracts/protocol/extensions/adapters/interfaces/IEAppsLighter.sol";
@@ -309,9 +310,9 @@ contract ALighterForkTest is Test {
     }
 
     /// @notice Lock semantics around a deposit: from the request until the async refund lands,
-    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact);
-    ///  once the refund lands in the pool wallet, the mint's own evaluation clears the record and
-    ///  unlocks in the same pass.
+    ///  minting is locked (pending included — the lock keeps the request-time snapshot exact).
+    ///  The refund landing in the wallet is not detectable on-chain, so the record carries until
+    ///  the operator attests the landing; only then does the mint unlock.
     function testFork_MintLockLifecycle() public {
         _mockAccountInfo(0);
         _mockEvmAccountIndex(1);
@@ -341,9 +342,13 @@ contract ALighterForkTest is Test {
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         ISmartPoolActions(pool).updateUnitaryValue();
 
-        // The refund lands in the pool wallet (balance increases over the request-time snapshot):
-        // the mint's own evaluation clears the record and unlocks in the same pass.
+        // The refund lands in the pool wallet (balance increases over the request-time snapshot),
+        //  but a raw balance increase is not the landing signal: the record carries and the mint
+        //  stays locked until the operator attests.
         deal(usdc, pool, snapshot + 1e6);
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
+        ALighter(pool).confirmTransferLanded();
         ISmartPoolActions(pool).mint(poolOwner, depositAmount, 0);
         vm.stopPrank();
     }
