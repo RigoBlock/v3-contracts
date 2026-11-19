@@ -156,7 +156,7 @@ library LighterLib {
         LighterData storage data = StorageLib.lighterSlot().data;
         if (data.lastReqId != 0) {
             _inFlightAdjustment(StorageLib.lighterSlot());
-            if (data.lastReqId != 0) revert PendingRequest();
+            require(data.lastReqId == 0, PendingRequest());
         }
         data.inFlightAmount = amount.toInt128();
         data.lastReqId = reqId;
