@@ -512,13 +512,11 @@ contract ALighterUnit is Test {
         MockERC20(_usdc).mint(address(pool), 400e6);
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 1000e6, "Inflow does not clear: the app still carries the amount");
-        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 1, "Record carries until attested");
+        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 1, "Record carries within the window");
 
-        // The operator confirms the landing: the record clears and the collateral read alone is
+        // The settle window elapses: the record self-clears and the collateral read alone is
         //  authoritative.
-        _useAdapter();
-        ALighter(address(pool)).confirmTransferLanded();
-        _useLibHarness();
+        vm.warp(block.timestamp + 1 hours);
         balances = LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(balances[0].amount, 600e6);
         assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
@@ -555,60 +553,15 @@ contract ALighterUnit is Test {
         vm.expectRevert(LighterLib.PendingRequest.selector);
         IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
 
-        // The operator recovery for a leg that verifiably never lands releases the record, and
-        //  the next transfer records normally.
-        vm.expectEmit(true, true, true, true, address(pool));
-        emit ALighter.InFlightLegAbandoned();
-        ALighter(address(pool)).abandonInFlightLeg();
+        // The window starts at the first settled observation: commit it, let it elapse — the
+        //  record self-clears, the lock lifts — and the next transfer records normally.
         _useLibHarness();
+        LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
+        vm.warp(block.timestamp + 1 hours);
+        LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
         assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0);
         LighterLibHarness(address(pool)).assertNavUnlocked();
 
-        _useAdapter();
-        uint64 secondReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
-        assertEq(secondReqId, 2);
-    }
-
-    /// @notice The recovery reverts when no transfer is in flight, and the adapter cannot be
-    ///  called directly (delegatecall-only).
-    function testAbandonInFlightLegRevertsWithoutRecord() public {
-        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
-        ALighter(address(pool)).abandonInFlightLeg();
-
-        vm.expectRevert(IALighter.DirectCallNotAllowed.selector);
-        adapter.abandonInFlightLeg();
-    }
-
-    /// @notice The operator confirmation clears an outstanding confirmed leg once the wallet has
-    ///  grown by at least the outstanding amount, lifting the lock and allowing the next
-    ///  transfer. Confirming before that growth reverts LegNotLanded.
-    function testConfirmTransferLanded() public {
-        vm.chainId(Constants.LIGHTEREVM_CHAIN_ID);
-        uint64 firstReqId = IALighter(address(pool)).sendToEvm(0, 3, address(pool), LighterRouteType.Perps, 400e6);
-        assertEq(firstReqId, 1);
-        _mockTxStatus(1, 1);
-
-        // Premature: the wallet has not grown by the outstanding amount.
-        vm.expectRevert(LighterLib.LegNotLanded.selector);
-        ALighter(address(pool)).confirmTransferLanded();
-        _useLibHarness();
-        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 1, "Record survives the premature call");
-        vm.expectRevert(LighterLib.NavLocked.selector);
-        LighterLibHarness(address(pool)).assertNavUnlocked();
-        _useAdapter();
-
-        // The delivery is observed in the wallet; the operator confirms.
-        MockERC20(_usdc).mint(address(pool), 400e6);
-        vm.expectEmit(true, false, false, true, address(pool));
-        emit ALighter.TransferLegConfirmed(1);
-        ALighter(address(pool)).confirmTransferLanded();
-
-        _useLibHarness();
-        assertEq(LighterLibHarness(address(pool)).lighterData().lastReqId, 0, "Record cleared by the confirmation");
-        LighterLibHarness(address(pool)).assertNavUnlocked();
-
-        // The next transfer records normally.
         _useAdapter();
         uint64 secondReqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 50e6, LighterRouteType.Perps);
         assertEq(secondReqId, 2);
@@ -995,13 +948,19 @@ contract ALighterUnit is Test {
         vm.expectRevert(LighterLib.PendingRequest.selector);
         IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
 
-        // Once the first request settles and the operator attests its leg landed, the next
-        //  transfer starts normally. A wallet increase alone does not resolve the record.
+        // Once the first request settles and the window elapses, the next transfer starts
+        //  normally. A wallet increase alone does not resolve the record.
         _mockTxStatusWithPayload(1, 1, abi.encode(uint64(60e6)));
         MockERC20(_usdc).mint(address(pool), 60e6);
         vm.expectRevert(LighterLib.PendingRequest.selector);
         IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
-        ALighter(address(pool)).confirmTransferLanded();
+
+        // The window starts at the first settled observation: commit it, let it elapse, then
+        //  the next transfer records normally.
+        _useLibHarness();
+        LighterLibHarness(address(pool)).getLighterBalances(address(pool), true);
+        _useAdapter();
+        vm.warp(block.timestamp + 1 hours);
         uint64 reqId = IALighter(address(pool)).sendToCore(3, address(pool), false, 100e6, LighterRouteType.Perps);
         assertEq(reqId, 2);
     }

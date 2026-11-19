@@ -78,14 +78,6 @@ contract LighterLibHarness {
         LighterLib.recordAction(amount, reqId);
     }
 
-    function confirmLegLanded() external {
-        LighterLib.confirmLegLanded();
-    }
-
-    function abandonAction() external {
-        LighterLib.abandonAction();
-    }
-
     function assertNavUnlocked() external view {
         require(StorageLib.lighterSlot().data.lastReqId == 0, LighterLib.NavLocked());
     }
@@ -485,7 +477,7 @@ contract LighterLibTest is Test {
     }
 
     /// @notice A partially-accepted deposit keeps the unaccepted remainder in NAV — the refund
-    ///  is in transit and sits on neither side — until the operator attests the refund landed.
+    ///  is in transit and sits on neither side — until the settle window elapses.
     function testInFlightPartialDepositUntilRefundLands() public {
         _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
         MockERC20(USDC).mint(address(harness), 1_000e6);
@@ -496,22 +488,22 @@ contract LighterLibTest is Test {
         assertEq(balances[0].amount, 70e6, "Unaccepted remainder (60e6) stays in NAV while the refund is in transit");
 
         // The refund arriving in the wallet is not detectable on-chain: the record carries until
-        //  the operator attests the landing.
+        //  the settle window elapses.
         MockERC20(USDC).mint(address(harness), 60e6);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 70e6, "Carry survives the wallet increase");
-        assertEq(harness.lighterData().lastReqId, 1, "Record carries until attested");
-        harness.confirmLegLanded();
+        assertEq(harness.lighterData().lastReqId, 1, "Record carries within the window");
+        vm.warp(block.timestamp + 1 hours);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 10e6, "Confirmed: collateral read is authoritative again");
-        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the attestation");
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared after the window");
     }
 
     /// @notice A settled withdrawal is carried by the app (+amount): Core debited (the collateral
     ///  read excludes the amount) but the wallet not yet credited — exact while the delivery is in
     ///  transit. A wallet increase is NOT the clearing signal (an unrelated inflow is
     ///  indistinguishable from the delivery and would drop the receivable from NAV); the operator
-    ///  attests the landing, and only then does the record clear.
+    ///  window elapses, and only then does the record self-clear.
     function testInFlightWithdrawalUntilDeliveryLands() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
@@ -544,10 +536,10 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // The operator attests the landing (delivery receipt verified off-chain): the wallet has
+        // The settle window elapses: the record self-clears and
         //  grown by the outstanding amount, so the record clears and the collateral read alone
         //  is authoritative again.
-        harness.confirmLegLanded();
+        vm.warp(block.timestamp + 1 hours);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 600e6, "Confirmed: collateral read alone is authoritative");
         assertEq(_nav(), 1500e6);
@@ -601,8 +593,8 @@ contract LighterLibTest is Test {
         MockERC20(USDC).mint(address(harness), 400e6);
         assertEq(_nav(), 1900e6, "Inflow counts, leg still carried: exact");
 
-        // The operator attests the landing: record clears and the lock lifts.
-        harness.confirmLegLanded();
+        // The settle window elapses: record self-clears and the lock lifts.
+        vm.warp(block.timestamp + 1 hours);
         assertEq(_nav(), 1500e6, "Confirmed: exact without adjustment");
         assertEq(harness.lighterData().lastReqId, 0);
         harness.assertNavUnlocked();
@@ -640,11 +632,11 @@ contract LighterLibTest is Test {
         assertEq(_nav(), 1500e6 + 300_000_000_000, "Settled-in-transit: carry and revaluation compose");
 
         // An unrelated inflow does not clear the record — NAV counts the inflow AND the
-        //  receivable; the operator attestation clears it.
+        //  receivable; the settle window clears it.
         MockERC20(USDC).mint(address(harness), 400e6);
         assertEq(_nav(), 1500e6 + 300_000_000_000 + 400e6, "Inflow and receivable both count");
         assertEq(harness.lighterData().lastReqId, 1);
-        harness.confirmLegLanded();
+        vm.warp(block.timestamp + 1 hours);
         assertEq(_nav(), 1500e6 + 300_000_000_000, "Confirmed: exact without the carry");
         assertEq(harness.lighterData().lastReqId, 0);
     }
@@ -678,7 +670,7 @@ contract LighterLibTest is Test {
     ///  confirmed, async leg still in transit) blocks a new transfer with PendingRequest instead
     ///  of being overwritten — overwriting would drop the outstanding leg's carry while the funds
     ///  are still owed to the wallet, understating NAV. A wallet increase does NOT resolve the
-    ///  record (an inflow is not the landing); the operator attestation does.
+    ///  record (an inflow is not the landing); the settle window does.
     function testRecordActionRevertsWhilePreviousLegInFlight() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
@@ -703,9 +695,9 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.PendingRequest.selector);
         harness.recordAction(100e6, 2);
 
-        // The operator attests the landing: the record resolves and the new request replaces it
+        // The settle window elapses: the record resolves and the new request replaces it
         //  with a fresh snapshot.
-        harness.confirmLegLanded();
+        vm.warp(block.timestamp + 1 hours);
         harness.recordAction(100e6, 2);
         LighterData memory data = harness.lighterData();
         assertEq(data.lastReqId, 2);
@@ -713,67 +705,51 @@ contract LighterLibTest is Test {
         assertEq(data.balanceSnapshot, 900e6, "Fresh snapshot at the new request");
         _mockTxStatus(2, 0, bytes(""));
         balances = harness.getLighterBalances(ACCOUNT, true);
-        assertEq(balances[0].amount, 700e6, "New pending deposit added back; the attested leg is in the wallet");
+        assertEq(balances[0].amount, 700e6, "New pending deposit added back; the resolved leg is in the wallet");
     }
 
-    /// @notice The operator attestation is the only way to clear an outstanding confirmed leg. It
-    ///  requires a recorded request, Core confirmation, and a wallet grown by at least the
-    ///  outstanding amount — each missing precondition reverts, so neither a premature, an
-    ///  underfunded, nor a repeated confirmation can clear or corrupt the record.
-    function testConfirmLegLandedPreconditions() public {
+    /// @notice A settled leg is carried — NAV exact, mint/burn locked — from the first
+    ///  observation of the settled state until SETTLED_TRANSFER_WINDOW elapses, then the record
+    ///  self-clears automatically.
+    function testSettledLegClearsAfterWindow() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
 
-        // No record at all.
-        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
-        harness.confirmLegLanded();
-
         harness.recordAction(-400e6, 1);
 
-        // Pending on Core: no confirmation possible.
+        // Pending: no window started.
         _mockTxStatus(1, 0, bytes(""));
-        vm.expectRevert(LighterLib.PendingRequest.selector);
-        harness.confirmLegLanded();
+        vm.warp(block.timestamp + 30 days);
+        AppTokenBalance[] memory balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(harness.lighterData().settledAt, 0, "Window starts only at the settled observation");
 
-        // Confirmed, but the wallet has not grown by the outstanding amount.
+        // Settled: carried from the first observation.
         _mockTxStatus(1, 1, bytes(""));
-        vm.expectRevert(LighterLib.LegNotLanded.selector);
-        harness.confirmLegLanded();
-
-        // Partial growth is still not the landing.
-        MockERC20(USDC).mint(address(harness), 399e6);
-        vm.expectRevert(LighterLib.LegNotLanded.selector);
-        harness.confirmLegLanded();
-
-        // Full growth: the attestation clears the record.
-        MockERC20(USDC).mint(address(harness), 1e6);
-        harness.confirmLegLanded();
-        assertEq(harness.lighterData().lastReqId, 0, "Cleared by the attestation");
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1400e6, "Carried after the settled observation");
+        uint64 settledAt = harness.lighterData().settledAt;
+        assertTrue(settledAt != 0, "Settled observation is pinned");
+        vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // A cleared record cannot be confirmed again.
-        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
-        harness.confirmLegLanded();
+        // Still within the window: carried, locked.
+        vm.warp(settledAt + 30 minutes);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1400e6, "Carried within the window");
+        vm.expectRevert(LighterLib.NavLocked.selector);
+        harness.assertNavUnlocked();
+
+        // Window elapsed: the record self-clears.
+        vm.warp(settledAt + 1 hours);
+        balances = harness.getLighterBalances(ACCOUNT, true);
+        assertEq(balances[0].amount, 1000e6, "Cleared after the window");
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared");
+        harness.assertNavUnlocked();
     }
 
-    /// @notice A fully-accepted deposit has no outstanding leg: it self-clears on any evaluation
-    ///  and needs no confirmation — confirming it reverts (there is nothing to attest).
-    function testConfirmLegLandedRevertsWhenNothingOutstanding() public {
-        _mockAccountInfo(ACCOUNT, _accountInfo(10e6));
-        harness.recordAction(100e6, 1);
-        _mockTxStatus(1, 1, abi.encode(uint64(100e6)));
-        harness.getLighterBalances(ACCOUNT, true);
-        assertEq(harness.lighterData().lastReqId, 0, "Full acceptance self-clears");
-        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
-        harness.confirmLegLanded();
-    }
-
-    /// @notice A never-landing leg is released explicitly: abandonAction deletes the record and
-    ///  the lock, and the next transfer records normally. Reverts when no record exists.
-    function testAbandonActionReleasesStuckRecord() public {
-        vm.expectRevert(LighterLib.NoInFlightLeg.selector);
-        harness.abandonAction();
-
+    /// @notice A never-landing leg resolves within the window without any operator action: the
+    ///  record self-clears, the lock lifts, and the next transfer records normally.
+    function testNeverLandingLegResolvesWithWindow() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
         harness.recordAction(-400e6, 1);
@@ -781,19 +757,23 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        harness.abandonAction();
-        assertEq(harness.lighterData().lastReqId, 0, "Record released");
+        // The window starts at the first settled observation: warping alone cannot skip it.
+        harness.getLighterBalances(ACCOUNT, true);
+        assertEq(harness.lighterData().settledAt, uint64(block.timestamp), "Observation pins the window");
+        vm.warp(block.timestamp + 1 hours);
+        harness.getLighterBalances(ACCOUNT, true);
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared");
         harness.assertNavUnlocked();
 
         harness.recordAction(100e6, 2);
-        assertEq(harness.lighterData().lastReqId, 2, "Next transfer records after the release");
+        assertEq(harness.lighterData().lastReqId, 2, "Next transfer records after the window");
     }
 
     /// @notice A plain ERC-20 transfer that covers the outstanding leg amount must NOT clear the
     ///  record. Landing is not detectable on-chain: a raw wallet increase is indistinguishable
     ///  from an unrelated inflow, and clearing on it would drop the receivable from NAV —
     ///  understating it by the full leg and lifting the mint/burn lock while the funds are still
-    ///  in transit. Only an operator attestation clears.
+    ///  in transit. Only the settle window clears it.
     function testDirectTransferOfLegAmountDoesNotClear() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
@@ -811,11 +791,11 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        // The operator attests the landing.
-        harness.confirmLegLanded();
+        // The settle window elapses.
+        vm.warp(block.timestamp + 1 hours);
         balances = harness.getLighterBalances(ACCOUNT, true);
-        assertEq(balances[0].amount, 1000e6, "Collateral read alone after the attestation");
-        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the attestation");
+        assertEq(balances[0].amount, 1000e6, "Collateral read alone after the window");
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared after the window");
         harness.assertNavUnlocked();
     }
 
@@ -839,7 +819,7 @@ contract LighterLibTest is Test {
         harness.assertNavUnlocked();
 
         // Reaching the full leg amount via inflows is still not the landing signal: the record
-        //  and the lock survive until the operator attests.
+        //  and the lock survive until the settle window elapses.
         MockERC20(USDC).mint(address(harness), 400e6 - 1);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 1400e6, "Carry unchanged by the full inflow");
@@ -847,8 +827,9 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        harness.confirmLegLanded();
-        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the attestation");
+        vm.warp(block.timestamp + 1 hours);
+        harness.getLighterBalances(ACCOUNT, true);
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared after the window");
         harness.assertNavUnlocked();
     }
 
@@ -875,17 +856,17 @@ contract LighterLibTest is Test {
         MockERC20(USDC).mint(address(harness), 60e6 - 1);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 70e6, "Carry survives the wallet increase");
-        assertEq(harness.lighterData().lastReqId, 1, "Record carries until attested");
-        harness.confirmLegLanded();
+        assertEq(harness.lighterData().lastReqId, 1, "Record carries within the window");
+        vm.warp(block.timestamp + 1 hours);
         balances = harness.getLighterBalances(ACCOUNT, true);
         assertEq(balances[0].amount, 10e6, "Confirmed: collateral read is authoritative");
-        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the attestation");
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared after the window");
     }
 
     /// @notice An inflow larger than the outstanding leg must NOT clear the record. The receivable
     ///  still exists until the delivery lands, so dropping the carry would understate NAV by the
     ///  full leg even though the wallet covers the amount — the inflow and the receivable are
-    ///  additive, not interchangeable. Only an operator attestation clears.
+    ///  additive, not interchangeable. Only the settle window clears it.
     function testDonationLargerThanLegDoesNotClear() public {
         MockERC20(USDC).mint(address(harness), 500e6);
         _mockAccountInfo(ACCOUNT, _accountInfo(1000e6));
@@ -901,10 +882,10 @@ contract LighterLibTest is Test {
         vm.expectRevert(LighterLib.NavLocked.selector);
         harness.assertNavUnlocked();
 
-        harness.confirmLegLanded();
+        vm.warp(block.timestamp + 1 hours);
         balances = harness.getLighterBalances(ACCOUNT, true);
-        assertEq(balances[0].amount, 1000e6, "Collateral read alone after the attestation");
-        assertEq(harness.lighterData().lastReqId, 0, "Record cleared by the attestation");
+        assertEq(balances[0].amount, 1000e6, "Collateral read alone after the window");
+        assertEq(harness.lighterData().lastReqId, 0, "Record self-cleared after the window");
         harness.assertNavUnlocked();
     }
 

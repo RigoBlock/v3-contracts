@@ -210,8 +210,6 @@ contract LighterDeploymentFixture is Test {
         _addOrReplaceMethod(ILighterCoreEntrypoint.createOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelOrder.selector, aLighter);
         _addOrReplaceMethod(ILighterCoreEntrypoint.cancelAllOrders.selector, aLighter);
-        _addOrReplaceMethod(ALighter.confirmTransferLanded.selector, aLighter);
-        _addOrReplaceMethod(ALighter.abandonInFlightLeg.selector, aLighter);
 
         vm.stopPrank();
 

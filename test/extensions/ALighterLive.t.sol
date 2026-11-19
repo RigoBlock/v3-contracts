@@ -225,7 +225,7 @@ contract ALighterLiveTest is Test {
         // tracked markets and the in-flight record are internal accounting: read the Lighter
         ///  slot storage directly
         uint16[] memory marketIds = _readTrackedMarkets();
-        (int256 inFlightAmount, uint64 lastReqId, uint128 balanceSnapshot) = _readLighterData();
+        (int256 inFlightAmount, uint64 lastReqId, uint64 settledAt) = _readLighterData();
 
         uint256 marketCount = marketIds.length;
         LighterTypes.Position[] memory positions = new LighterTypes.Position[](marketCount);
@@ -233,7 +233,7 @@ contract ALighterLiveTest is Test {
         uint64[] memory markAfter = new uint64[](marketCount);
 
         int256 collateral = int256(_readAccountInfo(TESTER_POOL).collateralBaseAmount);
-        int256 inFlight = _replicateInFlightAdjustment(inFlightAmount, lastReqId, balanceSnapshot);
+        int256 inFlight = _replicateInFlightAdjustment(inFlightAmount, lastReqId, settledAt);
 
         for (uint256 i; i < marketCount; ++i) {
             positions[i] = _readPosition(TESTER_POOL, marketIds[i]);
@@ -326,11 +326,11 @@ contract ALighterLiveTest is Test {
     ///  in-flight amount back; a settled request contributes nothing once it self-resolves (full
     ///  acceptance, failure). A settled request with an outstanding leg is carried by the pool —
     ///  NAV exact by construction — and the pool's own evaluation reverts (NavLocked) until the
-    ///  operator confirms the landing via confirmTransferLanded, so the attempt skips.
+    ///  settle window elapses, so the attempt skips.
     function _replicateInFlightAdjustment(
         int256 amount,
         uint64 lastReqId,
-        uint128 balanceSnapshot
+        uint64 settledAt
     ) internal returns (int256 adjustment) {
         if (lastReqId == 0 || amount == 0) return 0;
 
@@ -344,24 +344,29 @@ contract ALighterLiveTest is Test {
             uint256 accepted = payload.length >= 32 ? abi.decode(payload, (uint64)) : 0;
             uint256 outstanding = accepted < amount256 ? amount256 - accepted : 0;
             if (outstanding == 0) return 0;
-            console2.log("Skipping: settled deposit refund awaiting operator confirmation");
-            vm.skip(true);
+            if (settledAt != 0 && block.timestamp < settledAt + 1 hours) {
+                console2.log("Skipping: settled deposit refund within the carry window");
+                vm.skip(true);
+            }
+            return 0;
         }
         if (status == 2) return 0;
-        console2.log("Skipping: settled withdrawal delivery awaiting operator confirmation");
-        vm.skip(true);
+        if (settledAt != 0 && block.timestamp < settledAt + 1 hours) {
+            console2.log("Skipping: settled withdrawal delivery within the carry window");
+            vm.skip(true);
+        }
+        return 0;
     }
 
     /// @dev The pool's LighterData, decoded from raw storage (eth_getStorageAt). Solidity does
     ///  not split a value type across slots: slot 0 packs int128 inFlightAmount | uint64
-    ///  lastReqId (tail unused), slot 1 holds the whole uint128 balanceSnapshot.
-    function _readLighterData() internal returns (int256 inFlightAmount, uint64 lastReqId, uint128 balanceSnapshot) {
+    ///  lastReqId | uint64 settledAt, slot 1 holds the whole uint128 balanceSnapshot.
+    function _readLighterData() internal returns (int256 inFlightAmount, uint64 lastReqId, uint64 settledAt) {
         bytes32 base = StorageLib.LIGHTER_DATA_SLOT;
         uint256 w0 = uint256(_storageAt(TESTER_POOL, base));
-        uint256 w1 = uint256(_storageAt(TESTER_POOL, bytes32(uint256(base) + 1)));
         inFlightAmount = int256(int128(uint128(w0)));
         lastReqId = uint64(w0 >> 128);
-        balanceSnapshot = uint128(w1);
+        settledAt = uint64(w0 >> 192);
     }
 
     /// @dev The pool's tracked-market list, decoded from raw storage: the array length sits at

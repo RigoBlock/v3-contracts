@@ -158,38 +158,6 @@ contract ALighter is IALighter, IMinimumVersion, ReentrancyGuardTransient {
         emit OrderSent(reqId);
     }
 
-    /// @notice Emitted when the operator abandons a transfer whose async EVM-side leg never landed.
-    event InFlightLegAbandoned();
-
-    /// @notice Emitted when the operator confirms that the outstanding async EVM-side leg of the
-    ///  recorded transfer has landed, clearing the record and lifting the mint/burn lock.
-    event TransferLegConfirmed(uint64 indexed reqId);
-
-    /// @notice Confirms that the outstanding async EVM-side leg of the recorded transfer has
-    ///  landed — the only automatic-safe alternative to carrying the leg forever, since landing
-    ///  cannot be detected on-chain (a direct ERC-20 transfer is indistinguishable from the
-    ///  delivery). Write access is owner-gated by MixinFallback.
-    /// @dev Confirm only after verifying the delivery receipt off-chain (per Lighter's docs, via
-    ///  the Core transaction's event_info). Requires the request confirmed on Core and the wallet
-    ///  grown by at least the outstanding amount, so a smaller unrelated inflow cannot be
-    ///  mistaken for the landing. Fully-accepted deposits need no confirmation: they self-clear.
-    function confirmTransferLanded() external nonReentrant onlyDelegateCall {
-        uint64 reqId = StorageLib.lighterSlot().data.lastReqId;
-        LighterLib.confirmLegLanded();
-        emit TransferLegConfirmed(reqId);
-    }
-
-    /// @notice Releases a stuck transfer record whose async EVM-side leg never landed — the
-    ///  recovery for the documented never-landing-leg case (a reverted delivery is never retried
-    ///  and the funds are lost per Lighter's docs). Write access is owner-gated by MixinFallback.
-    /// @dev Only abandon after verifying off-chain — per Lighter's docs, the delivery receipt via
-    ///  the Core transaction's event_info — that the leg will not land: abandoning a live leg
-    ///  drops its carry from NAV, so a late landing mints against an understated NAV.
-    function abandonInFlightLeg() external nonReentrant onlyDelegateCall {
-        LighterLib.abandonAction();
-        emit InFlightLegAbandoned();
-    }
-
     /// @dev Resolves the pool's own Core account index; reverts if the pool has no Core account yet
     ///  (created automatically by the first deposit).
     function _requireAccountIndex() private view returns (uint48) {
